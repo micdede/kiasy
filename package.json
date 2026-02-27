@@ -1,0 +1,24 @@
+{
+  "name": "whatsapp-claude",
+  "version": "2.0.0",
+  "description": "JARVIS – Persönlicher KI-Assistent",
+  "main": "telegram.js",
+  "scripts": {
+    "start": "node telegram.js",
+    "start:whatsapp": "node index.js",
+    "dev": "node --watch telegram.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "axios": "^1.13.5",
+    "dotenv": "^16.4.7",
+    "imapflow": "^1.2.10",
+    "node-telegram-bot-api": "^0.67.0",
+    "nodemailer": "^8.0.1",
+    "openai": "^6.22.0",
+    "pdf-parse": "^1.1.1",
+    "qrcode-terminal": "^0.12.0",
+    "tsdav": "^2.1.8",
+    "whatsapp-web.js": "^1.26.1-alpha.3"
+  }
+}

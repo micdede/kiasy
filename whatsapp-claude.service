@@ -1,0 +1,26 @@
+[Unit]
+Description=WhatsApp-Claude Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mcde
+WorkingDirectory=/home/mcde/whatsapp-claude
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=whatsapp-claude
+
+# HOME setzen, damit Puppeteer ~/.cache/puppeteer findet
+Environment=HOME=/home/mcde TZ=Europe/Berlin
+
+# Sicherheits-Einstellungen
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/mcde/whatsapp-claude /home/mcde/.cache /tmp
+
+[Install]
+WantedBy=multi-user.target

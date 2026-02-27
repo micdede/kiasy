@@ -1,0 +1,12 @@
+node_modules/
+.env
+.wwebjs_auth/
+.wwebjs_cache/
+temp/
+venv/
+notes/
+certs/
+logs/
+memory.json
+reminders.json
+credentials.json
