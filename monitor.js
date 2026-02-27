@@ -1176,9 +1176,9 @@ const SETTINGS_GROUPS = [
     fields: [
       { key: "TTS_VOICE", label: "TTS Stimme", type: "select",
         options: [
-          { value: "de-DE-KillianNeural", label: "Killian (m\\u00e4nnlich)" },
-          { value: "de-DE-ConradNeural", label: "Conrad (m\\u00e4nnlich)" },
-          { value: "de-DE-FlorianMultilingualNeural", label: "Florian (m\\u00e4nnlich, multilingual)" },
+          { value: "de-DE-KillianNeural", label: "Killian (männlich)" },
+          { value: "de-DE-ConradNeural", label: "Conrad (männlich)" },
+          { value: "de-DE-FlorianMultilingualNeural", label: "Florian (männlich, multilingual)" },
           { value: "de-DE-AmalaNeural", label: "Amala (weiblich)" },
           { value: "de-DE-KatjaNeural", label: "Katja (weiblich)" },
           { value: "de-DE-SeraphinaMultilingualNeural", label: "Seraphina (weiblich, multilingual)" }
@@ -1554,7 +1554,7 @@ function getNotesHTML() {
   <span class="spacer"></span>
   <span class="save-status" id="saveStatus"></span>
   <input type="text" class="search-input" id="searchInput" placeholder="Suche...">
-  <button class="btn btn-danger" id="deleteBtn" style="display:none">L\\u00f6schen</button>
+  <button class="btn btn-danger" id="deleteBtn" style="display:none">Löschen</button>
   <button class="btn btn-primary" id="saveBtn" disabled>Speichern (Ctrl+S)</button>
 </div>
 
@@ -1568,11 +1568,11 @@ function getNotesHTML() {
       <span id="fileName">-</span>
       <span class="line-count" id="lineCount">0 Zeilen</span>
     </div>
-    <textarea id="editor" spellcheck="false" placeholder="Notiz ausw\\u00e4hlen oder neue erstellen..."></textarea>
+    <textarea id="editor" spellcheck="false" placeholder="Notiz auswählen oder neue erstellen..."></textarea>
   </div>
   <div class="preview-pane">
     <div class="pane-header">Vorschau</div>
-    <div id="preview"><div class="welcome-msg">Notiz ausw\\u00e4hlen oder neue Notiz erstellen</div></div>
+    <div id="preview"><div class="welcome-msg">Notiz auswählen oder neue Notiz erstellen</div></div>
   </div>
 </div>
 
@@ -1677,7 +1677,7 @@ function renderNoteList(filter) {
 
   noteListEl.querySelectorAll('.note-item').forEach(el => {
     el.addEventListener('click', () => {
-      if (dirty && !confirm('Ungespeicherte \\u00c4nderungen verwerfen?')) return;
+      if (dirty && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
       openNote(el.dataset.file);
     });
   });
@@ -1745,7 +1745,7 @@ async function createNote() {
 
 async function deleteNote() {
   if (!currentFile) return;
-  if (!confirm('Notiz "' + currentFile + '" wirklich l\\u00f6schen?')) return;
+  if (!confirm('Notiz "' + currentFile + '" wirklich löschen?')) return;
   try {
     const res = await fetch('/api/notes/' + encodeURIComponent(currentFile), { method: 'DELETE' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1756,8 +1756,8 @@ async function deleteNote() {
     saveBtn.disabled = true;
     deleteBtn.style.display = 'none';
     fileNameEl.textContent = '-';
-    preview.innerHTML = '<div class="welcome-msg">Notiz gel\\u00f6scht</div>';
-    showStatus('Gel\\u00f6scht!', false);
+    preview.innerHTML = '<div class="welcome-msg">Notiz gelöscht</div>';
+    showStatus('Gelöscht!', false);
     loadNotes();
   } catch (err) {
     showStatus('Fehler: ' + err.message, true);
@@ -2209,8 +2209,8 @@ function getTerminalHTML() {
 
     <div class="action-group">
       <h2>JARVIS Agent</h2>
-      <button class="action-btn" onclick="quickAction('agent-reset', 'Chat-History aller Nutzer l\\u00f6schen?')">
-        <span class="icon">&#x1F5D1;</span><span class="label">Chat-History l\\u00f6schen</span>
+      <button class="action-btn" onclick="quickAction('agent-reset', 'Chat-History aller Nutzer löschen?')">
+        <span class="icon">&#x1F5D1;</span><span class="label">Chat-History löschen</span>
       </button>
       <button class="action-btn" onclick="quickAction('git-backup', null)">
         <span class="icon">&#x2601;</span><span class="label">Git Backup pushen</span>
@@ -2262,7 +2262,7 @@ function getTerminalHTML() {
     <div class="terminal-input-wrap">
       <span class="prompt">$</span>
       <input type="text" id="terminal-input" placeholder="Befehl eingeben..." autofocus>
-      <button class="run-btn" id="runBtn" onclick="submitCmd()">Ausf\\u00fchren</button>
+      <button class="run-btn" id="runBtn" onclick="submitCmd()">Ausführen</button>
     </div>
   </div>
 </div>
@@ -2718,14 +2718,14 @@ function getRemindersHTML() {
       <label>Wiederholen</label>
       <select id="formRepeat">
         <option value="none">Einmalig</option>
-        <option value="daily">T\\u00e4glich</option>
-        <option value="weekly">W\\u00f6chentlich</option>
+        <option value="daily">Täglich</option>
+        <option value="weekly">Wöchentlich</option>
       </select>
     </div>
     <div class="form-row">
       <label>Anzahl</label>
       <input type="number" id="formRepeatCount" value="7" min="2" max="365" style="max-width:80px">
-      <span style="font-size:11px;color:#8b949e">Wiederholungen (nur bei t\\u00e4glich/w\\u00f6chentlich)</span>
+      <span style="font-size:11px;color:#8b949e">Wiederholungen (nur bei täglich/wöchentlich)</span>
     </div>
     <div class="form-actions">
       <button class="btn" id="cancelBtn">Abbrechen</button>
@@ -2801,7 +2801,7 @@ function renderList() {
   listEl.innerHTML = filtered.map(r => {
     const status = getStatus(r);
     const dueClass = status === 'overdue' ? ' overdue' : (status === 'upcoming' ? ' soon' : '');
-    const statusLabel = status === 'overdue' ? ' (\\u00fcberf\\u00e4llig)' : (status === 'upcoming' ? ' (bald)' : '');
+    const statusLabel = status === 'overdue' ? ' (überfällig)' : (status === 'upcoming' ? ' (bald)' : '');
     return '<div class="reminder-card ' + status + '" data-id="' + r.id + '">' +
       '<button class="reminder-check' + (r.done ? ' checked' : '') + '" onclick="toggleDone(' + r.id + ')">' +
       (r.done ? '\\u2713' : '') + '</button>' +
@@ -2813,7 +2813,7 @@ function renderList() {
       '</div></div>' +
       '<div class="reminder-actions">' +
       '<button onclick="editReminder(' + r.id + ')">Bearbeiten</button>' +
-      '<button class="del-btn" onclick="deleteReminder(' + r.id + ')">L\\u00f6schen</button>' +
+      '<button class="del-btn" onclick="deleteReminder(' + r.id + ')">Löschen</button>' +
       '</div></div>';
   }).join('');
 }
@@ -2834,10 +2834,10 @@ async function toggleDone(id) {
 
 async function deleteReminder(id) {
   const r = allReminders.find(x => x.id === id);
-  if (!confirm('Erinnerung "' + (r ? r.text : id) + '" l\\u00f6schen?')) return;
+  if (!confirm('Erinnerung "' + (r ? r.text : id) + '" löschen?')) return;
   try {
     await fetch('/api/reminders/' + id, { method: 'DELETE' });
-    showStatus('Gel\\u00f6scht', false);
+    showStatus('Gelöscht', false);
     loadReminders();
   } catch (err) { showStatus('Fehler: ' + err.message, true); }
 }
