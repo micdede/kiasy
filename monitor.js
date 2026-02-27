@@ -350,6 +350,7 @@ function getDashboardHTML() {
   <a href="/ha-editor" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Smart Home Editor</a>
   <a href="/notes" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Wissensbasis</a>
   <a href="/reminders" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Erinnerungen</a>
+  <a href="/terminal" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Terminal</a>
   <a href="/settings" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Einstellungen</a>
   <div class="status-bar">
     <span>Uptime: <b id="uptime">-</b></span>
@@ -758,6 +759,7 @@ function getEditorHTML() {
   <a href="/">Monitor</a>
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
 </header>
 
@@ -1124,6 +1126,7 @@ function getSettingsHTML() {
   <a href="/ha-editor">Smart Home Editor</a>
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
 </header>
 
 <div class="banner" id="banner">
@@ -1539,6 +1542,7 @@ function getNotesHTML() {
   <a href="/">Monitor</a>
   <a href="/ha-editor">Smart Home Editor</a>
   <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
 </header>
 
@@ -2050,6 +2054,506 @@ function handleNoteSync(req, res) {
   }
 }
 
+// --- Terminal HTML ---
+
+function getTerminalHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS - Terminal</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px; height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; color: #58a6ff; font-weight: 600; }
+  header a {
+    color: #8b949e; text-decoration: none; font-size: 12px;
+    padding: 4px 10px; border: 1px solid #30363d; border-radius: 6px;
+  }
+  header a:hover { color: #c9d1d9; border-color: #58a6ff; }
+
+  .main { flex: 1; display: flex; overflow: hidden; }
+
+  /* --- Quick Actions Sidebar --- */
+  .sidebar {
+    width: 280px; min-width: 240px; background: #161b22;
+    border-right: 1px solid #30363d; overflow-y: auto; padding: 12px;
+  }
+  .sidebar h2 {
+    font-size: 11px; color: #8b949e; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 10px; font-weight: 600;
+  }
+  .action-group { margin-bottom: 20px; }
+  .action-btn {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 10px 12px; border-radius: 6px; cursor: pointer;
+    font-family: inherit; font-size: 12px; margin-bottom: 6px;
+    transition: all 0.15s; text-align: left;
+  }
+  .action-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+  .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .action-btn .icon { font-size: 16px; width: 24px; text-align: center; }
+  .action-btn .label { flex: 1; }
+  .action-btn .badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 8px;
+    background: #21262d; color: #8b949e;
+  }
+  .action-btn.danger { border-color: #f8514944; }
+  .action-btn.danger:hover { border-color: #f85149; color: #f85149; background: #f8514911; }
+  .action-btn.warn { border-color: #d2992244; }
+  .action-btn.warn:hover { border-color: #d29922; color: #d29922; background: #d2992211; }
+  .action-btn.success { border-color: #3fb95044; }
+  .action-btn.success:hover { border-color: #3fb950; color: #3fb950; background: #3fb95011; }
+
+  .status-card {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 10px; margin-bottom: 6px;
+  }
+  .status-card .label { font-size: 10px; color: #8b949e; text-transform: uppercase; margin-bottom: 4px; }
+  .status-card .value { font-size: 13px; color: #e6edf3; }
+  .status-card .value.running { color: #3fb950; }
+  .status-card .value.stopped { color: #f85149; }
+
+  /* --- Terminal Area --- */
+  .terminal-wrap {
+    flex: 1; display: flex; flex-direction: column; min-width: 0;
+  }
+  .terminal-header {
+    background: #161b22; padding: 8px 16px; font-size: 11px; color: #8b949e;
+    border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 12px;
+  }
+  .terminal-header .cwd { color: #58a6ff; }
+  .terminal-header .clear-btn {
+    margin-left: auto; background: none; border: 1px solid #30363d;
+    color: #8b949e; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+    font-family: inherit; font-size: 11px;
+  }
+  .terminal-header .clear-btn:hover { border-color: #58a6ff; color: #c9d1d9; }
+  #terminal-output {
+    flex: 1; overflow-y: auto; padding: 8px 16px; background: #0d1117;
+    white-space: pre-wrap; word-break: break-all; font-size: 12px;
+    line-height: 1.5;
+  }
+  #terminal-output .cmd-line { color: #3fb950; margin-top: 8px; }
+  #terminal-output .cmd-line:first-child { margin-top: 0; }
+  #terminal-output .cmd-output { color: #c9d1d9; }
+  #terminal-output .cmd-error { color: #f85149; }
+  #terminal-output .cmd-info { color: #8b949e; font-style: italic; }
+  .terminal-input-wrap {
+    background: #161b22; border-top: 1px solid #30363d;
+    padding: 8px 16px; display: flex; gap: 8px; align-items: center;
+  }
+  .prompt { color: #3fb950; font-size: 13px; font-weight: 600; }
+  #terminal-input {
+    flex: 1; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 8px 12px; border-radius: 6px; font-family: inherit; font-size: 13px;
+    outline: none;
+  }
+  #terminal-input:focus { border-color: #58a6ff; }
+  #terminal-input:disabled { opacity: 0.5; }
+  .run-btn {
+    background: #238636; border: 1px solid #2ea043; color: #fff;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: 600;
+  }
+  .run-btn:hover { background: #2ea043; }
+  .run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  @media (max-width: 800px) {
+    .main { flex-direction: column; }
+    .sidebar { width: 100%; max-height: 220px; border-right: none; border-bottom: 1px solid #30363d; }
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Terminal</h1>
+  <a href="/">Monitor</a>
+  <a href="/ha-editor">Smart Home Editor</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/reminders">Erinnerungen</a>
+  <a href="/settings">Einstellungen</a>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="action-group">
+      <h2>JARVIS Service</h2>
+      <div class="status-card">
+        <div class="label">Status</div>
+        <div class="value" id="serviceStatus">Laden...</div>
+      </div>
+      <button class="action-btn success" onclick="quickAction('service-restart', 'JARVIS neustarten?')">
+        <span class="icon">&#x21bb;</span><span class="label">JARVIS neustarten</span>
+      </button>
+      <button class="action-btn" onclick="quickAction('service-stop', 'JARVIS stoppen?')">
+        <span class="icon">&#x23f9;</span><span class="label">JARVIS stoppen</span>
+      </button>
+      <button class="action-btn" onclick="quickAction('service-logs', null)">
+        <span class="icon">&#x1F4CB;</span><span class="label">Service-Logs (50 Zeilen)</span>
+      </button>
+    </div>
+
+    <div class="action-group">
+      <h2>JARVIS Agent</h2>
+      <button class="action-btn" onclick="quickAction('agent-reset', 'Chat-History aller Nutzer l\\u00f6schen?')">
+        <span class="icon">&#x1F5D1;</span><span class="label">Chat-History l\\u00f6schen</span>
+      </button>
+      <button class="action-btn" onclick="quickAction('git-backup', null)">
+        <span class="icon">&#x2601;</span><span class="label">Git Backup pushen</span>
+      </button>
+    </div>
+
+    <div class="action-group">
+      <h2>System</h2>
+      <div class="status-card">
+        <div class="label">Uptime</div>
+        <div class="value" id="sysUptime">-</div>
+      </div>
+      <button class="action-btn warn" onclick="quickAction('system-reboot', 'System wirklich NEUSTARTEN?')">
+        <span class="icon">&#x1F504;</span><span class="label">System neustarten</span>
+      </button>
+      <button class="action-btn danger" onclick="quickAction('system-shutdown', 'System wirklich HERUNTERFAHREN?\\nJARVIS wird offline sein!')">
+        <span class="icon">&#x23FB;</span><span class="label">System herunterfahren</span>
+      </button>
+    </div>
+
+    <div class="action-group">
+      <h2>Schnellbefehle</h2>
+      <button class="action-btn" onclick="runCmd('df -h /')">
+        <span class="icon">&#x1F4BE;</span><span class="label">Speicherplatz</span>
+      </button>
+      <button class="action-btn" onclick="runCmd('free -h')">
+        <span class="icon">&#x1F4CA;</span><span class="label">RAM-Auslastung</span>
+      </button>
+      <button class="action-btn" onclick="runCmd('docker ps --format \\'table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\\' 2>/dev/null || echo \\'Docker nicht installiert\\'')">
+        <span class="icon">&#x1F40B;</span><span class="label">Docker Container</span>
+      </button>
+      <button class="action-btn" onclick="runCmd('ss -tlnp 2>/dev/null | head -20')">
+        <span class="icon">&#x1F310;</span><span class="label">Offene Ports</span>
+      </button>
+      <button class="action-btn" onclick="runCmd('tail -20 /var/log/syslog 2>/dev/null || journalctl -n 20 --no-pager 2>/dev/null')">
+        <span class="icon">&#x1F4DD;</span><span class="label">System-Log (letzte 20)</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="terminal-wrap">
+    <div class="terminal-header">
+      <span>Verzeichnis: <span class="cwd" id="cwd">/home/mcde/whatsapp-claude</span></span>
+      <button class="clear-btn" onclick="clearTerminal()">Leeren</button>
+    </div>
+    <div id="terminal-output">
+      <div class="cmd-info">JARVIS WebTerminal bereit. Befehle eingeben oder Quick Actions nutzen.</div>
+    </div>
+    <div class="terminal-input-wrap">
+      <span class="prompt">$</span>
+      <input type="text" id="terminal-input" placeholder="Befehl eingeben..." autofocus>
+      <button class="run-btn" id="runBtn" onclick="submitCmd()">Ausf\\u00fchren</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const output = document.getElementById('terminal-output');
+const input = document.getElementById('terminal-input');
+const runBtn = document.getElementById('runBtn');
+const cwdEl = document.getElementById('cwd');
+let cmdHistory = [];
+let historyIdx = -1;
+let currentCwd = '/home/mcde/whatsapp-claude';
+
+function escapeHtml(s) {
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+function appendOutput(html) {
+  output.insertAdjacentHTML('beforeend', html);
+  output.scrollTop = output.scrollHeight;
+}
+
+function clearTerminal() {
+  output.innerHTML = '<div class="cmd-info">Terminal geleert.</div>';
+}
+
+async function runCmd(cmd) {
+  if (!cmd || !cmd.trim()) return;
+
+  input.disabled = true;
+  runBtn.disabled = true;
+  appendOutput('<div class="cmd-line">$ ' + escapeHtml(cmd) + '</div>');
+
+  try {
+    const res = await fetch('/api/terminal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: cmd, cwd: currentCwd })
+    });
+    const data = await res.json();
+
+    if (data.stdout) {
+      appendOutput('<div class="cmd-output">' + escapeHtml(data.stdout) + '</div>');
+    }
+    if (data.stderr) {
+      appendOutput('<div class="cmd-error">' + escapeHtml(data.stderr) + '</div>');
+    }
+    if (data.error) {
+      appendOutput('<div class="cmd-error">' + escapeHtml(data.error) + '</div>');
+    }
+    if (data.cwd) {
+      currentCwd = data.cwd;
+      cwdEl.textContent = currentCwd;
+    }
+  } catch (err) {
+    appendOutput('<div class="cmd-error">Verbindungsfehler: ' + escapeHtml(err.message) + '</div>');
+  } finally {
+    input.disabled = false;
+    runBtn.disabled = false;
+    input.focus();
+  }
+}
+
+function submitCmd() {
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  cmdHistory.unshift(cmd);
+  if (cmdHistory.length > 100) cmdHistory.pop();
+  historyIdx = -1;
+  input.value = '';
+  runCmd(cmd);
+}
+
+async function quickAction(action, confirmMsg) {
+  if (confirmMsg && !confirm(confirmMsg)) return;
+
+  appendOutput('<div class="cmd-info">[Quick Action: ' + escapeHtml(action) + ']</div>');
+
+  try {
+    const res = await fetch('/api/terminal/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    const data = await res.json();
+
+    if (data.output) {
+      appendOutput('<div class="cmd-output">' + escapeHtml(data.output) + '</div>');
+    }
+    if (data.error) {
+      appendOutput('<div class="cmd-error">' + escapeHtml(data.error) + '</div>');
+    }
+    if (data.message) {
+      appendOutput('<div class="cmd-info">' + escapeHtml(data.message) + '</div>');
+    }
+
+    // Refresh service status
+    loadStatus();
+  } catch (err) {
+    appendOutput('<div class="cmd-error">Fehler: ' + escapeHtml(err.message) + '</div>');
+  }
+}
+
+// Keyboard
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    submitCmd();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (historyIdx < cmdHistory.length - 1) {
+      historyIdx++;
+      input.value = cmdHistory[historyIdx];
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (historyIdx > 0) {
+      historyIdx--;
+      input.value = cmdHistory[historyIdx];
+    } else {
+      historyIdx = -1;
+      input.value = '';
+    }
+  }
+});
+
+// Service Status
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/terminal/status');
+    const data = await res.json();
+    const el = document.getElementById('serviceStatus');
+    el.textContent = data.serviceStatus || 'Unbekannt';
+    el.className = 'value ' + (data.serviceRunning ? 'running' : 'stopped');
+    document.getElementById('sysUptime').textContent = data.systemUptime || '-';
+  } catch {}
+}
+
+loadStatus();
+setInterval(loadStatus, 15000);
+</script>
+</body>
+</html>`;
+}
+
+// --- Terminal API Handlers ---
+
+function handleTerminalExec(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const cmd = body.command;
+      const cwd = body.cwd || __dirname;
+
+      if (!cmd) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "command fehlt" }));
+        return;
+      }
+
+      // cd handling: extract new cwd
+      const cdMatch = cmd.match(/^cd\s+(.+)$/);
+      if (cdMatch) {
+        const target = cdMatch[1].trim().replace(/^~/, process.env.HOME || "/home/mcde");
+        const newCwd = path.resolve(cwd, target);
+        if (fs.existsSync(newCwd) && fs.statSync(newCwd).isDirectory()) {
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ stdout: "", stderr: "", cwd: newCwd }));
+        } else {
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ stdout: "", stderr: "cd: " + target + ": Kein solches Verzeichnis", cwd }));
+        }
+        return;
+      }
+
+      const { exec } = require("child_process");
+      exec(cmd, { cwd, timeout: 30000, maxBuffer: 1024 * 1024, env: { ...process.env, TERM: "dumb" } }, (err, stdout, stderr) => {
+        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({
+          stdout: stdout || "",
+          stderr: stderr || "",
+          exitCode: err ? err.code : 0,
+          error: err && !stderr ? err.message : undefined,
+          cwd,
+        }));
+      });
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleTerminalAction(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const action = body.action;
+      const { exec } = require("child_process");
+
+      const respond = (data) => {
+        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify(data));
+      };
+
+      switch (action) {
+        case "service-restart":
+          exec("sudo systemctl restart jarvis-telegram 2>&1", { timeout: 15000 }, (err, out, serr) => {
+            if (err) {
+              // Fallback: process.exit for self-restart
+              respond({ message: "JARVIS wird neu gestartet..." });
+              setTimeout(() => process.exit(0), 500);
+            } else {
+              respond({ message: "JARVIS Service neu gestartet", output: out || serr });
+            }
+          });
+          break;
+
+        case "service-stop":
+          respond({ message: "JARVIS wird gestoppt..." });
+          setTimeout(() => process.exit(0), 500);
+          break;
+
+        case "service-logs":
+          exec("journalctl -u jarvis-telegram --no-pager -n 50 2>/dev/null || echo 'Journal nicht verfügbar'", { timeout: 10000 }, (err, out) => {
+            respond({ output: out || (err ? err.message : "Keine Logs") });
+          });
+          break;
+
+        case "agent-reset":
+          try {
+            const agentMod = require("./agent");
+            agentMod.conversations.clear();
+            respond({ message: "Chat-History aller Nutzer gelöscht (" + agentMod.conversations.size + " verbleibend)" });
+          } catch (e) {
+            respond({ error: e.message });
+          }
+          break;
+
+        case "git-backup":
+          exec('cd "' + __dirname + '" && git add -A && git diff --cached --quiet || (git commit -m "Auto-Backup $(date +%Y-%m-%d_%H:%M)" && git push) 2>&1', { timeout: 30000 }, (err, out) => {
+            respond({ output: out || "Keine Änderungen", error: err ? err.message : undefined });
+          });
+          break;
+
+        case "system-reboot":
+          respond({ message: "System wird neugestartet..." });
+          exec("sudo reboot", { timeout: 5000 }, () => {});
+          break;
+
+        case "system-shutdown":
+          respond({ message: "System wird heruntergefahren..." });
+          exec("sudo shutdown -h now", { timeout: 5000 }, () => {});
+          break;
+
+        default:
+          respond({ error: "Unbekannte Aktion: " + action });
+      }
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleTerminalStatus(req, res) {
+  const { exec } = require("child_process");
+
+  let serviceStatus = "Unbekannt";
+  let serviceRunning = false;
+
+  exec("systemctl is-active jarvis-telegram 2>/dev/null", { timeout: 5000 }, (err, out) => {
+    const status = (out || "").trim();
+    serviceRunning = status === "active";
+    serviceStatus = serviceRunning ? "Aktiv (running)" : (status || "Gestoppt");
+
+    // System uptime
+    const uptimeSec = os.uptime();
+    const days = Math.floor(uptimeSec / 86400);
+    const hours = Math.floor((uptimeSec % 86400) / 3600);
+    const mins = Math.floor((uptimeSec % 3600) / 60);
+    const systemUptime = (days > 0 ? days + "d " : "") + hours + "h " + mins + "m";
+
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    res.end(JSON.stringify({ serviceStatus, serviceRunning, systemUptime }));
+  });
+}
+
 // --- Reminders HTML ---
 
 function getRemindersHTML() {
@@ -2182,6 +2686,7 @@ function getRemindersHTML() {
   <a href="/">Monitor</a>
   <a href="/ha-editor">Smart Home Editor</a>
   <a href="/notes">Wissensbasis</a>
+  <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
 </header>
 
@@ -2838,6 +3343,17 @@ function startMonitor(port) {
       handleHaFileWrite(req, res, filename);
     } else if (req.url === "/api/ha-regenerate" && req.method === "POST") {
       handleHaRegenerate(req, res);
+
+    // --- Terminal ---
+    } else if (req.url === "/terminal") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getTerminalHTML());
+    } else if (req.url === "/api/terminal" && req.method === "POST") {
+      handleTerminalExec(req, res);
+    } else if (req.url === "/api/terminal/action" && req.method === "POST") {
+      handleTerminalAction(req, res);
+    } else if (req.url === "/api/terminal/status" && req.method === "GET") {
+      handleTerminalStatus(req, res);
 
     // --- Reminders / Erinnerungen ---
     } else if (req.url === "/reminders") {
