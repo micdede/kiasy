@@ -1,0 +1,22 @@
+{
+  "facts": [
+    {
+      "key": "E-Mail-Adresse",
+      "value": "m.dedecke@wrsk.de",
+      "id": 1771764807085,
+      "added": "2026-02-22"
+    },
+    "{\"key\": \"Vollständiger Name\", \"value\": \"Michael Dedecke\"}"
+  ],
+  "todos": [],
+  "notes": [
+    {
+      "content": "Testnotiz",
+      "topic": "Testnotiz",
+      "id": 1771763188581,
+      "added": "2026-02-22"
+    },
+    "{\"topic\": \"Anfrage von Oliver Hütz\", \"content\": \"Oliver Hütz (o.huetz@wrsk.de) hat am 22.02.2026 nach Terminen von Michael für den 23.02.2026 gefragt. Kalender zeigt keine Termine. Habe bereits geantwortet dass keine Termine eingetragen sind.\"}",
+    "{\"topic\": \"Termin mit Oliver Hütz\", \"content\": \"Oliver Hütz (o.huetz@wrsk.de) hat Termin angefragt für 23.02.2026 um 13:30 Uhr im Büro Witten. Habe Termin 'Meeting mit Oliver Hütz' für 23.02.2026, 13:30-14:30 Uhr eingetragen (UID: jarvis-1771792065616-7iiyyw). Bestätigungsmail gesendet an o.huetz@wrsk.de.\"}"
+  ]
+}

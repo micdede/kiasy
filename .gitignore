@@ -7,6 +7,4 @@ venv/
 notes/
 certs/
 logs/
-memory.json
-reminders.json
 credentials.json

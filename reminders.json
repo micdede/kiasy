@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1771456573347,
+    "text": "Test 😉",
+    "due": "2026-02-19T00:15:00",
+    "chatId": "40922498744565@lid",
+    "done": true,
+    "created": "2026-02-18T23:16:13.347Z"
+  },
+  {
+    "id": 1771720505775,
+    "text": "Medikamente nehmen!",
+    "due": "2026-02-22T01:37:00",
+    "chatId": "17723600",
+    "done": true,
+    "created": "2026-02-22T00:35:05.775Z"
+  },
+  {
+    "id": 1772219649916,
+    "text": "Tägliche Statusmeldung - Check die Uhrzeit",
+    "due": "2026-02-28T18:00:00",
+    "chatId": "17723600",
+    "done": false,
+    "created": "2026-02-27T19:14:09.916Z"
+  },
+  {
+    "id": 1772219649918,
+    "text": "Tägliche Statusmeldung - Check die Uhrzeit",
+    "due": "2026-03-01T18:00:00",
+    "chatId": "17723600",
+    "done": false,
+    "created": "2026-02-27T19:14:09.918Z"
+  },
+  {
+    "id": 1772219649920,
+    "text": "Tägliche Statusmeldung - Check die Uhrzeit",
+    "due": "2026-03-02T18:00:00",
+    "chatId": "17723600",
+    "done": false,
+    "created": "2026-02-27T19:14:09.920Z"
+  },
+  {
+    "id": 1772219649921,
+    "text": "Tägliche Statusmeldung - Check die Uhrzeit",
+    "due": "2026-03-03T18:00:00",
+    "chatId": "17723600",
+    "done": false,
+    "created": "2026-02-27T19:14:09.921Z"
+  },
+  {
+    "id": 1772219649923,
+    "text": "Tägliche Statusmeldung - Check die Uhrzeit",
+    "due": "2026-03-04T18:00:00",
+    "chatId": "17723600",
+    "done": false,
+    "created": "2026-02-27T19:14:09.923Z"
+  },
+  {
+    "id": 1772219649924,
+    "text": "Tägliche Statusmeldung - Check die Uhrzeit",
+    "due": "2026-03-05T18:00:00",
+    "chatId": "17723600",
+    "done": false,
+    "created": "2026-02-27T19:14:09.925Z"
+  },
+  {
+    "id": 1772219649926,
+    "text": "Tägliche Statusmeldung - Check die Uhrzeit",
+    "due": "2026-03-06T18:00:00",
+    "chatId": "17723600",
+    "done": false,
+    "created": "2026-02-27T19:14:09.926Z"
+  }
+]
