@@ -59,7 +59,8 @@
       "Bash(git:*)",
       "Bash(ssh-keygen:*)",
       "Bash(ssh:*)",
-      "Bash(gh repo:*)"
+      "Bash(gh repo:*)",
+      "Bash(bash:*)"
     ]
   }
 }

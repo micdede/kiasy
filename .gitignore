@@ -8,3 +8,7 @@ notes/
 certs/
 logs/
 credentials.json
+chat-history.db
+chat-history.db-shm
+chat-history.db-wal
+.last-telegram-chat

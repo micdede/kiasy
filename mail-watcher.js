@@ -7,8 +7,15 @@ const { extractText } = require("./tools/kerio-mail");
 const POLL_INTERVAL = 60000; // 60 Sekunden
 let isProcessing = false;
 
+function getWatchFolders() {
+  const env = process.env.MAIL_WATCH_FOLDERS;
+  if (!env || !env.trim()) return ["INBOX"];
+  return env.split(",").map((f) => f.trim()).filter(Boolean);
+}
+
 function startMailWatcher(agent) {
-  console.log("Mail-Watcher gestartet (60s Intervall)");
+  const folders = getWatchFolders();
+  console.log(`Mail-Watcher gestartet (60s Intervall, Ordner: ${folders.join(", ")})`);
   checkNewMails(agent);
   setInterval(() => checkNewMails(agent), POLL_INTERVAL);
 }
@@ -30,30 +37,36 @@ async function checkNewMails(agent) {
     await client.connect();
 
     const mailsToProcess = [];
-    const lock = await client.getMailboxLock("INBOX");
-    try {
-      const uids = await client.search({ seen: false }, { uid: true });
-      if (uids.length === 0) return;
+    const folders = getWatchFolders();
 
-      console.log(`  Mail-Watcher: ${uids.length} ungelesene Mail(s)`);
-
-      // Mails lesen und SOFORT als gelesen markieren (verhindert Doppelverarbeitung)
-      for (const uid of uids) {
+    for (const folder of folders) {
+      try {
+        const lock = await client.getMailboxLock(folder);
         try {
-          const msg = await client.fetchOne(uid, { envelope: true, source: true }, { uid: true });
-          if (!msg || !msg.envelope) {
-            console.log(`  Mail-Watcher: UID ${uid} nicht lesbar, übersprungen`);
-            continue;
+          const uids = await client.search({ seen: false }, { uid: true });
+          if (!uids || uids.length === 0) continue;
+
+          console.log(`  Mail-Watcher [${folder}]: ${uids.length} ungelesene Mail(s)`);
+
+          for (const uid of uids) {
+            try {
+              const msg = await client.fetchOne(uid, { envelope: true, source: true }, { uid: true });
+              if (!msg || !msg.envelope) {
+                console.log(`  Mail-Watcher [${folder}]: UID ${uid} nicht lesbar, übersprungen`);
+                continue;
+              }
+              await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
+              mailsToProcess.push({ envelope: msg.envelope, source: msg.source, folder });
+            } catch (err) {
+              console.error(`  Mail-Watcher [${folder}]: Fehler bei UID ${uid}:`, err.message);
+            }
           }
-          // Sofort als gelesen markieren
-          await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
-          mailsToProcess.push({ envelope: msg.envelope, source: msg.source });
-        } catch (err) {
-          console.error(`  Mail-Watcher: Fehler bei UID ${uid}:`, err.message);
+        } finally {
+          lock.release();
         }
+      } catch (err) {
+        console.error(`  Mail-Watcher: Ordner "${folder}" nicht zugreifbar:`, err.message);
       }
-    } finally {
-      lock.release();
     }
 
     // IMAP-Verbindung schließen bevor Agent aufgerufen wird (dauert lange)
@@ -62,7 +75,7 @@ async function checkNewMails(agent) {
 
     // Jetzt Mails verarbeiten (ohne offene IMAP-Verbindung)
     for (const mail of mailsToProcess) {
-      await processEmail(agent, mail.envelope, mail.source);
+      await processEmail(agent, mail.envelope, mail.source, mail.folder);
     }
   } catch (err) {
     console.error("Mail-Watcher Fehler:", err.message);
@@ -74,7 +87,7 @@ async function checkNewMails(agent) {
   }
 }
 
-async function processEmail(agent, envelope, source) {
+async function processEmail(agent, envelope, source, folder = "INBOX") {
   const cfg = getKerioConfig();
 
   // Absender ermitteln
@@ -96,7 +109,8 @@ async function processEmail(agent, envelope, source) {
   const messageId = envelope.messageId || null;
   const body = extractText(source);
 
-  console.log(`  Mail-Watcher: Verarbeite Mail von ${fromAddr}: "${subject}"`);
+  const folderInfo = folder !== "INBOX" ? ` [${folder}]` : "";
+  console.log(`  Mail-Watcher${folderInfo}: Verarbeite Mail von ${fromAddr}: "${subject}"`);
 
   // Agent aufrufen mit eigenem Konversationskontext pro Absender
   const chatId = `mail-${fromAddr}`;
@@ -115,7 +129,24 @@ async function processEmail(agent, envelope, source) {
   }
 }
 
+function isRecipientAllowed(email) {
+  const allowedDomains = (process.env.MAIL_ALLOWED_DOMAINS || "")
+    .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
+  const whitelist = (process.env.MAIL_WHITELIST || "")
+    .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+
+  const addr = email.trim().toLowerCase();
+  const domain = addr.split("@")[1] || "";
+
+  return allowedDomains.includes(domain) || whitelist.includes(addr);
+}
+
 async function sendReply(to, subject, messageId, body) {
+  if (!isRecipientAllowed(to)) {
+    console.log(`  Mail-Watcher: Reply an ${to} blockiert (nicht in erlaubten Domains/Whitelist)`);
+    return;
+  }
+
   const cfg = getKerioConfig();
   const transporter = nodemailer.createTransport({
     host: cfg.host,

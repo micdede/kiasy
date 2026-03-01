@@ -6,7 +6,85 @@
       "id": 1771764807085,
       "added": "2026-02-22"
     },
-    "{\"key\": \"Vollständiger Name\", \"value\": \"Michael Dedecke\"}"
+    "{\"key\": \"Vollständiger Name\", \"value\": \"Michael Dedecke\"}",
+    {
+      "key": "name",
+      "value": "Michael Dedecke",
+      "id": 1772236536228,
+      "added": "2026-02-27"
+    },
+    {
+      "added": "2026-02-27",
+      "id": 1772236538725,
+      "key": "email",
+      "value": "m.dedecke@wrsk.de"
+    },
+    {
+      "added": "2026-02-27",
+      "id": 1772236597218,
+      "key": "adresse",
+      "value": "Gerberstraße 17, 58456 Witten"
+    },
+    {
+      "added": "2026-02-27",
+      "id": 1772236775188,
+      "key": "handy",
+      "value": "0151 19668027"
+    },
+    {
+      "added": "2026-02-28",
+      "id": 1772236838876,
+      "key": "baujahr",
+      "value": "1971"
+    },
+    {
+      "added": "2026-02-28",
+      "id": 1772236841574,
+      "key": "geschlecht",
+      "value": "männlich"
+    },
+    {
+      "added": "2026-02-28",
+      "id": 1772237144251,
+      "key": "firma",
+      "value": "WRSK GmbH"
+    },
+    {
+      "added": "2026-02-28",
+      "id": 1772237147408,
+      "key": "position",
+      "value": "Geschäftsführer"
+    },
+    {
+      "added": "2026-02-28",
+      "id": 1772237151799,
+      "key": "partnerin",
+      "value": "Lea"
+    },
+    {
+      "added": "2026-02-28",
+      "id": 1772237154741,
+      "key": "hobbys",
+      "value": "Mit dem Wohnmobil unterwegs sein"
+    },
+    {
+      "key": "mir = Michael kontaktieren",
+      "value": "Wenn Michael 'mir' sagt, meint er sich selbst und möchte, dass ich ihm (Michael) etwas sende (WhatsApp/E-Mail)",
+      "id": 1772312349405,
+      "added": "2026-02-28"
+    },
+    {
+      "added": "2026-02-28",
+      "key": "private Email = md@efach.eu",
+      "value": "Wenn Michael 'auf meine private Email' sagt, meint er md@efach.eu",
+      "id": 1772312641545
+    },
+    {
+      "added": "2026-03-01",
+      "key": "E-Mail-Postfach/Inbox = ~m.dedecke@wrsk.de/INBOX",
+      "value": "Wenn Michael von 'meinem E-Mail-Postfach' oder 'meinen E-Mails' spricht, meint er den freigegebenen Ordner ~m.dedecke@wrsk.de/INBOX",
+      "id": 1772379661563
+    }
   ],
   "todos": [],
   "notes": [

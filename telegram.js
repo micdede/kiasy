@@ -58,9 +58,15 @@ require("./mail-watcher").startMailWatcher(agent);
 
 // --- Nachrichten-Handler ---
 
+const LAST_CHAT_FILE = path.join(__dirname, ".last-telegram-chat");
+let lastKnownChatId = null;
+try { lastKnownChatId = fs.readFileSync(LAST_CHAT_FILE, "utf-8").trim() || null; } catch {}
+
 bot.on("message", async (msg) => {
   const chatId = String(msg.chat.id);
   const userId = String(msg.from.id);
+  lastKnownChatId = chatId;
+  try { fs.writeFileSync(LAST_CHAT_FILE, chatId); } catch {}
 
   // Whitelist
   if (ALLOWED_USERS.length > 0 && !ALLOWED_USERS.includes(userId)) {
@@ -137,6 +143,14 @@ bot.on("message", async (msg) => {
       }
     })();
 
+    // DB-Statistiken
+    let dbInfo = "";
+    try {
+      const stats = agent.chatDb.getStats();
+      dbInfo = `\nChat-DB: ${stats.total} Nachrichten, ${stats.chats} Chats` +
+        (stats.oldest ? `\nÄlteste Nachricht: ${stats.oldest}` : "");
+    } catch {}
+
     await bot.sendMessage(
       chatId,
       `*JARVIS Status*\n\n` +
@@ -144,7 +158,8 @@ bot.on("message", async (msg) => {
         `Tools geladen: ${toolCount}\n` +
         `Nachrichten im Verlauf: ${history.length}\n` +
         `Aktive Chats: ${agent.conversations.size}\n` +
-        `Gedächtnis: ${(memSize / 1024).toFixed(1)} KB`,
+        `Gedächtnis: ${(memSize / 1024).toFixed(1)} KB` +
+        dbInfo,
       { parse_mode: "Markdown" }
     );
     return;
@@ -225,23 +240,91 @@ bot.on("message", async (msg) => {
 
 // --- Reminder-Scheduler ---
 
+const processingReminders = new Set();
+
 async function checkReminders() {
   try {
     const reminder = require("./tools/reminder");
     const due = reminder.getDueReminders();
 
-    for (const r of due) {
-      const chatId = r.chatId;
-      if (!chatId) continue;
+    const fallbackChatId = (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).find(Boolean)
+      || lastKnownChatId || null;
 
+    for (const r of due) {
+      const chatId = r.chatId || fallbackChatId;
+      if (!chatId) continue;
+      if (processingReminders.has(r.id)) continue;
+
+      processingReminders.add(r.id);
       try {
-        await bot.sendMessage(chatId, `*Erinnerung:* ${r.text}`, {
-          parse_mode: "Markdown",
-        });
-        reminder.markDone(r.id);
-        console.log(`  Reminder gesendet: "${r.text}" -> ${chatId}`);
+        if (r.type === "task") {
+          // Aufgabe: Prompt an Agent senden
+          console.log(`  Task-Reminder startet: "${r.text}" -> ${chatId}`);
+          await bot.sendChatAction(chatId, "typing");
+
+          try {
+            const { text } = await agent.handleMessage(chatId, r.text);
+            const header = "*Automatische Aufgabe:*";
+            const msg = text ? `${header}\n${text}` : `${header}\nAufgabe ausgeführt (keine Ausgabe).`;
+
+            if (msg.length > 4000) {
+              const chunks = splitMessage(msg, 4000);
+              for (const chunk of chunks) {
+                await bot.sendMessage(chatId, chunk, { parse_mode: "Markdown" }).catch(() =>
+                  bot.sendMessage(chatId, chunk)
+                );
+              }
+            } else {
+              await bot.sendMessage(chatId, msg, { parse_mode: "Markdown" }).catch(() =>
+                bot.sendMessage(chatId, msg)
+              );
+            }
+
+            // Erfolg: recurring vorsetzen oder einmalig erledigen
+            if (r.interval_hours) {
+              reminder.advanceReminder(r.id);
+              console.log(`  Task-Reminder wiederholt: "${r.text}" -> nächster Termin`);
+            } else {
+              reminder.markDone(r.id);
+            }
+          } catch (taskErr) {
+            console.error(`  Task-Reminder Fehler für "${r.text}":`, taskErr.message);
+            const count = reminder.incrementFailCount(r.id);
+            if (count >= 3) {
+              await bot.sendMessage(
+                chatId,
+                `*Aufgabe pausiert:* "${r.text}" — 3x fehlgeschlagen. Nutze reminder\\_list um den Status zu sehen.`,
+                { parse_mode: "Markdown" }
+              ).catch(() => {});
+            } else {
+              await bot.sendMessage(
+                chatId,
+                `*Aufgabe fehlgeschlagen (${count}/3):* "${r.text}" — ${taskErr.message}`,
+                { parse_mode: "Markdown" }
+              ).catch(() => {});
+            }
+          }
+        } else {
+          // Text-Erinnerung (bestehend)
+          const isRecurring = !!r.interval_hours;
+          const header = isRecurring ? "*Erinnerung (wiederkehrend):*" : "*Erinnerung:*";
+
+          await bot.sendMessage(chatId, `${header} ${r.text}`, {
+            parse_mode: "Markdown",
+          });
+
+          if (isRecurring) {
+            reminder.advanceReminder(r.id);
+            console.log(`  Reminder wiederholt: "${r.text}" -> nächster Termin`);
+          } else {
+            reminder.markDone(r.id);
+          }
+          console.log(`  Reminder gesendet: "${r.text}" -> ${chatId}`);
+        }
       } catch (err) {
         console.error(`  Reminder-Fehler für "${r.text}":`, err.message);
+      } finally {
+        processingReminders.delete(r.id);
       }
     }
   } catch {

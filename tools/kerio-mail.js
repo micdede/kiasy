@@ -4,9 +4,19 @@ const { getKerioConfig } = require("./kerio-config");
 
 const definitions = [
   {
+    name: "mail_folders",
+    description:
+      "Listet alle verfügbaren IMAP-Ordner auf, inkl. freigegebener Postfächer. Zeigt Name, Pfad, Anzahl Nachrichten und ungelesene.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
     name: "mail_list",
     description:
-      "Listet die letzten E-Mails via IMAP auf. Optional nur ungelesene. Zeigt Betreff, Absender, Datum und UID.",
+      "Listet die letzten E-Mails via IMAP auf. Optional nur ungelesene. Zeigt Betreff, Absender, Datum und UID. Mit folder-Parameter auch freigegebene Postfächer lesbar.",
     input_schema: {
       type: "object",
       properties: {
@@ -18,19 +28,30 @@ const definitions = [
           type: "boolean",
           description: "Nur ungelesene Mails anzeigen (Standard: false)",
         },
+        folder: {
+          type: "string",
+          description:
+            'IMAP-Ordner (Standard: "INBOX"). Für freigegebene Postfächer z.B. "~user@domain/INBOX". Ordner mit mail_folders auflisten.',
+        },
       },
       required: [],
     },
   },
   {
     name: "mail_read",
-    description: "Liest den Inhalt einer einzelnen E-Mail anhand ihrer UID.",
+    description:
+      "Liest den Inhalt einer einzelnen E-Mail anhand ihrer UID. Mit folder-Parameter auch aus freigegebenen Postfächern.",
     input_schema: {
       type: "object",
       properties: {
         uid: {
           type: "string",
           description: "Die UID der zu lesenden Mail",
+        },
+        folder: {
+          type: "string",
+          description:
+            'IMAP-Ordner (Standard: "INBOX"). Für freigegebene Postfächer z.B. "~user@domain/INBOX".',
         },
       },
       required: ["uid"],
@@ -140,34 +161,69 @@ function extractText(source) {
 async function execute(name, input) {
   try {
     switch (name) {
+      case "mail_folders": {
+        const client = await getImapClient();
+        try {
+          const folders = await client.list();
+          const lines = [];
+          for (const folder of folders) {
+            // Ordner-Status abrufen für Nachrichten-Anzahl
+            try {
+              const status = await client.status(folder.path, {
+                messages: true,
+                unseen: true,
+              });
+              const unread = status.unseen > 0 ? ` (${status.unseen} ungelesen)` : "";
+              lines.push(`📁 ${folder.path} — ${status.messages} Nachrichten${unread}`);
+            } catch {
+              // Manche Ordner sind nicht selektierbar (z.B. \Noselect)
+              lines.push(`📁 ${folder.path} (nicht lesbar)`);
+            }
+          }
+          return `📂 ${lines.length} Ordner gefunden:\n\n${lines.join("\n")}`;
+        } finally {
+          await client.logout();
+        }
+      }
+
       case "mail_list": {
         const count = Math.min(input.count || 10, 20);
+        const folder = input.folder || "INBOX";
         const client = await getImapClient();
 
         try {
-          const lock = await client.getMailboxLock("INBOX");
+          const lock = await client.getMailboxLock(folder);
           try {
             const messages = [];
-            const searchCriteria = input.unread_only ? { seen: false } : "all";
-            const uids = await client.search(searchCriteria, { uid: true });
-            
-            // Fix: client.search gibt manchmal false zurück statt Array
-            const uidsArray = uids === false ? [] : (Array.isArray(uids) ? uids : []);
 
-            if (uidsArray.length === 0) {
-              return input.unread_only
-                ? "Keine ungelesenen E-Mails."
-                : "Keine E-Mails gefunden.";
+            let recentUids;
+            if (input.unread_only) {
+              const uids = await client.search({ seen: false }, { uid: true });
+              const uidsArray = uids === false ? [] : (Array.isArray(uids) ? uids : []);
+              if (uidsArray.length === 0) return "Keine ungelesenen E-Mails.";
+              recentUids = uidsArray.slice(-count).reverse();
+            } else {
+              // search('all') kann bei großen/shared Mailboxen false zurückgeben
+              // Fallback: Sequence-basierter Fetch der letzten N Mails
+              const uids = await client.search("all", { uid: true });
+              const uidsArray = uids === false ? [] : (Array.isArray(uids) ? uids : []);
+              if (uidsArray.length > 0) {
+                recentUids = uidsArray.slice(-count).reverse();
+              } else {
+                // Fallback: letzte N per Sequence-Nummer
+                const total = client.mailbox.exists;
+                if (!total || total === 0) return "Keine E-Mails gefunden.";
+                const from = Math.max(1, total - count + 1);
+                recentUids = `${from}:*`;
+              }
             }
 
-            // Letzte N UIDs nehmen
-            const recentUids = uidsArray.slice(-count).reverse();
-
-            for await (const msg of client.fetch(recentUids, {
-              envelope: true,
-              uid: true,
-              flags: true,
-            })) {
+            const isUidRange = Array.isArray(recentUids);
+            for await (const msg of client.fetch(
+              recentUids,
+              { envelope: true, uid: true, flags: true },
+              isUidRange ? { uid: true } : {}
+            )) {
               const env = msg.envelope;
               const from = env.from && env.from[0]
                 ? env.from[0].name || env.from[0].address
@@ -189,7 +245,8 @@ async function execute(name, input) {
               );
             }
 
-            return `📬 ${messages.length} E-Mails:\n${messages.join("\n\n")}`;
+            const folderInfo = folder !== "INBOX" ? ` (${folder})` : "";
+            return `📬 ${messages.length} E-Mails${folderInfo}:\n${messages.join("\n\n")}`;
           } finally {
             lock.release();
           }
@@ -201,16 +258,17 @@ async function execute(name, input) {
       case "mail_read": {
         const uid = parseInt(input.uid, 10);
         if (isNaN(uid)) return "❌ Ungültige UID.";
+        const folder = input.folder || "INBOX";
 
         const client = await getImapClient();
 
         try {
-          const lock = await client.getMailboxLock("INBOX");
+          const lock = await client.getMailboxLock(folder);
           try {
             const msg = await client.fetchOne(uid, {
               envelope: true,
               source: true,
-            });
+            }, { uid: true });
 
             const env = msg.envelope;
             const from = env.from && env.from[0]
@@ -242,6 +300,22 @@ async function execute(name, input) {
       }
 
       case "mail_send": {
+        // Empfänger-Validierung: nur erlaubte Domains und Whitelist-Adressen
+        const allowedDomains = (process.env.MAIL_ALLOWED_DOMAINS || "")
+          .split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
+        const whitelist = (process.env.MAIL_WHITELIST || "")
+          .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+
+        const recipient = input.to.trim().toLowerCase();
+        const recipientDomain = recipient.split("@")[1] || "";
+
+        const domainAllowed = allowedDomains.includes(recipientDomain);
+        const whitelistAllowed = whitelist.includes(recipient);
+
+        if (!domainAllowed && !whitelistAllowed) {
+          return `❌ Senden an ${input.to} nicht erlaubt. Nur Adressen der Domains [${allowedDomains.join(", ") || "keine"}] oder Whitelist-Adressen sind freigegeben.`;
+        }
+
         const cfg = getKerioConfig();
         const transporter = nodemailer.createTransport({
           host: cfg.host,

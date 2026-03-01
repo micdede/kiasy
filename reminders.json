@@ -16,59 +16,49 @@
     "created": "2026-02-22T00:35:05.775Z"
   },
   {
-    "id": 1772232566508,
-    "text": "Batterie-Check: Prüfe alle Home Assistant Sensoren auf Batteriestand unter 25%",
-    "due": "2026-03-01T18:00:00",
-    "chatId": "17723600",
-    "done": false,
-    "created": "2026-02-27T22:49:26.508Z"
-  },
-  {
-    "id": 1772232566510,
-    "text": "Batterie-Check: Prüfe alle Home Assistant Sensoren auf Batteriestand unter 25%",
-    "due": "2026-03-02T18:00:00",
-    "chatId": "17723600",
-    "done": false,
-    "created": "2026-02-27T22:49:26.510Z"
-  },
-  {
-    "id": 1772232566511,
-    "text": "Batterie-Check: Prüfe alle Home Assistant Sensoren auf Batteriestand unter 25%",
-    "due": "2026-03-03T18:00:00",
-    "chatId": "17723600",
-    "done": false,
-    "created": "2026-02-27T22:49:26.511Z"
-  },
-  {
-    "id": 1772232566513,
-    "text": "Batterie-Check: Prüfe alle Home Assistant Sensoren auf Batteriestand unter 25%",
-    "due": "2026-03-04T18:00:00",
-    "chatId": "17723600",
-    "done": false,
-    "created": "2026-02-27T22:49:26.513Z"
-  },
-  {
-    "id": 1772232566515,
-    "text": "Batterie-Check: Prüfe alle Home Assistant Sensoren auf Batteriestand unter 25%",
-    "due": "2026-03-05T18:00:00",
-    "chatId": "17723600",
-    "done": false,
-    "created": "2026-02-27T22:49:26.515Z"
-  },
-  {
-    "id": 1772232566516,
-    "text": "Batterie-Check: Prüfe alle Home Assistant Sensoren auf Batteriestand unter 25%",
-    "due": "2026-03-06T18:00:00",
-    "chatId": "17723600",
-    "done": false,
-    "created": "2026-02-27T22:49:26.516Z"
-  },
-  {
     "id": 1772232566518,
     "text": "Batterie-Check: Prüfe alle Home Assistant Sensoren auf Batteriestand unter 25%",
     "due": "2026-02-28T18:00:00",
     "chatId": "17723600",
-    "done": false,
+    "done": true,
     "created": "2026-02-27T22:49:26.518Z"
+  },
+  {
+    "id": 1772298197134,
+    "text": "🔋 Batteriecheck: Alle Home Assistant Sensoren auf Batteriestand unter 25% prüfen",
+    "due": "2026-02-28T18:00:00",
+    "chatId": "17723600",
+    "done": true,
+    "created": "2026-02-28T17:03:17.134Z"
+  },
+  {
+    "id": 1772298204619,
+    "text": "🔋 Batteriecheck: Alle Home Assistant Sensoren auf Batteriestand unter 25% prüfen",
+    "due": "2026-03-01T18:00:00",
+    "chatId": "17723600",
+    "done": true,
+    "created": "2026-02-28T17:03:24.619Z"
+  },
+  {
+    "id": 1772392714179,
+    "text": "Prüfe die Batteriestände der Home Assistant Sensoren. Sende Eine Telegram Nachricht mit dem Ergebnis. Lollte es Sensoren mit einem Batteriestand von unter 25% geben, liste sie auf.",
+    "due": "2026-03-02T18:00:00",
+    "chatId": null,
+    "done": false,
+    "created": "2026-03-01T19:18:33.323Z",
+    "type": "task",
+    "interval_hours": 24,
+    "failCount": 0
+  },
+  {
+    "id": 1772392736641,
+    "text": "Prüfe die Batteriestände der Home Assistant Sensoren. Sende Eine Telegram Nachricht mit dem Ergebnis. Lollte es Sensoren mit einem Batteriestand von unter 25% geben, liste sie auf.",
+    "due": "2026-03-01T20:30:00",
+    "chatId": null,
+    "done": true,
+    "created": "2026-03-01T19:18:55.664Z",
+    "type": "task",
+    "interval_hours": null,
+    "failCount": 0
   }
 ]

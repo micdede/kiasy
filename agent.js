@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { createProvider } = require("./providers");
+const chatDb = require("./lib/chat-db");
 
 // --- Konfiguration ---
 
@@ -137,12 +138,19 @@ ${haDevices}
 - WICHTIG: Wenn Michael dich bittet etwas zu merken/speichern, nutze kb_create. Bei Fragen nach gespeichertem Wissen nutze kb_search.
 ${notesIndex}
 
+## Chat-Verlauf
+- chat_search: Volltextsuche in früheren Gesprächen — nutze dies wenn Michael fragt was er gesagt hat, ob ihr über etwas gesprochen habt, oder nach früheren Diskussionen sucht
+- Der gesamte Chat-Verlauf wird persistent gespeichert und überlebt Neustarts
+
 ## Verhalten
 - Einfache Fragen direkt beantworten, ohne Tools
 - Bei Bedarf Tools nutzen – erkläre kurz was du tust
 - Wichtige Infos über Michael im Gedächtnis (memory_write) speichern
 - Todos und Aufgaben merken
 - WICHTIG: Wenn Michael an etwas erinnert werden will, MUSST du das Tool reminder_set aufrufen mit ISO-Zeitstempel (z.B. 2026-02-22T09:00:00). Nur textlich bestätigen reicht NICHT!
+- Erinnerungen haben zwei Typen: type="text" (Standard, sendet nur Text) und type="task" (Text wird als Prompt an den Agent geschickt, der Tools nutzt und das Ergebnis zurücksendet)
+- Für wiederkehrende Erinnerungen: interval_hours setzen (24 = täglich, 168 = wöchentlich, 1 = stündlich)
+- Beispiel: "Prüfe täglich um 9 Uhr alle Batteriesensoren unter 25%" → reminder_set mit type="task", due="2026-03-02T09:00:00", interval_hours=24, text="Prüfe alle HA-Batteriesensoren (domain=sensor, Attribut battery) unter 25% und liste die betroffenen Geräte auf"
 - Für Dateien senden: send_image nutzen (Bilder)
 - Sprachnachrichten werden automatisch transkribiert – du erhältst den Text mit [Sprachnachricht]: Präfix
 - Wenn dir eine Fähigkeit fehlt: npm-Paket per shell installieren und neues Tool-Modul unter /home/mcde/whatsapp-claude/tools/ anlegen
@@ -204,13 +212,25 @@ const conversations = new Map();
 
 function getHistory(chatId) {
   if (!conversations.has(chatId)) {
-    conversations.set(chatId, []);
+    // Aus DB laden falls vorhanden
+    try {
+      const saved = chatDb.getRecentMessages(chatId, MAX_HISTORY);
+      if (saved.length > 0) {
+        trimHistory(saved);
+        conversations.set(chatId, saved);
+      } else {
+        conversations.set(chatId, []);
+      }
+    } catch {
+      conversations.set(chatId, []);
+    }
   }
   return conversations.get(chatId);
 }
 
 function clearHistory(chatId) {
   conversations.delete(chatId);
+  try { chatDb.clearChat(chatId); } catch {}
 }
 
 function trimHistory(history) {
@@ -226,8 +246,22 @@ function trimHistory(history) {
       history.shift();
     }
   }
-  while (history.length > 0 && history[0].role !== "user") {
-    history.shift();
+  // History muss mit einer echten User-Text-Nachricht beginnen
+  // (nicht assistant, nicht tool_result)
+  while (history.length > 0) {
+    const first = history[0];
+    if (first.role === "user" && typeof first.content === "string") break;
+    // assistant oder user+tool_result am Anfang entfernen
+    if (
+      first.role === "assistant" &&
+      Array.isArray(first.content) &&
+      first.content.some((b) => b.type === "tool_use") &&
+      history.length >= 2
+    ) {
+      history.splice(0, 2); // tool_use + tool_result Paar entfernen
+    } else {
+      history.shift();
+    }
   }
 }
 
@@ -243,6 +277,7 @@ async function handleMessage(chatId, userMessage) {
 
   const history = getHistory(chatId);
   history.push({ role: "user", content: userMessage });
+  try { chatDb.saveMessage(chatId, "user", userMessage); } catch {}
   trimHistory(history);
 
   for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
@@ -270,6 +305,7 @@ async function handleMessage(chatId, userMessage) {
 
     if (result.type === "tool_use") {
       provider.pushAssistant(history, result);
+      try { chatDb.saveMessage(chatId, "assistant", history[history.length - 1].content); } catch {}
 
       const toolResults = [];
       for (const call of result.toolCalls) {
@@ -299,11 +335,13 @@ async function handleMessage(chatId, userMessage) {
       }
 
       provider.pushToolResults(history, toolResults);
+      try { chatDb.saveMessage(chatId, "user", history[history.length - 1].content); } catch {}
       continue;
     }
 
     // Finale Text-Antwort
     provider.pushAssistant(history, result);
+    try { chatDb.saveMessage(chatId, "assistant", history[history.length - 1].content); } catch {}
     return buildResponse(result.text || "(keine Antwort)");
   }
 
@@ -320,4 +358,6 @@ function buildResponse(text) {
   return { text, images };
 }
 
-module.exports = { handleMessage, clearHistory, getHistory, conversations };
+process.on("exit", () => chatDb.close());
+
+module.exports = { handleMessage, clearHistory, getHistory, conversations, chatDb };

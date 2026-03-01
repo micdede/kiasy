@@ -26,12 +26,23 @@ const definitions = [
       properties: {
         text: {
           type: "string",
-          description: "Erinnerungstext",
+          description: "Erinnerungstext oder Aufgaben-Prompt (bei type=task)",
         },
         due: {
           type: "string",
           description:
             "Fälligkeitszeitpunkt als ISO-8601 String (z.B. 2026-02-19T09:00:00). Zeitzone: Europe/Berlin.",
+        },
+        type: {
+          type: "string",
+          enum: ["text", "task"],
+          description:
+            "Art der Erinnerung: 'text' (Standard) = Nachricht senden, 'task' = Text als Prompt an Agent senden und Ergebnis zurückmelden",
+        },
+        interval_hours: {
+          type: "number",
+          description:
+            "Wiederholungsintervall in Stunden (z.B. 24 = täglich, 168 = wöchentlich). Ohne Angabe = einmalig.",
         },
         chatId: {
           type: "string",
@@ -74,6 +85,9 @@ async function execute(name, input) {
         chatId: input.chatId || null,
         done: false,
         created: new Date().toISOString(),
+        type: input.type || "text",
+        interval_hours: input.interval_hours || null,
+        failCount: 0,
       };
       reminders.push(reminder);
       save(reminders);
@@ -87,7 +101,21 @@ async function execute(name, input) {
         hour: "2-digit",
         minute: "2-digit",
       });
-      return `Erinnerung gesetzt: "${input.text}" am ${formatted}`;
+
+      let confirm = `Erinnerung gesetzt: "${input.text}" am ${formatted}`;
+      if (reminder.type === "task") {
+        confirm += " (wird als Aufgabe ausgeführt)";
+      }
+      if (reminder.interval_hours) {
+        const h = reminder.interval_hours;
+        if (h % 24 === 0 && h >= 24) {
+          const days = h / 24;
+          confirm += days === 1 ? " — wiederholt täglich" : ` — wiederholt alle ${days} Tage`;
+        } else {
+          confirm += h === 1 ? " — wiederholt stündlich" : ` — wiederholt alle ${h}h`;
+        }
+      }
+      return confirm;
     }
 
     case "reminder_list": {
@@ -104,7 +132,18 @@ async function execute(name, input) {
             hour: "2-digit",
             minute: "2-digit",
           });
-          return `ID ${r.id}: "${r.text}" – ${due}`;
+          let line = `ID ${r.id}: "${r.text}" – ${due}`;
+          if (r.type === "task") line += " [Aufgabe]";
+          if (r.interval_hours) {
+            const h = r.interval_hours;
+            if (h % 24 === 0 && h >= 24) {
+              line += ` (alle ${h / 24}d)`;
+            } else {
+              line += ` (alle ${h}h)`;
+            }
+          }
+          if (r.failCount >= 3) line += " ⚠️ pausiert";
+          return line;
         })
         .join("\n");
     }
@@ -122,12 +161,13 @@ async function execute(name, input) {
   }
 }
 
-// Wird vom Scheduler in index.js aufgerufen
+// Wird vom Scheduler in telegram.js aufgerufen
 function getDueReminders() {
   const reminders = load();
   const now = new Date();
-  const due = reminders.filter((r) => !r.done && new Date(r.due) <= now);
-  return due;
+  return reminders.filter(
+    (r) => !r.done && new Date(r.due) <= now && (r.failCount || 0) < 3
+  );
 }
 
 function markDone(id) {
@@ -139,4 +179,35 @@ function markDone(id) {
   }
 }
 
-module.exports = { definitions, execute, getDueReminders, markDone };
+// Setzt due auf den nächsten zukünftigen Termin (überspringt vergangene Intervalle)
+function advanceReminder(id) {
+  const reminders = load();
+  const reminder = reminders.find((r) => r.id === id);
+  if (!reminder || !reminder.interval_hours) return;
+
+  const intervalMs = reminder.interval_hours * 3600000;
+  const now = Date.now();
+  let next = new Date(reminder.due).getTime() + intervalMs;
+
+  // Überspringe vergangene Termine (z.B. nach Offline-Zeit)
+  while (next <= now) {
+    next += intervalMs;
+  }
+
+  reminder.due = new Date(next).toISOString();
+  reminder.failCount = 0;
+  save(reminders);
+}
+
+// Erhöht den Fehlerzähler bei Task-Fehlschlägen
+function incrementFailCount(id) {
+  const reminders = load();
+  const reminder = reminders.find((r) => r.id === id);
+  if (!reminder) return 0;
+
+  reminder.failCount = (reminder.failCount || 0) + 1;
+  save(reminders);
+  return reminder.failCount;
+}
+
+module.exports = { definitions, execute, getDueReminders, markDone, advanceReminder, incrementFailCount };
