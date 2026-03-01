@@ -5,6 +5,7 @@ const path = require("path");
 const os = require("os");
 const { execSync } = require("child_process");
 const agent = require("./agent");
+const voice = require("./voice");
 
 const MAX_EVENTS = 200;
 const events = [];
@@ -257,96 +258,18 @@ function getDashboardHTML() {
     height: 100%; color: #484f58; font-size: 14px;
   }
 
-  /* --- Cleanup Panel --- */
-  #cleanup-panel {
-    background: #161b22; border-top: 1px solid #30363d; padding: 10px 16px;
-  }
-  .cleanup-header {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
-  }
-  .cleanup-title {
-    font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .cleanup-total {
-    font-size: 11px; color: #3fb950; margin-left: auto;
-  }
-  .cleanup-refresh-btn {
-    background: none; border: 1px solid #30363d; color: #8b949e; width: 28px; height: 28px;
-    border-radius: 6px; cursor: pointer; font-size: 16px; display: flex;
-    align-items: center; justify-content: center; transition: all 0.15s;
-  }
-  .cleanup-refresh-btn:hover { border-color: #58a6ff; color: #c9d1d9; }
-  .cleanup-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .cleanup-row {
-    display: flex; align-items: center; gap: 8px; padding: 4px 0;
-    border-bottom: 1px solid #21262d;
-  }
-  .cleanup-row:last-child { border-bottom: none; }
-  .cleanup-icon { font-size: 14px; width: 22px; text-align: center; }
-  .cleanup-label { font-size: 12px; color: #c9d1d9; flex: 1; }
-  .cleanup-size { font-size: 12px; color: #8b949e; min-width: 60px; text-align: right; }
-  .cleanup-btn {
-    font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid #238636;
-    background: #23863622; color: #3fb950; cursor: pointer; font-family: inherit;
-    transition: all 0.15s;
-  }
-  .cleanup-btn:hover { background: #238636; color: #fff; }
-  .cleanup-btn.disabled {
-    border-color: #30363d; background: none; color: #484f58; cursor: default;
-  }
-  .cleanup-btn.disabled:hover { background: none; color: #484f58; }
-  .cleanup-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-
-  /* --- System Panel --- */
-  .sys-toggle {
-    color: #8b949e; text-decoration: none; font-size: 12px; padding: 4px 10px;
-    border: 1px solid #30363d; border-radius: 6px; cursor: pointer;
-    background: none; font-family: inherit; transition: all 0.15s;
-  }
-  .sys-toggle:hover { border-color: #58a6ff; color: #c9d1d9; }
-  .sys-toggle.active { background: #1f6feb33; border-color: #58a6ff; color: #58a6ff; }
-  #system-panel {
-    background: #161b22; border-bottom: 1px solid #30363d; padding: 0;
-    max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;
-  }
-  #system-panel.open { max-height: 300px; padding: 12px 16px; }
-  .sys-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
-  }
-  .sys-card {
-    background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px;
-  }
-  .sys-card h3 {
-    font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;
-    margin-bottom: 6px; font-weight: 600;
-  }
-  .sys-card .sys-value { font-size: 18px; font-weight: 700; color: #e6edf3; margin-bottom: 4px; }
-  .sys-card .sys-detail { font-size: 11px; color: #8b949e; line-height: 1.5; }
-  .sys-bar {
-    height: 6px; background: #21262d; border-radius: 3px; margin-top: 6px; overflow: hidden;
-  }
-  .sys-bar-fill {
-    height: 100%; border-radius: 3px; transition: width 0.5s ease, background 0.3s ease;
-  }
-  .sys-bar-fill.green { background: #3fb950; }
-  .sys-bar-fill.yellow { background: #d29922; }
-  .sys-bar-fill.red { background: #f85149; }
-
   @media (max-width: 600px) {
     header { padding: 8px 10px; }
     .event { padding: 3px 10px; gap: 6px; }
     .event .time { min-width: 55px; font-size: 11px; }
-    #cleanup-panel { padding: 8px 10px; }
-    .sys-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
 <body>
 <header>
   <h1><span class="dot"></span> JARVIS Monitor</h1>
-  <button class="sys-toggle" id="sys-toggle" title="System-Ressourcen anzeigen">System</button>
+  <a href="/chat" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Chat</a>
+  <a href="/system" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">System</a>
   <a href="/ha-editor" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Smart Home Editor</a>
   <a href="/notes" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Wissensbasis</a>
   <a href="/reminders" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Erinnerungen</a>
@@ -359,32 +282,6 @@ function getDashboardHTML() {
     <span>Clients: <b id="clientCount">-</b></span>
   </div>
 </header>
-<div id="system-panel">
-  <div class="sys-grid">
-    <div class="sys-card">
-      <h3>CPU</h3>
-      <div class="sys-value" id="sys-cpu-load">-</div>
-      <div class="sys-detail" id="sys-cpu-detail">-</div>
-    </div>
-    <div class="sys-card">
-      <h3>RAM</h3>
-      <div class="sys-value" id="sys-mem-value">-</div>
-      <div class="sys-bar"><div class="sys-bar-fill green" id="sys-mem-bar" style="width:0%"></div></div>
-      <div class="sys-detail" id="sys-mem-detail">-</div>
-    </div>
-    <div class="sys-card">
-      <h3>Disk</h3>
-      <div class="sys-value" id="sys-disk-value">-</div>
-      <div class="sys-bar"><div class="sys-bar-fill green" id="sys-disk-bar" style="width:0%"></div></div>
-      <div class="sys-detail" id="sys-disk-detail">-</div>
-    </div>
-    <div class="sys-card">
-      <h3>Uptime / Node.js</h3>
-      <div class="sys-value" id="sys-uptime-value">-</div>
-      <div class="sys-detail" id="sys-node-detail">-</div>
-    </div>
-  </div>
-</div>
 <div class="filters">
   <button class="filter-btn active" data-type="all">Alle <span class="count" id="count-all">0</span></button>
   <button class="filter-btn active" data-type="telegram">Telegram <span class="count" id="count-telegram">0</span></button>
@@ -394,16 +291,6 @@ function getDashboardHTML() {
   <button class="filter-btn active" data-type="system">System <span class="count" id="count-system">0</span></button>
 </div>
 <div id="feed"><div class="empty">Warte auf Events...</div></div>
-
-<!-- Cleanup Panel -->
-<div id="cleanup-panel">
-  <div class="cleanup-header">
-    <span class="cleanup-title">Systembereinigung</span>
-    <span id="cleanup-total" class="cleanup-total">-</span>
-    <button id="cleanup-refresh" class="cleanup-refresh-btn" title="Neu scannen">&#x21bb;</button>
-  </div>
-  <div id="cleanup-list"></div>
-</div>
 
 <script>
 const feed = document.getElementById("feed");
@@ -492,61 +379,203 @@ sse.onopen = () => {
   document.querySelector("header .dot").style.background = "#3fb950";
 };
 
-// ==================== System Panel ====================
+
+</script>
+</body>
+</html>`;
+}
+
+// --- System HTML ---
+
+function getSystemHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JARVIS - System</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px;
+  }
+  header {
+    background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; color: #58a6ff; font-weight: 600; }
+  header a {
+    color: #8b949e; text-decoration: none; font-size: 12px;
+    padding: 4px 10px; border: 1px solid #30363d; border-radius: 6px;
+  }
+  header a:hover { color: #c9d1d9; border-color: #58a6ff; }
+
+  .content { max-width: 1000px; margin: 20px auto; padding: 0 16px; }
+
+  .sys-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px; margin-bottom: 24px;
+  }
+  .sys-card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px;
+  }
+  .sys-card h3 {
+    font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 6px; font-weight: 600;
+  }
+  .sys-card .sys-value { font-size: 18px; font-weight: 700; color: #e6edf3; margin-bottom: 4px; }
+  .sys-card .sys-detail { font-size: 11px; color: #8b949e; line-height: 1.5; }
+  .sys-bar {
+    height: 6px; background: #21262d; border-radius: 3px; margin-top: 6px; overflow: hidden;
+  }
+  .sys-bar-fill {
+    height: 100%; border-radius: 3px; transition: width 0.5s ease, background 0.3s ease;
+  }
+  .sys-bar-fill.green { background: #3fb950; }
+  .sys-bar-fill.yellow { background: #d29922; }
+  .sys-bar-fill.red { background: #f85149; }
+
+  .cleanup-section {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .cleanup-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  }
+  .cleanup-title {
+    font-size: 12px; font-weight: 600; color: #8b949e; text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .cleanup-total {
+    font-size: 11px; color: #3fb950; margin-left: auto;
+  }
+  .cleanup-refresh-btn {
+    background: none; border: 1px solid #30363d; color: #8b949e; width: 28px; height: 28px;
+    border-radius: 6px; cursor: pointer; font-size: 16px; display: flex;
+    align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .cleanup-refresh-btn:hover { border-color: #58a6ff; color: #c9d1d9; }
+  .cleanup-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .cleanup-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid #21262d;
+  }
+  .cleanup-row:last-child { border-bottom: none; }
+  .cleanup-icon { font-size: 14px; width: 22px; text-align: center; }
+  .cleanup-label { font-size: 12px; color: #c9d1d9; flex: 1; }
+  .cleanup-size { font-size: 12px; color: #8b949e; min-width: 60px; text-align: right; }
+  .cleanup-btn {
+    font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid #238636;
+    background: #23863622; color: #3fb950; cursor: pointer; font-family: inherit;
+    transition: all 0.15s;
+  }
+  .cleanup-btn:hover { background: #238636; color: #fff; }
+  .cleanup-btn.disabled {
+    border-color: #30363d; background: none; color: #484f58; cursor: default;
+  }
+  .cleanup-btn.disabled:hover { background: none; color: #484f58; }
+  .cleanup-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+  @media (max-width: 600px) {
+    .sys-grid { grid-template-columns: 1fr; }
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>JARVIS System</h1>
+  <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/ha-editor">Smart Home Editor</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
+  <a href="/settings">Einstellungen</a>
+</header>
+
+<div class="content">
+  <div class="sys-grid">
+    <div class="sys-card">
+      <h3>CPU</h3>
+      <div class="sys-value" id="sys-cpu-load">-</div>
+      <div class="sys-detail" id="sys-cpu-detail">-</div>
+    </div>
+    <div class="sys-card">
+      <h3>RAM</h3>
+      <div class="sys-value" id="sys-mem-value">-</div>
+      <div class="sys-bar"><div class="sys-bar-fill green" id="sys-mem-bar" style="width:0%"></div></div>
+      <div class="sys-detail" id="sys-mem-detail">-</div>
+    </div>
+    <div class="sys-card">
+      <h3>Disk</h3>
+      <div class="sys-value" id="sys-disk-value">-</div>
+      <div class="sys-bar"><div class="sys-bar-fill green" id="sys-disk-bar" style="width:0%"></div></div>
+      <div class="sys-detail" id="sys-disk-detail">-</div>
+    </div>
+    <div class="sys-card">
+      <h3>Uptime / Node.js</h3>
+      <div class="sys-value" id="sys-uptime-value">-</div>
+      <div class="sys-detail" id="sys-node-detail">-</div>
+    </div>
+  </div>
+
+  <div class="cleanup-section">
+    <div class="cleanup-header">
+      <span class="cleanup-title">Systembereinigung</span>
+      <span id="cleanup-total" class="cleanup-total">-</span>
+      <button id="cleanup-refresh" class="cleanup-refresh-btn" title="Neu scannen">&#x21bb;</button>
+    </div>
+    <div id="cleanup-list"></div>
+  </div>
+</div>
+
+<script>
+function escapeHtml(s) {
+  const d = document.createElement("div"); d.textContent = s; return d.innerHTML;
+}
+
+// ==================== System Info ====================
+function barColor(pct) {
+  if (pct >= 85) return "red";
+  if (pct >= 60) return "yellow";
+  return "green";
+}
+
+function updateSystemPanel(d) {
+  document.getElementById("sys-cpu-load").textContent = d.cpu.loadAvg.join("  /  ");
+  document.getElementById("sys-cpu-detail").textContent = d.cpu.cores + " Cores \\u2014 " + d.cpu.model;
+
+  document.getElementById("sys-mem-value").textContent = d.memory.used + " / " + d.memory.total;
+  const memBar = document.getElementById("sys-mem-bar");
+  memBar.style.width = d.memory.percent + "%";
+  memBar.className = "sys-bar-fill " + barColor(d.memory.percent);
+  document.getElementById("sys-mem-detail").textContent = d.memory.percent + "% belegt \\u2014 " + d.memory.free + " frei";
+
+  document.getElementById("sys-disk-value").textContent = d.disk.used + " / " + d.disk.total;
+  const diskBar = document.getElementById("sys-disk-bar");
+  diskBar.style.width = d.disk.percent + "%";
+  diskBar.className = "sys-bar-fill " + barColor(d.disk.percent);
+  document.getElementById("sys-disk-detail").textContent = d.disk.percent + "% belegt \\u2014 " + d.disk.free + " frei";
+
+  document.getElementById("sys-uptime-value").textContent = "System: " + d.uptime.system + " \\u2014 Prozess: " + d.uptime.process;
+  document.getElementById("sys-node-detail").textContent = "Heap: " + d.node.heapUsed + " / " + d.node.heapTotal + " \\u2014 RSS: " + d.node.rss;
+}
+
+function fetchSystem() {
+  fetch("/api/system").then(r => r.json()).then(updateSystemPanel).catch(() => {});
+}
+
+fetchSystem();
+setInterval(fetchSystem, 5000);
+
+// ==================== Cleanup ====================
 (function() {
-  const toggle = document.getElementById("sys-toggle");
-  const panel = document.getElementById("system-panel");
-  let sysInterval = null;
-
-  function barColor(pct) {
-    if (pct >= 85) return "red";
-    if (pct >= 60) return "yellow";
-    return "green";
-  }
-
-  function updateSystemPanel(d) {
-    // CPU
-    document.getElementById("sys-cpu-load").textContent = d.cpu.loadAvg.join("  /  ");
-    document.getElementById("sys-cpu-detail").textContent = d.cpu.cores + " Cores — " + d.cpu.model;
-
-    // RAM
-    document.getElementById("sys-mem-value").textContent = d.memory.used + " / " + d.memory.total;
-    const memBar = document.getElementById("sys-mem-bar");
-    memBar.style.width = d.memory.percent + "%";
-    memBar.className = "sys-bar-fill " + barColor(d.memory.percent);
-    document.getElementById("sys-mem-detail").textContent = d.memory.percent + "% belegt — " + d.memory.free + " frei";
-
-    // Disk
-    document.getElementById("sys-disk-value").textContent = d.disk.used + " / " + d.disk.total;
-    const diskBar = document.getElementById("sys-disk-bar");
-    diskBar.style.width = d.disk.percent + "%";
-    diskBar.className = "sys-bar-fill " + barColor(d.disk.percent);
-    document.getElementById("sys-disk-detail").textContent = d.disk.percent + "% belegt — " + d.disk.free + " frei";
-
-    // Uptime / Node
-    document.getElementById("sys-uptime-value").textContent = "System: " + d.uptime.system + " — Prozess: " + d.uptime.process;
-    document.getElementById("sys-node-detail").textContent = "Heap: " + d.node.heapUsed + " / " + d.node.heapTotal + " — RSS: " + d.node.rss;
-  }
-
-  function fetchSystem() {
-    fetch("/api/system").then(r => r.json()).then(updateSystemPanel).catch(() => {});
-  }
-
-  toggle.addEventListener("click", () => {
-    const open = panel.classList.toggle("open");
-    toggle.classList.toggle("active", open);
-    if (open) {
-      fetchSystem();
-      sysInterval = setInterval(fetchSystem, 5000);
-    } else {
-      if (sysInterval) { clearInterval(sysInterval); sysInterval = null; }
-    }
-  });
-})();
-
-// ==================== Cleanup Panel ====================
-(function() {
-  const panel = document.getElementById("cleanup-panel");
   const listEl = document.getElementById("cleanup-list");
   const totalEl = document.getElementById("cleanup-total");
   const refreshBtn = document.getElementById("cleanup-refresh");
@@ -571,7 +600,7 @@ sse.onopen = () => {
     data.categories.forEach(cat => {
       const icon = icons[cat.id] || "\\ud83d\\udcc2";
       const btnClass = cat.cleanable ? "cleanup-btn" : "cleanup-btn disabled";
-      const btnText = cat.cleanable ? "Aufräumen" : "sudo";
+      const btnText = cat.cleanable ? "Aufr\\u00e4umen" : "sudo";
       const hint = cat.hint ? ' title="' + escapeHtml(cat.hint) + '"' : "";
       html += '<div class="cleanup-row">' +
         '<span class="cleanup-icon">' + icon + '</span>' +
@@ -588,7 +617,7 @@ sse.onopen = () => {
       btn.addEventListener("click", async () => {
         const id = btn.dataset.id;
         const cat = data.categories.find(c => c.id === id);
-        if (!confirm(cat.label + " (" + cat.size + ") aufräumen?")) return;
+        if (!confirm(cat.label + " (" + cat.size + ") aufr\\u00e4umen?")) return;
         btn.disabled = true;
         btn.textContent = "...";
         try {
@@ -757,6 +786,8 @@ function getEditorHTML() {
 <header>
   <h1>Smart Home Editor</h1>
   <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
@@ -1123,6 +1154,8 @@ function getSettingsHTML() {
 <header>
   <h1>JARVIS Einstellungen</h1>
   <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
   <a href="/ha-editor">Smart Home Editor</a>
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
@@ -1214,7 +1247,9 @@ const SETTINGS_GROUPS = [
       { key: "KERIO_HOST", label: "Host", type: "text" },
       { key: "KERIO_USER", label: "Benutzer", type: "text" },
       { key: "KERIO_PASSWORD", label: "Passwort", type: "password" },
-      { key: "KERIO_FROM", label: "Absender", type: "text" }
+      { key: "KERIO_FROM", label: "Absender", type: "text" },
+      { key: "MAIL_ALLOWED_DOMAINS", label: "Erlaubte Domains (kommagetrennt)", type: "text" },
+      { key: "MAIL_WHITELIST", label: "Whitelist E-Mails (kommagetrennt)", type: "text" }
     ]
   },
   {
@@ -1540,6 +1575,8 @@ function getNotesHTML() {
 <header>
   <h1>Wissensbasis</h1>
   <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
   <a href="/ha-editor">Smart Home Editor</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
@@ -2054,6 +2091,521 @@ function handleNoteSync(req, res) {
   }
 }
 
+// --- Chat HTML ---
+
+function getChatHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JARVIS Chat</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 14px; height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
+  }
+  header {
+    background: #161b22; border-bottom: 1px solid #30363d; padding: 10px 16px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; color: #58a6ff; font-weight: 600; white-space: nowrap; }
+  .header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .header-btn {
+    background: none; border: 1px solid #30363d; color: #8b949e;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .header-btn:hover { color: #c9d1d9; border-color: #58a6ff; }
+  .header-btn.active { color: #58a6ff; border-color: #58a6ff; background: #58a6ff15; }
+
+  #messages {
+    flex: 1; overflow-y: auto; padding: 16px; display: flex;
+    flex-direction: column; gap: 12px; scroll-behavior: smooth;
+  }
+  #messages::-webkit-scrollbar { width: 6px; }
+  #messages::-webkit-scrollbar-track { background: transparent; }
+  #messages::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+  .msg { display: flex; flex-direction: column; max-width: 85%; animation: fadeIn 0.2s ease; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.assistant { align-self: flex-start; align-items: flex-start; }
+
+  .bubble {
+    padding: 10px 14px; border-radius: 12px; line-height: 1.55;
+    word-wrap: break-word; overflow-wrap: break-word;
+  }
+  .msg.user .bubble {
+    background: #1f6feb; color: #fff; border-bottom-right-radius: 4px;
+  }
+  .msg.assistant .bubble {
+    background: #161b22; border: 1px solid #30363d; color: #c9d1d9;
+    border-bottom-left-radius: 4px;
+  }
+  .msg .ts {
+    font-size: 10px; color: #484f58; margin-top: 4px; padding: 0 4px;
+  }
+
+  /* Markdown in Assistant-Bubbles */
+  .bubble p { margin: 0 0 8px 0; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble strong, .bubble b { color: #e6edf3; }
+  .bubble code {
+    background: #0d111788; padding: 1px 5px; border-radius: 3px;
+    font-size: 0.9em; color: #f0883e;
+  }
+  .bubble pre {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 10px; margin: 8px 0; overflow-x: auto; font-size: 12px;
+    line-height: 1.5;
+  }
+  .bubble pre code { background: none; padding: 0; color: #c9d1d9; }
+  .bubble ul, .bubble ol { margin: 6px 0 6px 20px; }
+  .bubble li { margin: 2px 0; }
+  .bubble a { color: #58a6ff; text-decoration: none; }
+  .bubble a:hover { text-decoration: underline; }
+  .bubble blockquote {
+    border-left: 3px solid #30363d; margin: 6px 0; padding: 4px 12px; color: #8b949e;
+  }
+
+  .bubble .msg-img {
+    max-width: 100%; border-radius: 8px; margin: 8px 0; cursor: pointer;
+  }
+
+  /* TTS Button in Assistant-Bubbles */
+  .tts-btn {
+    background: none; border: none; color: #484f58; cursor: pointer;
+    font-size: 14px; padding: 2px 4px; margin-left: 4px; transition: color 0.15s;
+  }
+  .tts-btn:hover { color: #58a6ff; }
+  .tts-btn.playing { color: #3fb950; }
+
+  /* Typing Indicator */
+  .typing { display: none; align-self: flex-start; padding: 0 4px; }
+  .typing.visible { display: flex; }
+  .typing-bubble {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 12px 18px; display: flex; gap: 5px; align-items: center;
+    border-bottom-left-radius: 4px;
+  }
+  .typing-dot {
+    width: 7px; height: 7px; background: #484f58; border-radius: 50%;
+    animation: typingPulse 1.4s ease-in-out infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingPulse {
+    0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+    30% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Input Area */
+  .input-area {
+    background: #161b22; border-top: 1px solid #30363d;
+    padding: 12px 16px; display: flex; gap: 10px; align-items: flex-end;
+    flex-shrink: 0;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  #voiceBtn {
+    width: 40px; height: 40px; border-radius: 50%; border: 1px solid #30363d;
+    background: #21262d; color: #8b949e; cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  #voiceBtn:hover { border-color: #58a6ff; color: #c9d1d9; }
+  #voiceBtn.recording { background: #f8514933; border-color: #f85149; color: #f85149; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 #f8514944; } 50% { box-shadow: 0 0 0 8px #f8514900; } }
+
+  #msgInput {
+    flex: 1; background: #0d1117; border: 1px solid #30363d; border-radius: 10px;
+    color: #c9d1d9; padding: 10px 14px; font-family: inherit; font-size: 14px;
+    resize: none; outline: none; max-height: 150px; min-height: 40px;
+    line-height: 1.4; transition: border-color 0.15s;
+  }
+  #msgInput:focus { border-color: #58a6ff; }
+  #msgInput::placeholder { color: #484f58; }
+
+  #sendBtn {
+    width: 40px; height: 40px; border-radius: 50%; border: none;
+    background: #1f6feb; color: #fff; cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  #sendBtn:hover { background: #388bfd; }
+  #sendBtn:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+  .empty-state {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    color: #30363d; font-size: 48px; font-weight: 700; user-select: none;
+  }
+
+  @media (max-width: 600px) {
+    .msg { max-width: 92%; }
+    header { padding: 8px 12px; }
+    .input-area { padding: 10px 12px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>JARVIS Chat</h1>
+  <div class="header-actions">
+    <button class="header-btn" id="ttsToggle" title="Antworten vorlesen">TTS</button>
+    <button class="header-btn" id="clearBtn" title="Chat leeren">Leeren</button>
+  </div>
+</header>
+
+<div id="messages">
+  <div class="empty-state">JARVIS</div>
+</div>
+<div class="typing" id="typing">
+  <div class="typing-bubble">
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+  </div>
+</div>
+
+<div class="input-area">
+  <button id="voiceBtn" title="Sprachnachricht (halten)">&#x1F3A4;</button>
+  <textarea id="msgInput" placeholder="Nachricht eingeben..." rows="1"></textarea>
+  <button id="sendBtn" title="Senden">&#x27A4;</button>
+</div>
+
+<script>
+const messagesEl = document.getElementById("messages");
+const typingEl = document.getElementById("typing");
+const input = document.getElementById("msgInput");
+const sendBtn = document.getElementById("sendBtn");
+const voiceBtn = document.getElementById("voiceBtn");
+const clearBtn = document.getElementById("clearBtn");
+const ttsToggle = document.getElementById("ttsToggle");
+
+let ttsEnabled = localStorage.getItem("jarvis-tts") === "true";
+let sending = false;
+let currentAudio = null;
+
+if (ttsEnabled) ttsToggle.classList.add("active");
+
+// --- Markdown Rendering ---
+function renderMarkdown(text) {
+  let html = text
+    // Code Blocks
+    .replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, (_, code) => '<pre><code>' + escapeHtml(code.trim()) + '</code></pre>')
+    // Inline Code
+    .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
+    // Bold
+    .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\\*(.+?)\\*/g, '<em>$1</em>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    // Links
+    .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // Blockquotes
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // Headings
+    .replace(/^### (.+)$/gm, '<strong>$1</strong>')
+    .replace(/^## (.+)$/gm, '<strong>$1</strong>')
+    .replace(/^# (.+)$/gm, '<strong>$1</strong>');
+
+  // Lists — unordered
+  html = html.replace(/(^[-*] .+$\\n?)+/gm, (block) => {
+    const items = block.trim().split('\\n').map(l => '<li>' + l.replace(/^[-*] /, '') + '</li>').join('');
+    return '<ul>' + items + '</ul>';
+  });
+  // Lists — ordered
+  html = html.replace(/(^\\d+\\. .+$\\n?)+/gm, (block) => {
+    const items = block.trim().split('\\n').map(l => '<li>' + l.replace(/^\\d+\\. /, '') + '</li>').join('');
+    return '<ol>' + items + '</ol>';
+  });
+
+  // Paragraphs
+  html = html.replace(/\\n\\n/g, '</p><p>');
+  html = html.replace(/\\n/g, '<br>');
+  html = '<p>' + html + '</p>';
+  html = html.replace(/<p><\\/p>/g, '');
+  html = html.replace(/<p>(<pre>)/g, '$1').replace(/(<\\/pre>)<\\/p>/g, '$1');
+  html = html.replace(/<p>(<ul>)/g, '$1').replace(/(<\\/ul>)<\\/p>/g, '$1');
+  html = html.replace(/<p>(<ol>)/g, '$1').replace(/(<\\/ol>)<\\/p>/g, '$1');
+  html = html.replace(/<p>(<blockquote>)/g, '$1').replace(/(<\\/blockquote>)<\\/p>/g, '$1');
+
+  return html;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div"); d.textContent = s; return d.innerHTML;
+}
+
+function formatTime(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
+function scrollBottom() {
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function clearEmpty() {
+  const empty = messagesEl.querySelector(".empty-state");
+  if (empty) empty.remove();
+}
+
+function addMessage(role, text, ts, images) {
+  clearEmpty();
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+
+  let content = "";
+  if (role === "assistant") {
+    content = renderMarkdown(text);
+  } else {
+    content = escapeHtml(text);
+  }
+
+  let imgHtml = "";
+  if (images && images.length > 0) {
+    for (const img of images) {
+      const src = img.startsWith("http") ? img : "/api/chat/images/" + img.split("/").pop();
+      imgHtml += '<img class="msg-img" src="' + src + '" alt="Bild" onclick="window.open(this.src)">';
+    }
+  }
+
+  const tsStr = ts ? formatTime(ts) : formatTime(new Date().toISOString());
+  const ttsBtn = role === "assistant" ? ' <button class="tts-btn" onclick="playTTS(this)" title="Vorlesen">&#x1F50A;</button>' : "";
+
+  div.innerHTML = '<div class="bubble">' + content + imgHtml + '</div>' +
+    '<div class="ts">' + tsStr + ttsBtn + '</div>';
+  div.dataset.text = text;
+
+  messagesEl.appendChild(div);
+  scrollBottom();
+  return div;
+}
+
+// --- Send Message ---
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text || sending) return;
+
+  sending = true;
+  sendBtn.disabled = true;
+  input.value = "";
+  autoResize();
+
+  addMessage("user", text);
+  typingEl.classList.add("visible");
+  scrollBottom();
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+
+    const resp = await fetch("/api/chat/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    typingEl.classList.remove("visible");
+    const msgEl = addMessage("assistant", data.text, null, data.images);
+
+    if (ttsEnabled && data.text) playTTS(msgEl.querySelector(".tts-btn"));
+  } catch (err) {
+    typingEl.classList.remove("visible");
+    if (err.name === "AbortError") {
+      addMessage("assistant", "Timeout — keine Antwort innerhalb von 2 Minuten.");
+    } else {
+      addMessage("assistant", "Fehler: " + err.message);
+    }
+  } finally {
+    sending = false;
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+// --- TTS ---
+async function playTTS(btn) {
+  if (!btn) return;
+  const msgEl = btn.closest(".msg");
+  const text = msgEl ? msgEl.dataset.text : "";
+  if (!text) return;
+
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+
+  const prevPlaying = document.querySelector(".tts-btn.playing");
+  if (prevPlaying) prevPlaying.classList.remove("playing");
+
+  if (prevPlaying === btn) return; // Toggle off
+
+  btn.classList.add("playing");
+  try {
+    const resp = await fetch("/api/chat/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!resp.ok) throw new Error("TTS-Fehler");
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    currentAudio = new Audio(url);
+    currentAudio.onended = () => { btn.classList.remove("playing"); currentAudio = null; URL.revokeObjectURL(url); };
+    currentAudio.onerror = () => { btn.classList.remove("playing"); currentAudio = null; };
+    currentAudio.play();
+  } catch {
+    btn.classList.remove("playing");
+  }
+}
+
+ttsToggle.addEventListener("click", () => {
+  ttsEnabled = !ttsEnabled;
+  localStorage.setItem("jarvis-tts", ttsEnabled);
+  ttsToggle.classList.toggle("active", ttsEnabled);
+});
+
+// --- Voice Recording ---
+let mediaRecorder = null;
+let audioChunks = [];
+
+voiceBtn.addEventListener("mousedown", startRecording);
+voiceBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startRecording(); });
+voiceBtn.addEventListener("mouseup", stopRecording);
+voiceBtn.addEventListener("mouseleave", stopRecording);
+voiceBtn.addEventListener("touchend", stopRecording);
+voiceBtn.addEventListener("touchcancel", stopRecording);
+
+async function startRecording() {
+  if (sending) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = sendVoice;
+    mediaRecorder.start();
+    voiceBtn.classList.add("recording");
+  } catch (err) {
+    console.error("Mikrofon-Fehler:", err);
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    voiceBtn.classList.remove("recording");
+  }
+}
+
+async function sendVoice() {
+  if (audioChunks.length === 0) return;
+  const blob = new Blob(audioChunks, { type: "audio/webm" });
+  audioChunks = [];
+
+  sending = true;
+  sendBtn.disabled = true;
+  typingEl.classList.add("visible");
+  scrollBottom();
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+
+    const resp = await fetch("/api/chat/voice", {
+      method: "POST",
+      headers: { "Content-Type": "audio/webm" },
+      body: blob,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    typingEl.classList.remove("visible");
+    addMessage("user", data.transcript);
+    const msgEl = addMessage("assistant", data.text, null, data.images);
+
+    if (ttsEnabled && data.text) playTTS(msgEl.querySelector(".tts-btn"));
+  } catch (err) {
+    typingEl.classList.remove("visible");
+    if (err.name === "AbortError") {
+      addMessage("assistant", "Timeout — keine Antwort innerhalb von 2 Minuten.");
+    } else {
+      addMessage("assistant", "Fehler: " + err.message);
+    }
+  } finally {
+    sending = false;
+    sendBtn.disabled = false;
+  }
+}
+
+// --- Clear Chat ---
+clearBtn.addEventListener("click", async () => {
+  if (!confirm("Chat-Verlauf leeren?")) return;
+  try {
+    await fetch("/api/chat/clear", { method: "POST" });
+    messagesEl.innerHTML = '<div class="empty-state">JARVIS</div>';
+  } catch {}
+});
+
+// --- Input Handling ---
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+sendBtn.addEventListener("click", sendMessage);
+
+function autoResize() {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 150) + "px";
+}
+input.addEventListener("input", autoResize);
+
+// --- Load History ---
+async function loadHistory() {
+  try {
+    const resp = await fetch("/api/chat/history");
+    const data = await resp.json();
+    if (data.messages && data.messages.length > 0) {
+      clearEmpty();
+      for (const msg of data.messages) {
+        addMessage(msg.role, msg.text, msg.ts);
+      }
+    }
+  } catch {}
+}
+loadHistory();
+
+// --- Service Worker ---
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>`;
+}
+
 // --- Terminal HTML ---
 
 function getTerminalHTML() {
@@ -2182,6 +2734,8 @@ function getTerminalHTML() {
 <header>
   <h1>Terminal</h1>
   <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
   <a href="/ha-editor">Smart Home Editor</a>
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
@@ -2499,7 +3053,8 @@ function handleTerminalAction(req, res) {
           try {
             const agentMod = require("./agent");
             agentMod.conversations.clear();
-            respond({ message: "Chat-History aller Nutzer gelöscht (" + agentMod.conversations.size + " verbleibend)" });
+            try { agentMod.chatDb.clearAllChats(); } catch {}
+            respond({ message: "Chat-History aller Nutzer gelöscht (Memory + DB)" });
           } catch (e) {
             respond({ error: e.message });
           }
@@ -2684,6 +3239,8 @@ function getRemindersHTML() {
 <header>
   <h1>Erinnerungen</h1>
   <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
   <a href="/ha-editor">Smart Home Editor</a>
   <a href="/notes">Wissensbasis</a>
   <a href="/terminal">Terminal</a>
@@ -2715,17 +3272,20 @@ function getRemindersHTML() {
       <input type="time" id="formTime" value="09:00">
     </div>
     <div class="form-row">
-      <label>Wiederholen</label>
-      <select id="formRepeat">
-        <option value="none">Einmalig</option>
-        <option value="daily">Täglich</option>
-        <option value="weekly">Wöchentlich</option>
+      <label>Typ</label>
+      <select id="formType">
+        <option value="text">Text-Erinnerung</option>
+        <option value="task">Aufgabe (Agent führt aus)</option>
       </select>
     </div>
     <div class="form-row">
-      <label>Anzahl</label>
-      <input type="number" id="formRepeatCount" value="7" min="2" max="365" style="max-width:80px">
-      <span style="font-size:11px;color:#8b949e">Wiederholungen (nur bei täglich/wöchentlich)</span>
+      <label>Wiederholen</label>
+      <select id="formRepeat">
+        <option value="none">Einmalig</option>
+        <option value="1">Stündlich</option>
+        <option value="24">Täglich</option>
+        <option value="168">Wöchentlich</option>
+      </select>
     </div>
     <div class="form-actions">
       <button class="btn" id="cancelBtn">Abbrechen</button>
@@ -2802,11 +3362,19 @@ function renderList() {
     const status = getStatus(r);
     const dueClass = status === 'overdue' ? ' overdue' : (status === 'upcoming' ? ' soon' : '');
     const statusLabel = status === 'overdue' ? ' (überfällig)' : (status === 'upcoming' ? ' (bald)' : '');
+    const typeBadge = r.type === 'task' ? '<span style="background:#1f6feb33;color:#58a6ff;padding:1px 6px;border-radius:4px;font-size:10px;margin-left:6px">Aufgabe</span>' : '';
+    let intervalLabel = '';
+    if (r.interval_hours) {
+      const h = r.interval_hours;
+      if (h % 24 === 0 && h >= 24) intervalLabel = '<span style="color:#d29922;margin-left:6px;font-size:10px">\\u27F3 alle ' + (h/24) + 'd</span>';
+      else intervalLabel = '<span style="color:#d29922;margin-left:6px;font-size:10px">\\u27F3 alle ' + h + 'h</span>';
+    }
+    const pausedLabel = (r.failCount >= 3) ? '<span style="color:#f85149;margin-left:6px;font-size:10px">\\u26A0 pausiert</span>' : '';
     return '<div class="reminder-card ' + status + '" data-id="' + r.id + '">' +
       '<button class="reminder-check' + (r.done ? ' checked' : '') + '" onclick="toggleDone(' + r.id + ')">' +
       (r.done ? '\\u2713' : '') + '</button>' +
       '<div class="reminder-body">' +
-      '<div class="reminder-text">' + escapeHtml(r.text) + '</div>' +
+      '<div class="reminder-text">' + escapeHtml(r.text) + typeBadge + intervalLabel + pausedLabel + '</div>' +
       '<div class="reminder-meta">' +
       '<span class="due' + dueClass + '">' + formatDate(r.due) + statusLabel + '</span>' +
       '<span>Erstellt: ' + formatDate(r.created) + '</span>' +
@@ -2883,35 +3451,20 @@ async function createReminder() {
   const text = document.getElementById('formText').value.trim();
   const date = document.getElementById('formDate').value;
   const time = document.getElementById('formTime').value;
+  const type = document.getElementById('formType').value;
   const repeat = document.getElementById('formRepeat').value;
-  const count = parseInt(document.getElementById('formRepeatCount').value) || 7;
   if (!text || !date || !time) { showStatus('Text, Datum und Uhrzeit erforderlich', true); return; }
 
-  const entries = [];
-  const baseDate = new Date(date + 'T' + time + ':00');
-
-  if (repeat === 'none') {
-    entries.push({ text, due: date + 'T' + time + ':00' });
-  } else {
-    for (let i = 0; i < count; i++) {
-      const d = new Date(baseDate);
-      if (repeat === 'daily') d.setDate(d.getDate() + i);
-      else if (repeat === 'weekly') d.setDate(d.getDate() + i * 7);
-      const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
-        + 'T' + time + ':00';
-      entries.push({ text, due: iso });
-    }
-  }
+  const entry = { text, due: date + 'T' + time + ':00', type };
+  if (repeat !== 'none') entry.interval_hours = parseInt(repeat);
 
   try {
-    for (const entry of entries) {
-      await fetch('/api/reminders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry)
-      });
-    }
-    showStatus(entries.length + ' Erinnerung(en) erstellt', false);
+    await fetch('/api/reminders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    });
+    showStatus('Erinnerung erstellt', false);
     createForm.classList.remove('show');
     document.getElementById('formText').value = '';
     loadReminders();
@@ -2986,6 +3539,9 @@ function handleReminderCreate(req, res) {
         chatId: body.chatId || null,
         done: false,
         created: new Date().toISOString(),
+        type: body.type || "text",
+        interval_hours: body.interval_hours || null,
+        failCount: 0,
       };
       reminders.push(reminder);
       saveReminders(reminders);
@@ -3016,6 +3572,9 @@ function handleReminderUpdate(req, res, id) {
       if (body.due !== undefined) reminders[idx].due = body.due;
       if (body.done !== undefined) reminders[idx].done = body.done;
       if (body.chatId !== undefined) reminders[idx].chatId = body.chatId;
+      if (body.type !== undefined) reminders[idx].type = body.type;
+      if (body.interval_hours !== undefined) reminders[idx].interval_hours = body.interval_hours;
+      if (body.failCount !== undefined) reminders[idx].failCount = body.failCount;
       saveReminders(reminders);
       originalLog("[Monitor] Erinnerung aktualisiert: " + reminders[idx].text);
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
@@ -3191,6 +3750,189 @@ function handleRestart(req, res) {
   setTimeout(() => process.exit(0), 500);
 }
 
+// --- PWA Manifest + Service Worker ---
+
+function getManifestJSON() {
+  return JSON.stringify({
+    name: "JARVIS Chat",
+    short_name: "JARVIS",
+    start_url: "/chat",
+    display: "standalone",
+    background_color: "#0d1117",
+    theme_color: "#0d1117",
+    icons: [
+      {
+        src: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="80" fill="#0d1117"/><text x="256" y="360" text-anchor="middle" font-family="monospace" font-size="320" font-weight="bold" fill="#58a6ff">J</text></svg>'),
+        sizes: "512x512",
+        type: "image/svg+xml",
+        purpose: "any maskable",
+      },
+    ],
+  });
+}
+
+function getServiceWorkerJS() {
+  return `const CACHE = "jarvis-chat-v1";
+const SHELL = ["/chat"];
+
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (e) => {
+  if (e.request.url.includes("/api/")) return;
+  e.respondWith(
+    fetch(e.request).catch(() => caches.match(e.request))
+  );
+});`;
+}
+
+// --- Chat API ---
+
+function handleChatSend(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", async () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const msg = (body.message || "").trim();
+      if (!msg) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Nachricht fehlt" }));
+        return;
+      }
+      const result = await agent.handleMessage("web-chat", msg);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ text: result.text, images: result.images || [] }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleChatHistory(req, res) {
+  try {
+    const history = agent.getHistory("web-chat");
+    const messages = [];
+    for (const msg of history) {
+      if (msg.role === "user" && typeof msg.content === "string") {
+        messages.push({ role: "user", text: msg.content, ts: msg.ts || null });
+      } else if (msg.role === "assistant") {
+        let text = "";
+        if (typeof msg.content === "string") {
+          text = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          text = msg.content
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join("\n");
+        }
+        if (text) messages.push({ role: "assistant", text, ts: msg.ts || null });
+      }
+    }
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    res.end(JSON.stringify({ messages }));
+  } catch (err) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+
+function handleChatClear(req, res) {
+  try {
+    agent.clearHistory("web-chat");
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    res.end(JSON.stringify({ ok: true }));
+  } catch (err) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+
+function handleChatVoice(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", async () => {
+    try {
+      const audioFile = path.join(TEMP_DIR, `chat_voice_${Date.now()}.webm`);
+      fs.writeFileSync(audioFile, Buffer.concat(chunks));
+      const transcript = voice.transcribe(audioFile);
+      try { fs.unlinkSync(audioFile); } catch {}
+      if (!transcript) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Transkription fehlgeschlagen" }));
+        return;
+      }
+      const result = await agent.handleMessage("web-chat", `[Sprachnachricht]: ${transcript}`);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ transcript, text: result.text, images: result.images || [] }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleChatTTS(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const text = (body.text || "").trim();
+      if (!text) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Text fehlt" }));
+        return;
+      }
+      const oggFile = voice.textToSpeech(text);
+      if (!oggFile || !fs.existsSync(oggFile)) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "TTS fehlgeschlagen" }));
+        return;
+      }
+      const audio = fs.readFileSync(oggFile);
+      try { fs.unlinkSync(oggFile); } catch {}
+      res.writeHead(200, {
+        "Content-Type": "audio/ogg",
+        "Content-Length": audio.length,
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(audio);
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleChatImage(req, res, filename) {
+  const safeName = path.basename(filename);
+  const filePath = path.join(TEMP_DIR, safeName);
+  if (!fs.existsSync(filePath)) {
+    res.writeHead(404);
+    res.end("Not found");
+    return;
+  }
+  const ext = path.extname(safeName).toLowerCase();
+  const mimeTypes = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
+  const contentType = mimeTypes[ext] || "application/octet-stream";
+  const data = fs.readFileSync(filePath);
+  res.writeHead(200, { "Content-Type": contentType, "Content-Length": data.length, "Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*" });
+  res.end(data);
+}
+
 // --- Uptime Formatierung ---
 
 function formatUptime() {
@@ -3291,6 +4033,29 @@ function startMonitor(port) {
       return;
     }
 
+    // Öffentliche Downloads — kein Auth nötig
+    const publicFiles = {
+      "/install.sh": { file: "scripts/install.sh", type: "text/plain; charset=utf-8" },
+      "/HOWTO.md": { file: "HOWTO.md", type: "text/markdown; charset=utf-8" },
+    };
+    if (publicFiles[req.url]) {
+      const { file, type } = publicFiles[req.url];
+      const filePath = path.join(__dirname, file);
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const filename = path.basename(file);
+        res.writeHead(200, {
+          "Content-Type": type,
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        });
+        res.end(content);
+      } catch {
+        res.writeHead(404);
+        res.end(`${path.basename(file)} not found`);
+      }
+      return;
+    }
+
     // Auth-Check für alle Routen außer CORS Preflight
     if (!checkAuth(req, res)) return;
 
@@ -3332,6 +4097,9 @@ function startMonitor(port) {
       handleCleanup(req, res);
 
     // --- HA Editor ---
+    } else if (req.url === "/system") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getSystemHTML());
     } else if (req.url === "/ha-editor") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(getEditorHTML());
@@ -3391,6 +4159,30 @@ function startMonitor(port) {
     } else if (req.url.startsWith("/api/notes/") && req.method === "DELETE") {
       const filename = decodeURIComponent(req.url.replace("/api/notes/", ""));
       handleNoteDelete(req, res, filename);
+
+    // --- Chat ---
+    } else if (req.url === "/chat") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getChatHTML());
+    } else if (req.url === "/manifest.json") {
+      res.writeHead(200, { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=86400" });
+      res.end(getManifestJSON());
+    } else if (req.url === "/sw.js") {
+      res.writeHead(200, { "Content-Type": "application/javascript", "Cache-Control": "no-cache" });
+      res.end(getServiceWorkerJS());
+    } else if (req.url === "/api/chat/send" && req.method === "POST") {
+      handleChatSend(req, res);
+    } else if (req.url === "/api/chat/history" && req.method === "GET") {
+      handleChatHistory(req, res);
+    } else if (req.url === "/api/chat/clear" && req.method === "POST") {
+      handleChatClear(req, res);
+    } else if (req.url === "/api/chat/voice" && req.method === "POST") {
+      handleChatVoice(req, res);
+    } else if (req.url === "/api/chat/tts" && req.method === "POST") {
+      handleChatTTS(req, res);
+    } else if (req.url.startsWith("/api/chat/images/") && req.method === "GET") {
+      const filename = decodeURIComponent(req.url.replace("/api/chat/images/", ""));
+      handleChatImage(req, res, filename);
 
     // --- Settings ---
     } else if (req.url === "/settings") {
