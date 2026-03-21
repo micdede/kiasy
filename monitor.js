@@ -196,6 +196,10 @@ function getDashboardHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS Monitor</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -393,6 +397,10 @@ function getSystemHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS - System</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -660,6 +668,10 @@ function getEditorHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS - Smart Home Editor</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1041,6 +1053,10 @@ function getSettingsHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS - Einstellungen</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1424,6 +1440,10 @@ function getNotesHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS - Wissensbasis</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2099,6 +2119,10 @@ function getChatHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS Chat</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0d1117">
@@ -2614,6 +2638,10 @@ function getTerminalHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS - Terminal</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -3117,6 +3145,10 @@ function getRemindersHTML() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <title>JARVIS - Erinnerungen</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -3762,10 +3794,16 @@ function getManifestJSON() {
     theme_color: "#0d1117",
     icons: [
       {
-        src: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="80" fill="#0d1117"/><text x="256" y="360" text-anchor="middle" font-family="monospace" font-size="320" font-weight="bold" fill="#58a6ff">J</text></svg>'),
+        src: "/favicon/web-app-manifest-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "maskable",
+      },
+      {
+        src: "/favicon/web-app-manifest-512x512.png",
         sizes: "512x512",
-        type: "image/svg+xml",
-        purpose: "any maskable",
+        type: "image/png",
+        purpose: "maskable",
       },
     ],
   });
@@ -4030,6 +4068,34 @@ function startMonitor(port) {
         "Access-Control-Max-Age": "86400",
       });
       res.end();
+      return;
+    }
+
+    // Favicon-Dateien aus public/favicon/ servieren (kein Auth)
+    if (req.url.startsWith("/favicon/") || req.url === "/favicon.ico" || req.url === "/site.webmanifest") {
+      const faviconMap = {
+        "/favicon.ico": "public/favicon/favicon.ico",
+        "/site.webmanifest": "public/favicon/site.webmanifest",
+      };
+      const filePath = faviconMap[req.url] || path.join("public", req.url);
+      const fullPath = path.join(__dirname, filePath);
+      if (fs.existsSync(fullPath)) {
+        const ext = path.extname(fullPath).toLowerCase();
+        const mimeTypes = {
+          ".ico": "image/x-icon", ".svg": "image/svg+xml", ".png": "image/png",
+          ".webmanifest": "application/manifest+json", ".json": "application/json",
+        };
+        const data = fs.readFileSync(fullPath);
+        res.writeHead(200, {
+          "Content-Type": mimeTypes[ext] || "application/octet-stream",
+          "Content-Length": data.length,
+          "Cache-Control": "public, max-age=604800",
+        });
+        res.end(data);
+      } else {
+        res.writeHead(404);
+        res.end("Not found");
+      }
       return;
     }
 
