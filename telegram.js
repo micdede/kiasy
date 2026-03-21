@@ -131,22 +131,13 @@ bot.on("message", async (msg) => {
     const toolCount = fs
       .readdirSync(path.join(__dirname, "tools"))
       .filter((f) => f.endsWith(".js")).length;
-    const memSize = (() => {
-      try {
-        return JSON.stringify(
-          JSON.parse(
-            fs.readFileSync(path.join(__dirname, "memory.json"), "utf-8")
-          )
-        ).length;
-      } catch {
-        return 0;
-      }
-    })();
-
     // DB-Statistiken
     let dbInfo = "";
+    let memCount = 0;
     try {
-      const stats = agent.chatDb.getStats();
+      const stats = agent.db.messages.getStats();
+      const memData = agent.db.memory.getAll();
+      memCount = (memData.facts || []).length + (memData.todos || []).length + (memData.notes || []).length;
       dbInfo = `\nChat-DB: ${stats.total} Nachrichten, ${stats.chats} Chats` +
         (stats.oldest ? `\nÄlteste Nachricht: ${stats.oldest}` : "");
     } catch {}
@@ -158,7 +149,7 @@ bot.on("message", async (msg) => {
         `Tools geladen: ${toolCount}\n` +
         `Nachrichten im Verlauf: ${history.length}\n` +
         `Aktive Chats: ${agent.conversations.size}\n` +
-        `Gedächtnis: ${(memSize / 1024).toFixed(1)} KB` +
+        `Gedächtnis: ${memCount} Einträge` +
         dbInfo,
       { parse_mode: "Markdown" }
     );

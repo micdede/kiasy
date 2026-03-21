@@ -10,6 +10,7 @@ const {
   validateNoteFilename,
 } = require("../lib/notes-utils");
 const { gitSync } = require("../lib/git-sync");
+const db = require("../lib/db");
 
 const definitions = [
   {
@@ -114,7 +115,7 @@ async function execute(name, input) {
 
   switch (name) {
     case "kb_list": {
-      const notes = getAllNotes();
+      const notes = db.notes.getAll();
       if (notes.length === 0) return "Wissensbasis ist leer. Erstelle Notizen mit kb_create.";
       return notes
         .map(n => `- ${n.title} (${n.filename}) — ${n.tags.length ? "[" + n.tags.join(", ") + "] " : ""}${n.updated} — ${formatSize(n.size)}`)
@@ -122,46 +123,18 @@ async function execute(name, input) {
     }
 
     case "kb_search": {
-      const query = (input.query || "").toLowerCase();
+      const query = (input.query || "").trim();
       if (!query) return "Suchbegriff fehlt.";
 
-      const notes = getAllNotes();
-      const results = [];
-
-      for (const note of notes) {
-        const filePath = path.join(NOTES_DIR, note.filename);
-        const content = fs.readFileSync(filePath, "utf-8");
-        const fullText = (note.title + " " + note.tags.join(" ") + " " + content).toLowerCase();
-
-        if (!fullText.includes(query)) continue;
-
-        // Kontext finden (~2 Zeilen um den Treffer)
-        const { body } = parseFrontmatter(content);
-        const lines = body.split("\n");
-        let context = "";
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].toLowerCase().includes(query)) {
-            const start = Math.max(0, i - 1);
-            const end = Math.min(lines.length, i + 2);
-            context = lines.slice(start, end).join("\n").trim();
-            break;
-          }
-        }
-
-        results.push({
-          title: note.title,
-          filename: note.filename,
-          tags: note.tags,
-          context: context || note.preview,
-        });
-
-        if (results.length >= 10) break;
-      }
-
+      // FTS5-Suche statt File-Scanning
+      const results = db.notes.search(query);
       if (results.length === 0) return `Keine Treffer für "${input.query}".`;
 
       return results
-        .map(r => `**${r.title}** (${r.filename})${r.tags.length ? " [" + r.tags.join(", ") + "]" : ""}\n> ${r.context}`)
+        .map(r => {
+          const tags = r.tags ? r.tags.split(", ").filter(Boolean) : [];
+          return `**${r.title}** (${r.filename})${tags.length ? " [" + tags.join(", ") + "]" : ""}\n> ${r.context || ""}`;
+        })
         .join("\n\n");
     }
 
@@ -186,6 +159,7 @@ async function execute(name, input) {
       const fileContent = buildFrontmatter(meta) + input.content;
 
       fs.writeFileSync(path.join(NOTES_DIR, filename), fileContent, "utf-8");
+      db.notes.upsert(filename);
       gitSync(`Neue Notiz: ${input.title}`);
 
       return `Notiz erstellt: ${filename}`;
@@ -211,6 +185,7 @@ async function execute(name, input) {
       }
 
       fs.writeFileSync(filePath, buildFrontmatter(meta) + newBody, "utf-8");
+      db.notes.upsert(input.filename);
       gitSync(`Notiz aktualisiert: ${meta.title || input.filename}`);
 
       return `Notiz aktualisiert: ${input.filename} (${mode})`;
@@ -224,6 +199,7 @@ async function execute(name, input) {
 
       const { meta } = parseFrontmatter(fs.readFileSync(filePath, "utf-8"));
       fs.unlinkSync(filePath);
+      db.notes.remove(input.filename);
       gitSync(`Notiz gelöscht: ${meta.title || input.filename}`);
 
       return `Notiz gelöscht: ${input.filename}`;

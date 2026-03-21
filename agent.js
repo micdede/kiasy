@@ -1,7 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 const { createProvider } = require("./providers");
-const chatDb = require("./lib/chat-db");
+// const chatDb = require("./lib/chat-db"); // DEPRECATED: Replaced by lib/db.js
+const db = require("./lib/db");
 
 // --- Konfiguration ---
 
@@ -214,7 +215,7 @@ function getHistory(chatId) {
   if (!conversations.has(chatId)) {
     // Aus DB laden falls vorhanden
     try {
-      const saved = chatDb.getRecentMessages(chatId, MAX_HISTORY);
+      const saved = db.messages.getRecent(chatId, MAX_HISTORY);
       if (saved.length > 0) {
         trimHistory(saved);
         conversations.set(chatId, saved);
@@ -230,7 +231,7 @@ function getHistory(chatId) {
 
 function clearHistory(chatId) {
   conversations.delete(chatId);
-  try { chatDb.clearChat(chatId); } catch {}
+  try { db.messages.clearChat(chatId); } catch {}
 }
 
 function trimHistory(history) {
@@ -277,7 +278,7 @@ async function handleMessage(chatId, userMessage) {
 
   const history = getHistory(chatId);
   history.push({ role: "user", content: userMessage });
-  try { chatDb.saveMessage(chatId, "user", userMessage); } catch {}
+  try { db.messages.save(chatId, "user", userMessage); } catch {}
   trimHistory(history);
 
   for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
@@ -305,7 +306,7 @@ async function handleMessage(chatId, userMessage) {
 
     if (result.type === "tool_use") {
       provider.pushAssistant(history, result);
-      try { chatDb.saveMessage(chatId, "assistant", history[history.length - 1].content); } catch {}
+      try { db.messages.save(chatId, "assistant", history[history.length - 1].content); } catch {}
 
       const toolResults = [];
       for (const call of result.toolCalls) {
@@ -335,13 +336,13 @@ async function handleMessage(chatId, userMessage) {
       }
 
       provider.pushToolResults(history, toolResults);
-      try { chatDb.saveMessage(chatId, "user", history[history.length - 1].content); } catch {}
+      try { db.messages.save(chatId, "user", history[history.length - 1].content); } catch {}
       continue;
     }
 
     // Finale Text-Antwort
     provider.pushAssistant(history, result);
-    try { chatDb.saveMessage(chatId, "assistant", history[history.length - 1].content); } catch {}
+    try { db.messages.save(chatId, "assistant", history[history.length - 1].content); } catch {}
     return buildResponse(result.text || "(keine Antwort)");
   }
 
@@ -358,6 +359,6 @@ function buildResponse(text) {
   return { text, images };
 }
 
-process.on("exit", () => chatDb.close());
+process.on("exit", () => db.close());
 
-module.exports = { handleMessage, clearHistory, getHistory, conversations, chatDb };
+module.exports = { handleMessage, clearHistory, getHistory, conversations, db };

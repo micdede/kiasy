@@ -6,6 +6,7 @@ const os = require("os");
 const { execSync } = require("child_process");
 const agent = require("./agent");
 const voice = require("./voice");
+const db = require("./lib/db");
 
 const MAX_EVENTS = 200;
 const events = [];
@@ -37,6 +38,9 @@ function logEvent(type, message) {
   };
   events.push(event);
   if (events.length > MAX_EVENTS) events.shift();
+
+  // In DB persistieren
+  try { db.events.log(type, event.message); } catch {}
 
   const data = `data: ${JSON.stringify(event)}\n\n`;
   for (const client of clients) {
@@ -1971,6 +1975,7 @@ function handleNoteCreate(req, res) {
       const meta = { title, tags, created: now, updated: now };
       const content = buildFrontmatter(meta) + (body.content || "");
       fs.writeFileSync(path.join(NOTES_DIR, filename), content, "utf-8");
+      db.notes.upsert(filename);
       gitSync("Neue Notiz: " + title);
 
       originalLog("[Monitor] Notiz erstellt: " + filename);
@@ -2005,6 +2010,7 @@ function handleNoteWrite(req, res, filename) {
       }
 
       fs.writeFileSync(filePath, body.content, "utf-8");
+      db.notes.upsert(filename);
       gitSync("Notiz aktualisiert: " + filename);
 
       originalLog("[Monitor] Notiz gespeichert: " + filename);
@@ -2033,6 +2039,7 @@ function handleNoteDelete(req, res, filename) {
     }
     const { gitSync } = require('./lib/git-sync');
     fs.unlinkSync(filePath);
+    db.notes.remove(filename);
     gitSync("Notiz gelöscht: " + filename);
 
     originalLog("[Monitor] Notiz gelöscht: " + filename);
@@ -2082,6 +2089,7 @@ function handleNoteUpload(req, res) {
       }
 
       fs.writeFileSync(path.join(NOTES_DIR, finalFilename), content, "utf-8");
+      db.notes.upsert(finalFilename);
       gitSync("Upload: " + finalFilename);
 
       originalLog("[Monitor] Notiz hochgeladen: " + finalFilename);
@@ -3531,25 +3539,15 @@ loadReminders();
 </html>`;
 }
 
-// --- Reminders API Handlers ---
+// --- Reminders API Handlers (nutzt db.reminders statt JSON-Datei) ---
 
-const REMINDERS_FILE = path.join(__dirname, "reminders.json");
-
-function loadReminders() {
-  try {
-    return JSON.parse(fs.readFileSync(REMINDERS_FILE, "utf-8"));
-  } catch {
-    return [];
-  }
-}
-
-function saveReminders(reminders) {
-  fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2), "utf-8");
-}
+// const REMINDERS_FILE = path.join(__dirname, "reminders.json");
+// function loadReminders() { try { return JSON.parse(fs.readFileSync(REMINDERS_FILE, "utf-8")); } catch { return []; } }
+// function saveReminders(reminders) { fs.writeFileSync(REMINDERS_FILE, JSON.stringify(reminders, null, 2), "utf-8"); }
 
 function handleRemindersList(req, res) {
   res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-  res.end(JSON.stringify(loadReminders()));
+  res.end(JSON.stringify(db.reminders.getAll()));
 }
 
 function handleReminderCreate(req, res) {
@@ -3563,20 +3561,7 @@ function handleReminderCreate(req, res) {
         res.end(JSON.stringify({ error: "text und due erforderlich" }));
         return;
       }
-      const reminders = loadReminders();
-      const reminder = {
-        id: Date.now() + Math.floor(Math.random() * 1000),
-        text: body.text,
-        due: body.due,
-        chatId: body.chatId || null,
-        done: false,
-        created: new Date().toISOString(),
-        type: body.type || "text",
-        interval_hours: body.interval_hours || null,
-        failCount: 0,
-      };
-      reminders.push(reminder);
-      saveReminders(reminders);
+      const reminder = db.reminders.create(body);
       originalLog("[Monitor] Erinnerung erstellt: " + body.text);
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify({ ok: true, reminder }));
@@ -3593,24 +3578,15 @@ function handleReminderUpdate(req, res, id) {
   req.on("end", () => {
     try {
       const body = JSON.parse(Buffer.concat(chunks).toString());
-      const reminders = loadReminders();
-      const idx = reminders.findIndex(r => r.id === id);
-      if (idx === -1) {
+      const updated = db.reminders.update(id, body);
+      if (!updated) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Erinnerung nicht gefunden" }));
         return;
       }
-      if (body.text !== undefined) reminders[idx].text = body.text;
-      if (body.due !== undefined) reminders[idx].due = body.due;
-      if (body.done !== undefined) reminders[idx].done = body.done;
-      if (body.chatId !== undefined) reminders[idx].chatId = body.chatId;
-      if (body.type !== undefined) reminders[idx].type = body.type;
-      if (body.interval_hours !== undefined) reminders[idx].interval_hours = body.interval_hours;
-      if (body.failCount !== undefined) reminders[idx].failCount = body.failCount;
-      saveReminders(reminders);
-      originalLog("[Monitor] Erinnerung aktualisiert: " + reminders[idx].text);
+      originalLog("[Monitor] Erinnerung aktualisiert: " + updated.text);
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-      res.end(JSON.stringify({ ok: true, reminder: reminders[idx] }));
+      res.end(JSON.stringify({ ok: true, reminder: updated }));
     } catch (err) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
@@ -3619,16 +3595,14 @@ function handleReminderUpdate(req, res, id) {
 }
 
 function handleReminderDelete(req, res, id) {
-  const reminders = loadReminders();
-  const idx = reminders.findIndex(r => r.id === id);
-  if (idx === -1) {
+  const existing = db.reminders.getById(id);
+  if (!existing) {
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Erinnerung nicht gefunden" }));
     return;
   }
-  const removed = reminders.splice(idx, 1);
-  saveReminders(reminders);
-  originalLog("[Monitor] Erinnerung gelöscht: " + removed[0].text);
+  db.reminders.remove(id);
+  originalLog("[Monitor] Erinnerung gelöscht: " + existing.text);
   res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
   res.end(JSON.stringify({ ok: true }));
 }

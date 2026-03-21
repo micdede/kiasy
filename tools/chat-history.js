@@ -1,4 +1,5 @@
-const chatDb = require("../lib/chat-db");
+// const chatDb = require("../lib/chat-db"); // DEPRECATED
+const db = require("../lib/db");
 
 const definitions = [
   {
@@ -24,7 +25,7 @@ const definitions = [
 
 async function execute(name, input) {
   if (name === "chat_search") {
-    const results = chatDb.searchMessages(input.query, null, input.limit || 10);
+    const results = db.messages.search(input.query, null, input.limit || 10);
 
     if (results.length === 0) {
       return `Keine Treffer für "${input.query}" im Chat-Verlauf.`;

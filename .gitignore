@@ -11,4 +11,7 @@ credentials.json
 chat-history.db
 chat-history.db-shm
 chat-history.db-wal
+jarvis.db
+jarvis.db-shm
+jarvis.db-wal
 .last-telegram-chat

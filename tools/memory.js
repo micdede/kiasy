@@ -1,19 +1,10 @@
-const fs = require("fs");
-const path = require("path");
+// const fs = require("fs");
+// const path = require("path");
+// const MEMORY_FILE = path.join(__dirname, "..", "memory.json");
+// function load() { try { return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf-8")); } catch { return { facts: [], todos: [], notes: [] }; } }
+// function save(memory) { fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2), "utf-8"); }
 
-const MEMORY_FILE = path.join(__dirname, "..", "memory.json");
-
-function load() {
-  try {
-    return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf-8"));
-  } catch {
-    return { facts: [], todos: [], notes: [] };
-  }
-}
-
-function save(memory) {
-  fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2), "utf-8");
-}
+const db = require("../lib/db");
 
 const definitions = [
   {
@@ -60,42 +51,32 @@ const definitions = [
 ];
 
 async function execute(name, input) {
-  const memory = load();
-
   if (name === "memory_read") {
     if (input.category) {
-      return JSON.stringify(memory[input.category] || [], null, 2);
+      return JSON.stringify(db.memory.getByCategory(input.category), null, 2);
     }
-    return JSON.stringify(memory, null, 2);
+    return JSON.stringify(db.memory.getAll(), null, 2);
   }
 
   if (name === "memory_write") {
     const { category, action, data } = input;
-    if (!memory[category]) memory[category] = [];
 
     switch (action) {
       case "add": {
-        data.id = Date.now();
-        data.added = new Date().toISOString().split("T")[0];
-        memory[category].push(data);
-        save(memory);
-        return `Gespeichert in ${category}: ${JSON.stringify(data)}`;
+        const entry = db.memory.add(category, data);
+        return `Gespeichert in ${category}: ${JSON.stringify(entry)}`;
       }
 
       case "remove": {
-        const idx = memory[category].findIndex((e) => e.id === data.id);
-        if (idx === -1) return `Eintrag mit ID ${data.id} nicht gefunden.`;
-        const removed = memory[category].splice(idx, 1);
-        save(memory);
-        return `Entfernt: ${JSON.stringify(removed[0])}`;
+        const removed = db.memory.remove(data.id);
+        if (!removed) return `Eintrag mit ID ${data.id} nicht gefunden.`;
+        return `Eintrag ${data.id} entfernt.`;
       }
 
       case "update": {
-        const entry = memory[category].find((e) => e.id === data.id);
-        if (!entry) return `Eintrag mit ID ${data.id} nicht gefunden.`;
-        Object.assign(entry, data);
-        save(memory);
-        return `Aktualisiert: ${JSON.stringify(entry)}`;
+        const updated = db.memory.update(data.id, data);
+        if (!updated) return `Eintrag mit ID ${data.id} nicht gefunden.`;
+        return `Aktualisiert: ${JSON.stringify(updated)}`;
       }
 
       default:
