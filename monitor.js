@@ -2877,6 +2877,7 @@ function appendOutput(html) {
 
 function clearTerminal() {
   output.innerHTML = '<div class="cmd-info">Terminal geleert.</div>';
+  fetch('/api/terminal/session', { method: 'DELETE' }).catch(() => {});
 }
 
 async function runCmd(cmd) {
@@ -2924,6 +2925,8 @@ function submitCmd() {
   historyIdx = -1;
   input.value = '';
   runCmd(cmd);
+  // History in DB speichern
+  fetch('/api/terminal/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ history: cmdHistory }) }).catch(() => {});
 }
 
 async function quickAction(action, confirmMsg) {
@@ -2992,6 +2995,27 @@ async function loadStatus() {
 
 loadStatus();
 setInterval(loadStatus, 15000);
+
+// Letzte Session aus DB laden
+async function loadSession() {
+  try {
+    const res = await fetch('/api/terminal/session');
+    const data = await res.json();
+    if (data.cwd) { currentCwd = data.cwd; cwdEl.textContent = currentCwd; }
+    if (data.history && data.history.length > 0) { cmdHistory = data.history; }
+    if (data.log && data.log.length > 0) {
+      output.innerHTML = '';
+      for (const entry of data.log) {
+        if (entry.type === 'cmd') appendOutput('<div class="cmd-line">$ ' + escapeHtml(entry.content) + '</div>');
+        else if (entry.type === 'stdout') appendOutput('<div class="cmd-output">' + escapeHtml(entry.content) + '</div>');
+        else if (entry.type === 'stderr') appendOutput('<div class="cmd-error">' + escapeHtml(entry.content) + '</div>');
+        else if (entry.type === 'error') appendOutput('<div class="cmd-error">' + escapeHtml(entry.content) + '</div>');
+        else if (entry.type === 'info') appendOutput('<div class="cmd-info">' + escapeHtml(entry.content) + '</div>');
+      }
+    }
+  } catch {}
+}
+loadSession();
 </script>
 </body>
 </html>`;
@@ -3019,18 +3043,27 @@ function handleTerminalExec(req, res) {
       if (cdMatch) {
         const target = cdMatch[1].trim().replace(/^~/, process.env.HOME || "/home/mcde");
         const newCwd = path.resolve(cwd, target);
+        db.terminal.log("cmd", cmd);
         if (fs.existsSync(newCwd) && fs.statSync(newCwd).isDirectory()) {
+          db.terminal.setCwd(newCwd);
           res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
           res.end(JSON.stringify({ stdout: "", stderr: "", cwd: newCwd }));
         } else {
+          const errMsg = "cd: " + target + ": Kein solches Verzeichnis";
+          db.terminal.log("stderr", errMsg);
           res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-          res.end(JSON.stringify({ stdout: "", stderr: "cd: " + target + ": Kein solches Verzeichnis", cwd }));
+          res.end(JSON.stringify({ stdout: "", stderr: errMsg, cwd }));
         }
         return;
       }
 
+      db.terminal.log("cmd", cmd);
       const { exec } = require("child_process");
       exec(cmd, { cwd, timeout: 30000, maxBuffer: 1024 * 1024, env: { ...process.env, TERM: "dumb" } }, (err, stdout, stderr) => {
+        if (stdout) db.terminal.log("stdout", stdout);
+        if (stderr) db.terminal.log("stderr", stderr);
+        if (err && !stderr) db.terminal.log("error", err.message);
+        db.terminal.setCwd(cwd);
         res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
         res.end(JSON.stringify({
           stdout: stdout || "",
@@ -3089,7 +3122,7 @@ function handleTerminalAction(req, res) {
           try {
             const agentMod = require("./agent");
             agentMod.conversations.clear();
-            try { agentMod.chatDb.clearAllChats(); } catch {}
+            try { agentMod.db.messages.clearAll(); } catch {}
             respond({ message: "Chat-History aller Nutzer gelöscht (Memory + DB)" });
           } catch (e) {
             respond({ error: e.message });
@@ -4162,6 +4195,27 @@ function startMonitor(port) {
       handleTerminalAction(req, res);
     } else if (req.url === "/api/terminal/status" && req.method === "GET") {
       handleTerminalStatus(req, res);
+    } else if (req.url === "/api/terminal/session" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ log: db.terminal.getLog(), cwd: db.terminal.getCwd(), history: db.terminal.getHistory() }));
+    } else if (req.url === "/api/terminal/session" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          if (body.history) db.terminal.setHistory(body.history);
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+    } else if (req.url === "/api/terminal/session" && req.method === "DELETE") {
+      db.terminal.clear();
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true }));
 
     // --- Reminders / Erinnerungen ---
     } else if (req.url === "/reminders") {
