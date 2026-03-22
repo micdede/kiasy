@@ -186,6 +186,76 @@ function cleanDir(dir, ext) {
 
 // --- Theme System ---
 
+// --- Theme-Variablen-Definition ---
+const THEME_VARS = [
+  { key: "bg-primary", label: "Hintergrund", group: "Farben", type: "color" },
+  { key: "bg-secondary", label: "Panels/Header", group: "Farben", type: "color" },
+  { key: "bg-tertiary", label: "Hover/Aktiv", group: "Farben", type: "color" },
+  { key: "border-color", label: "Rahmen", group: "Farben", type: "color" },
+  { key: "border-glow", label: "Rahmen Glow", group: "Farben", type: "color" },
+  { key: "text-primary", label: "Text", group: "Farben", type: "color" },
+  { key: "text-muted", label: "Text gedämpft", group: "Farben", type: "color" },
+  { key: "text-dim", label: "Text schwach", group: "Farben", type: "color" },
+  { key: "text-bright", label: "Text hell", group: "Farben", type: "color" },
+  { key: "accent", label: "Akzentfarbe", group: "Akzent", type: "color" },
+  { key: "accent-bg", label: "Akzent Hintergrund", group: "Akzent", type: "color" },
+  { key: "color-success", label: "Erfolg", group: "Status", type: "color" },
+  { key: "color-error", label: "Fehler", group: "Status", type: "color" },
+  { key: "color-warning", label: "Warnung", group: "Status", type: "color" },
+  { key: "color-info", label: "Info", group: "Status", type: "color" },
+  { key: "btn-primary-bg", label: "Button primär", group: "Buttons", type: "color" },
+  { key: "btn-primary-hover", label: "Button Hover", group: "Buttons", type: "color" },
+  { key: "bg-gradient", label: "Body-Gradient", group: "Effekte", type: "text" },
+  { key: "accent-glow", label: "Akzent-Glow", group: "Effekte", type: "text" },
+  { key: "glow-shadow", label: "Glow Shadow", group: "Effekte", type: "text" },
+  { key: "card-shadow", label: "Card Shadow", group: "Effekte", type: "text" },
+  { key: "scan-lines", label: "Scan-Lines", group: "Effekte", type: "text" },
+  { key: "font-heading", label: "Schrift Headlines", group: "Fonts", type: "text" },
+  { key: "font-body", label: "Schrift Body", group: "Fonts", type: "text" },
+];
+
+const BUILTIN_THEMES = {
+  classic: {
+    "bg-primary": "#0d1117", "bg-secondary": "#161b22", "bg-tertiary": "#21262d",
+    "border-color": "#30363d", "border-glow": "#30363d",
+    "text-primary": "#c9d1d9", "text-muted": "#8b949e", "text-dim": "#484f58", "text-bright": "#e6edf3",
+    "accent": "#58a6ff", "accent-glow": "transparent", "accent-bg": "#1f6feb33",
+    "color-success": "#3fb950", "color-error": "#f85149", "color-warning": "#d29922", "color-info": "#d2a8ff",
+    "btn-primary-bg": "#238636", "btn-primary-hover": "#2ea043",
+    "font-heading": "'SF Mono', 'Cascadia Code', monospace", "font-body": "'SF Mono', 'Cascadia Code', monospace",
+    "glow-shadow": "none", "card-shadow": "none", "scan-lines": "none",
+    "bg-gradient": "#0d1117",
+  },
+  tron: {
+    "bg-primary": "#05070A", "bg-secondary": "rgba(10, 20, 40, 0.6)", "bg-tertiary": "rgba(0, 240, 255, 0.05)",
+    "border-color": "rgba(0, 240, 255, 0.2)", "border-glow": "rgba(0, 240, 255, 0.4)",
+    "text-primary": "#E6F7FF", "text-muted": "rgba(230, 247, 255, 0.6)", "text-dim": "rgba(230, 247, 255, 0.3)", "text-bright": "#fff",
+    "accent": "#00F0FF", "accent-glow": "0 0 15px #00F0FF", "accent-bg": "rgba(0, 240, 255, 0.1)",
+    "color-success": "#00FF88", "color-error": "#FF3B3B", "color-warning": "#FFB000", "color-info": "#00F0FF",
+    "btn-primary-bg": "transparent", "btn-primary-hover": "rgba(0, 240, 255, 0.1)",
+    "font-heading": "'Orbitron', sans-serif", "font-body": "'Rajdhani', sans-serif",
+    "glow-shadow": "0 0 20px rgba(0, 240, 255, 0.15)", "card-shadow": "0 0 20px rgba(0, 240, 255, 0.08)",
+    "scan-lines": "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 240, 255, 0.03) 2px, rgba(0, 240, 255, 0.03) 4px)",
+    "bg-gradient": "radial-gradient(circle at center, #0A1A2F, #05070A)",
+  },
+};
+
+function getCustomThemes() {
+  try {
+    const row = db.db.prepare("SELECT value FROM terminal_state WHERE key = 'custom_themes'").get();
+    return row ? JSON.parse(row.value) : {};
+  } catch { return {}; }
+}
+
+function saveCustomThemes(themes) {
+  db.db.prepare("INSERT OR REPLACE INTO terminal_state (key, value) VALUES (?, ?)").run("custom_themes", JSON.stringify(themes));
+}
+
+function getAllThemes() {
+  const custom = getCustomThemes();
+  return { ...BUILTIN_THEMES, ...custom };
+}
+
 function getActiveTheme() {
   try {
     const row = db.db.prepare("SELECT value FROM terminal_state WHERE key = 'theme'").get();
@@ -193,8 +263,20 @@ function getActiveTheme() {
   } catch { return "tron"; }
 }
 
+function getThemeVars(themeName) {
+  const all = getAllThemes();
+  return all[themeName] || all.tron || BUILTIN_THEMES.tron;
+}
+
+function isGlowTheme(themeName) {
+  const vars = getThemeVars(themeName);
+  return vars["glow-shadow"] && vars["glow-shadow"] !== "none";
+}
+
 function getGoogleFontsLink(theme) {
-  if (theme === "tron") {
+  const vars = getThemeVars(theme);
+  const needsGoogle = vars["font-heading"]?.includes("Orbitron") || vars["font-body"]?.includes("Rajdhani");
+  if (needsGoogle) {
     return '<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">';
   }
   return '';
@@ -202,37 +284,12 @@ function getGoogleFontsLink(theme) {
 
 function getThemeCSS() {
   const theme = getActiveTheme();
+  const themeVars = getThemeVars(theme);
 
-  const presets = {
-    classic: `
-      --bg-primary: #0d1117; --bg-secondary: #161b22; --bg-tertiary: #21262d;
-      --border-color: #30363d; --border-glow: #30363d;
-      --text-primary: #c9d1d9; --text-muted: #8b949e; --text-dim: #484f58; --text-bright: #e6edf3;
-      --accent: #58a6ff; --accent-glow: transparent; --accent-bg: #1f6feb33;
-      --color-success: #3fb950; --color-error: #f85149; --color-warning: #d29922; --color-info: #d2a8ff;
-      --btn-primary-bg: #238636; --btn-primary-hover: #2ea043;
-      --font-heading: 'SF Mono', 'Cascadia Code', monospace; --font-body: 'SF Mono', 'Cascadia Code', monospace;
-      --glow-shadow: none; --card-shadow: none; --scan-lines: none;
-      --bg-gradient: #0d1117;
-    `,
-    tron: `
-      --bg-primary: #05070A; --bg-secondary: rgba(10, 20, 40, 0.6); --bg-tertiary: rgba(0, 240, 255, 0.05);
-      --border-color: rgba(0, 240, 255, 0.2); --border-glow: rgba(0, 240, 255, 0.4);
-      --text-primary: #E6F7FF; --text-muted: rgba(230, 247, 255, 0.6); --text-dim: rgba(230, 247, 255, 0.3); --text-bright: #fff;
-      --accent: #00F0FF; --accent-glow: 0 0 15px #00F0FF; --accent-bg: rgba(0, 240, 255, 0.1);
-      --color-success: #00FF88; --color-error: #FF3B3B; --color-warning: #FFB000; --color-info: #00F0FF;
-      --btn-primary-bg: transparent; --btn-primary-hover: rgba(0, 240, 255, 0.1);
-      --font-heading: 'Orbitron', sans-serif; --font-body: 'Rajdhani', sans-serif;
-      --glow-shadow: 0 0 20px rgba(0, 240, 255, 0.15); --card-shadow: 0 0 20px rgba(0, 240, 255, 0.08);
-      --scan-lines: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 240, 255, 0.03) 2px, rgba(0, 240, 255, 0.03) 4px);
-      --bg-gradient: radial-gradient(circle at center, #0A1A2F, #05070A);
-    `
-  };
-
-  const vars = presets[theme] || presets.tron;
+  const vars = Object.entries(themeVars).map(([k, v]) => `--${k}: ${v};`).join("\n      ");
 
   let tronExtras = '';
-  if (theme === 'tron') {
+  if (isGlowTheme(theme)) {
     tronExtras = `
     body::after {
       content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -1243,11 +1300,9 @@ ${getThemeCSS()}
     <div class="fields">
       <div class="field-row">
         <label class="field-label">Theme</label>
-        <div class="field-input-wrap">
-          <select id="themeSelect" onchange="changeTheme(this.value)">
-            <option value="classic">Classic Dark</option>
-            <option value="tron">TRON Legacy</option>
-          </select>
+        <div class="field-input-wrap" style="display:flex;gap:8px;align-items:center">
+          <select id="themeSelect" onchange="changeTheme(this.value)"></select>
+          <a href="/theme-editor" style="font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap">Editor</a>
         </div>
       </div>
     </div>
@@ -1490,8 +1545,12 @@ document.addEventListener("keydown", (e) => {
 });
 
 // Theme selector
-fetch('/api/theme').then(r=>r.json()).then(d => {
-  document.getElementById('themeSelect').value = d.theme;
+fetch('/api/themes').then(r=>r.json()).then(d => {
+  const sel = document.getElementById('themeSelect');
+  sel.innerHTML = Object.entries(d.themes).map(([name, info]) =>
+    '<option value="' + name + '">' + name + (info.builtin ? '' : ' (Custom)') + '</option>'
+  ).join('');
+  sel.value = d.active;
 }).catch(() => {});
 function changeTheme(t) {
   fetch('/api/theme', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({theme:t}) })
@@ -2672,6 +2731,375 @@ loadHistory();
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
+</script>
+</body>
+</html>`;
+}
+
+// --- Theme Editor HTML ---
+
+function getThemeEditorHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>JARVIS - Theme Editor</title>
+\${getThemeCSS()}
+<style>
+  .container { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
+
+  .editor-layout { display: flex; gap: 20px; }
+
+  /* Sidebar: Theme-Liste */
+  .theme-sidebar {
+    width: 240px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;
+  }
+  .theme-item {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px;
+    padding: 10px 14px; cursor: pointer; transition: all 0.15s;
+  }
+  .theme-item:hover { border-color: var(--accent); }
+  .theme-item.active { border-color: var(--accent); box-shadow: 0 0 10px rgba(0,240,255,0.1); }
+  .theme-item-name { font-weight: 600; color: var(--text-bright); font-size: 13px; }
+  .theme-item-meta { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .theme-item-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .theme-item-actions button {
+    background: none; border: 1px solid var(--border-color); color: var(--text-muted);
+    padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .theme-item-actions button:hover { border-color: var(--accent); color: var(--text-primary); }
+  .theme-item-actions .del-btn:hover { border-color: var(--color-error); color: var(--color-error); }
+
+  .new-theme-btn {
+    background: none; border: 1px dashed var(--border-color); color: var(--text-muted);
+    padding: 10px; border-radius: 8px; cursor: pointer; font-family: inherit;
+    font-size: 12px; transition: all 0.15s; text-align: center;
+  }
+  .new-theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Editor: Variablen */
+  .theme-editor { flex: 1; min-width: 0; }
+  .editor-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  }
+  .editor-title { font-family: var(--font-heading); font-size: 18px; color: var(--accent); }
+  .editor-badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    background: var(--bg-tertiary); color: var(--text-muted); border: 1px solid var(--border-color);
+  }
+
+  .var-group {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .var-group h3 {
+    font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 10px; font-weight: 600;
+  }
+  .var-row {
+    display: flex; align-items: center; gap: 10px; padding: 4px 0;
+    border-bottom: 1px solid var(--bg-tertiary);
+  }
+  .var-row:last-child { border-bottom: none; }
+  .var-label { font-size: 12px; color: var(--text-primary); min-width: 140px; }
+  .var-input {
+    flex: 1; background: var(--bg-primary); border: 1px solid var(--border-color);
+    color: var(--text-primary); padding: 4px 8px; border-radius: 4px;
+    font-family: inherit; font-size: 12px;
+  }
+  .var-input:focus { outline: none; border-color: var(--accent); }
+  .var-color {
+    width: 32px; height: 26px; border: 1px solid var(--border-color);
+    border-radius: 4px; cursor: pointer; padding: 0; background: none;
+  }
+  .var-color::-webkit-color-swatch-wrapper { padding: 2px; }
+  .var-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+
+  .editor-actions {
+    display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end;
+  }
+
+  /* Preview */
+  .preview-section {
+    margin-top: 20px; background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: 8px; padding: 16px; overflow: hidden;
+  }
+  .preview-section h3 {
+    font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 12px;
+  }
+  .preview-frame {
+    border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;
+    height: 200px;
+  }
+  .preview-frame iframe {
+    width: 100%; height: 100%; border: none; transform-origin: top left;
+  }
+
+  /* New Theme Dialog */
+  .dialog-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;
+  }
+  .dialog-overlay.show { display: flex; }
+  .dialog {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px;
+    padding: 24px; min-width: 350px; box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  }
+  .dialog h2 { font-family: var(--font-heading); color: var(--accent); margin-bottom: 16px; font-size: 16px; }
+  .dialog input, .dialog select {
+    width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color);
+    color: var(--text-primary); padding: 8px 12px; border-radius: 6px;
+    font-family: inherit; font-size: 13px; margin-bottom: 12px;
+  }
+  .dialog input:focus, .dialog select:focus { outline: none; border-color: var(--accent); }
+  .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  @media (max-width: 768px) {
+    .editor-layout { flex-direction: column; }
+    .theme-sidebar { width: 100%; flex-direction: row; overflow-x: auto; }
+    .theme-item { min-width: 160px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Theme Editor</h1>
+  <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
+</header>
+
+<div class="container">
+  <div class="editor-layout">
+    <div class="theme-sidebar" id="themeSidebar"></div>
+    <div class="theme-editor" id="themeEditor">
+      <div class="empty-state" style="font-size:14px;padding:40px">Theme auswählen oder neues erstellen</div>
+    </div>
+  </div>
+</div>
+
+<!-- New Theme Dialog -->
+<div class="dialog-overlay" id="newDialog">
+  <div class="dialog">
+    <h2>Neues Theme</h2>
+    <input type="text" id="newThemeName" placeholder="Name (z.B. Midnight Blue)">
+    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Basierend auf:</label>
+    <select id="newThemeBase"></select>
+    <div class="dialog-actions">
+      <button class="btn" onclick="closeNewDialog()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="createTheme()">Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allThemes = {};
+let varDefs = [];
+let activeTheme = '';
+let selectedTheme = null;
+let editedVars = {};
+
+function escapeHtml(s) {
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+async function loadThemes() {
+  const res = await fetch('/api/themes');
+  const data = await res.json();
+  allThemes = data.themes;
+  varDefs = data.varDefs;
+  activeTheme = data.active;
+  renderSidebar();
+  if (selectedTheme && allThemes[selectedTheme]) {
+    renderEditor(selectedTheme);
+  }
+}
+
+function renderSidebar() {
+  const sb = document.getElementById('themeSidebar');
+  let html = '';
+  for (const [name, info] of Object.entries(allThemes)) {
+    const isActive = name === activeTheme;
+    const isBuiltin = info.builtin;
+    html += '<div class="theme-item' + (name === selectedTheme ? ' active' : '') + '" onclick="selectTheme(\\'' + name + '\\')">' +
+      '<div class="theme-item-name">' + escapeHtml(name) + (isActive ? ' ✓' : '') + '</div>' +
+      '<div class="theme-item-meta">' + (isBuiltin ? 'Eingebaut' : 'Custom') + '</div>' +
+      '<div class="theme-item-actions">' +
+        (isActive ? '' : '<button onclick="event.stopPropagation();activateTheme(\\'' + name + '\\')">Aktivieren</button>') +
+        (!isBuiltin ? '<button class="del-btn" onclick="event.stopPropagation();deleteTheme(\\'' + name + '\\')">Löschen</button>' : '') +
+      '</div>' +
+    '</div>';
+  }
+  html += '<button class="new-theme-btn" onclick="openNewDialog()">+ Neues Theme</button>';
+  sb.innerHTML = html;
+}
+
+function selectTheme(name) {
+  selectedTheme = name;
+  editedVars = { ...allThemes[name].vars };
+  renderSidebar();
+  renderEditor(name);
+}
+
+function renderEditor(name) {
+  const info = allThemes[name];
+  const isBuiltin = info.builtin;
+  const vars = editedVars;
+  const editor = document.getElementById('themeEditor');
+
+  // Variablen nach Gruppen sortieren
+  const groups = {};
+  for (const def of varDefs) {
+    if (!groups[def.group]) groups[def.group] = [];
+    groups[def.group].push(def);
+  }
+
+  let html = '<div class="editor-header">' +
+    '<span class="editor-title">' + escapeHtml(name) + '</span>' +
+    '<span class="editor-badge">' + (isBuiltin ? 'Eingebaut (nur lesen)' : 'Custom') + '</span>' +
+    (name === activeTheme ? '<span class="editor-badge" style="color:var(--color-success);border-color:var(--color-success)">Aktiv</span>' : '') +
+  '</div>';
+
+  for (const [group, defs] of Object.entries(groups)) {
+    html += '<div class="var-group"><h3>' + escapeHtml(group) + '</h3>';
+    for (const def of defs) {
+      const val = vars[def.key] || '';
+      const isColor = def.type === 'color' && /^#[0-9a-fA-F]{3,8}$/.test(val);
+      html += '<div class="var-row">' +
+        '<span class="var-label">' + escapeHtml(def.label) + '</span>';
+      if (isColor) {
+        html += '<input type="color" class="var-color" value="' + val + '" data-key="' + def.key + '"' +
+          (isBuiltin ? ' disabled' : ' onchange="updateVar(this)"') + '>';
+      }
+      html += '<input type="text" class="var-input" value="' + escapeHtml(val) + '" data-key="' + def.key + '"' +
+        (isBuiltin ? ' readonly' : ' oninput="updateVarText(this)"') + '>' +
+      '</div>';
+    }
+    html += '</div>';
+  }
+
+  if (!isBuiltin) {
+    html += '<div class="editor-actions">' +
+      '<button class="btn" onclick="resetEdits()">Zurücksetzen</button>' +
+      '<button class="btn btn-primary" onclick="saveTheme()">Speichern</button>' +
+    '</div>';
+  }
+
+  editor.innerHTML = html;
+}
+
+function updateVar(input) {
+  const key = input.dataset.key;
+  editedVars[key] = input.value;
+  // Sync text input
+  const textInput = document.querySelector('.var-input[data-key="' + key + '"]');
+  if (textInput) textInput.value = input.value;
+  applyPreview();
+}
+
+function updateVarText(input) {
+  const key = input.dataset.key;
+  editedVars[key] = input.value;
+  // Sync color picker if hex
+  const colorInput = document.querySelector('.var-color[data-key="' + key + '"]');
+  if (colorInput && /^#[0-9a-fA-F]{6}$/.test(input.value)) {
+    colorInput.value = input.value;
+  }
+  applyPreview();
+}
+
+function applyPreview() {
+  // Live-Preview: CSS-Variablen direkt auf :root setzen
+  for (const [key, val] of Object.entries(editedVars)) {
+    document.documentElement.style.setProperty('--' + key, val);
+  }
+}
+
+function resetEdits() {
+  if (!selectedTheme) return;
+  editedVars = { ...allThemes[selectedTheme].vars };
+  renderEditor(selectedTheme);
+  // Reset live preview
+  for (const [key, val] of Object.entries(editedVars)) {
+    document.documentElement.style.setProperty('--' + key, val);
+  }
+}
+
+async function saveTheme() {
+  if (!selectedTheme) return;
+  try {
+    const res = await fetch('/api/themes/' + selectedTheme, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vars: editedVars })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    allThemes[selectedTheme].vars = { ...editedVars };
+    alert('Theme gespeichert! Seite neu laden um Änderungen zu sehen.');
+  } catch (err) { alert('Fehler: ' + err.message); }
+}
+
+async function activateTheme(name) {
+  try {
+    await fetch('/api/theme', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: name })
+    });
+    location.reload();
+  } catch (err) { alert('Fehler: ' + err.message); }
+}
+
+async function deleteTheme(name) {
+  if (!confirm('Theme "' + name + '" löschen?')) return;
+  try {
+    await fetch('/api/themes/' + name, { method: 'DELETE' });
+    if (selectedTheme === name) selectedTheme = null;
+    loadThemes();
+  } catch (err) { alert('Fehler: ' + err.message); }
+}
+
+function openNewDialog() {
+  const select = document.getElementById('newThemeBase');
+  select.innerHTML = Object.keys(allThemes).map(n => '<option value="' + n + '">' + n + '</option>').join('');
+  document.getElementById('newThemeName').value = '';
+  document.getElementById('newDialog').classList.add('show');
+}
+
+function closeNewDialog() {
+  document.getElementById('newDialog').classList.remove('show');
+}
+
+async function createTheme() {
+  const name = document.getElementById('newThemeName').value.trim();
+  const base = document.getElementById('newThemeBase').value;
+  if (!name) { alert('Name erforderlich'); return; }
+  try {
+    const vars = { ...allThemes[base].vars };
+    const res = await fetch('/api/themes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, vars })
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    closeNewDialog();
+    await loadThemes();
+    selectTheme(data.name);
+  } catch (err) { alert('Fehler: ' + err.message); }
+}
+
+loadThemes();
 </script>
 </body>
 </html>`;
@@ -5064,15 +5492,15 @@ function startMonitor(port) {
     // --- Theme API ---
     } else if (req.url === "/api/theme" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-      res.end(JSON.stringify({ theme: getActiveTheme() }));
+      res.end(JSON.stringify({ theme: getActiveTheme(), vars: THEME_VARS }));
     } else if (req.url === "/api/theme" && req.method === "PUT") {
       const chunks = [];
       req.on("data", (chunk) => chunks.push(chunk));
       req.on("end", () => {
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString());
-          const validThemes = ["classic", "tron"];
-          if (!validThemes.includes(body.theme)) {
+          const all = getAllThemes();
+          if (!all[body.theme]) {
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ ok: false, error: "Unbekanntes Theme" }));
             return;
@@ -5085,6 +5513,94 @@ function startMonitor(port) {
           res.end(JSON.stringify({ ok: false, error: err.message }));
         }
       });
+    } else if (req.url === "/api/themes" && req.method === "GET") {
+      const all = getAllThemes();
+      const builtinNames = Object.keys(BUILTIN_THEMES);
+      const result = {};
+      for (const [name, vars] of Object.entries(all)) {
+        result[name] = { vars, builtin: builtinNames.includes(name) };
+      }
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ themes: result, active: getActiveTheme(), varDefs: THEME_VARS }));
+    } else if (req.url === "/api/themes" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          if (!body.name || !body.vars) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "name und vars erforderlich" }));
+            return;
+          }
+          const slug = body.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").substring(0, 30);
+          if (BUILTIN_THEMES[slug]) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Name kollidiert mit eingebautem Theme" }));
+            return;
+          }
+          const custom = getCustomThemes();
+          custom[slug] = body.vars;
+          saveCustomThemes(custom);
+          originalLog("[Monitor] Custom Theme erstellt: " + slug);
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true, name: slug }));
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+    } else if (req.url.startsWith("/api/themes/") && req.method === "PUT") {
+      const name = decodeURIComponent(req.url.replace("/api/themes/", ""));
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          if (BUILTIN_THEMES[name]) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Eingebaute Themes können nicht bearbeitet werden" }));
+            return;
+          }
+          const custom = getCustomThemes();
+          if (!custom[name]) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Theme nicht gefunden" }));
+            return;
+          }
+          custom[name] = body.vars || custom[name];
+          saveCustomThemes(custom);
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+    } else if (req.url.startsWith("/api/themes/") && req.method === "DELETE") {
+      const name = decodeURIComponent(req.url.replace("/api/themes/", ""));
+      if (BUILTIN_THEMES[name]) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Eingebaute Themes können nicht gelöscht werden" }));
+        return;
+      }
+      const custom = getCustomThemes();
+      if (!custom[name]) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Theme nicht gefunden" }));
+        return;
+      }
+      delete custom[name];
+      saveCustomThemes(custom);
+      if (getActiveTheme() === name) {
+        db.db.prepare("INSERT OR REPLACE INTO terminal_state (key, value) VALUES (?, ?)").run("theme", "tron");
+      }
+      originalLog("[Monitor] Custom Theme gelöscht: " + name);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true }));
+    } else if (req.url === "/theme-editor") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getThemeEditorHTML());
 
     // --- Settings ---
     } else if (req.url === "/settings") {
