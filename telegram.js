@@ -49,9 +49,9 @@ bot.getMe().then((me) => {
   }
 });
 
-// Reminder-Scheduler: prüft jede Minute auf fällige Erinnerungen
-setInterval(() => checkReminders(), 60000);
-console.log("Reminder-Scheduler gestartet (60s Intervall)");
+// Reminder- & Workflow-Scheduler: prüft jede Minute auf fällige Erinnerungen und Workflow-Schritte
+setInterval(() => { checkReminders(); checkWorkflows(); }, 60000);
+console.log("Reminder- & Workflow-Scheduler gestartet (60s Intervall)");
 
 // Mail-Watcher starten
 require("./mail-watcher").startMailWatcher(agent);
@@ -321,6 +321,110 @@ async function checkReminders() {
   } catch {
     // reminder.js noch nicht geladen – ignorieren
   }
+}
+
+// --- Workflow-Scheduler ---
+
+const processingSteps = new Set();
+const db = require("./lib/db");
+
+async function checkWorkflows() {
+  try {
+    const dueSteps = db.workflows.getDueSteps();
+    const fallbackChatId = (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).find(Boolean)
+      || lastKnownChatId || null;
+
+    for (const step of dueSteps) {
+      if (processingSteps.has(step.id)) continue;
+      processingSteps.add(step.id);
+
+      try {
+        const context = JSON.parse(step.context || "{}");
+        const chatId = step.chat_id || fallbackChatId;
+
+        // Bedingung prüfen
+        if (step.condition) {
+          try {
+            const cond = JSON.parse(step.condition);
+            const fieldValue = context[cond.field];
+            const skip =
+              (cond.equals !== undefined && String(fieldValue) !== String(cond.equals)) ||
+              (cond.not_equals !== undefined && String(fieldValue) === String(cond.not_equals));
+            if (skip) {
+              db.workflows.skipStep(step.id);
+              console.log(`  Workflow "${step.workflow_name}" Schritt ${step.step_num} übersprungen (Bedingung nicht erfüllt)`);
+              db.workflows.scheduleNextStep(step.workflow_id);
+              continue;
+            }
+          } catch (e) {
+            console.warn("  Workflow-Bedingung ungültig:", e.message);
+          }
+        }
+
+        // Step ausführen
+        db.workflows.updateStep(step.id, { status: "running", started_at: new Date().toISOString() });
+        console.log(`  Workflow "${step.workflow_name}" Schritt ${step.step_num}: "${step.action.substring(0, 60)}"`);
+
+        if (chatId) await bot.sendChatAction(chatId, "typing").catch(() => {});
+
+        const { text } = await agent.handleMessage(chatId || "workflow", step.action, {
+          workflowId: step.workflow_id,
+          workflowName: step.workflow_name,
+          workflowContext: context,
+          stepNum: step.step_num,
+        });
+
+        // Step abschließen
+        db.workflows.updateStep(step.id, {
+          status: "completed",
+          result: JSON.stringify({ text: (text || "").substring(0, 5000) }),
+          completed_at: new Date().toISOString(),
+        });
+
+        // Workflow-Fortschritt aktualisieren
+        db.workflows.update(step.workflow_id, { current_step: step.step_num });
+
+        // Ergebnis an User senden
+        if (chatId) {
+          const msg = `*Workflow "${step.workflow_name}" — Schritt ${step.step_num}:*\n${text || "(keine Ausgabe)"}`;
+          if (msg.length > 4000) {
+            const chunks = splitMessage(msg, 4000);
+            for (const chunk of chunks) {
+              await bot.sendMessage(chatId, chunk, { parse_mode: "Markdown" }).catch(() =>
+                bot.sendMessage(chatId, chunk)
+              );
+            }
+          } else {
+            await bot.sendMessage(chatId, msg, { parse_mode: "Markdown" }).catch(() =>
+              bot.sendMessage(chatId, msg)
+            );
+          }
+        }
+
+        // Nächsten Step schedulen
+        db.workflows.scheduleNextStep(step.workflow_id);
+
+      } catch (err) {
+        console.error(`  Workflow-Schritt Fehler:`, err.message);
+        db.workflows.updateStep(step.id, {
+          status: "failed",
+          result: JSON.stringify({ error: err.message }),
+          completed_at: new Date().toISOString(),
+        });
+        db.workflows.update(step.workflow_id, { status: "failed", error: err.message });
+
+        const chatId = step.chat_id || fallbackChatId;
+        if (chatId) {
+          await bot.sendMessage(chatId,
+            `*Workflow "${step.workflow_name}" fehlgeschlagen:*\nSchritt ${step.step_num}: ${err.message}`,
+            { parse_mode: "Markdown" }
+          ).catch(() => {});
+        }
+      } finally {
+        processingSteps.delete(step.id);
+      }
+    }
+  } catch {}
 }
 
 // --- Sprach-Transkription ---

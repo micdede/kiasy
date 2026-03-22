@@ -157,6 +157,19 @@ ${notesIndex}
 - Wenn dir eine Fähigkeit fehlt: npm-Paket per shell installieren und neues Tool-Modul unter /home/mcde/whatsapp-claude/tools/ anlegen
 - Maximal 15 Tool-Aufrufe pro Anfrage – plane effizient, fasse Schritte zusammen
 
+## Workflows (Mehrstufige Aufgaben)
+- workflow_create: Mehrstufigen Workflow definieren — Schritte werden nacheinander vom Scheduler ausgeführt
+  - Jeder Schritt ist ein eigenständiger Agent-Prompt mit vollem Tool-Zugriff
+  - Schritte können Bedingungen haben: condition={"field":"x","equals":"y"} prüft den Kontext
+  - Schritte können Verzögerungen haben: delay_minutes=5 wartet 5 Minuten nach dem vorherigen Schritt
+  - Kontext (key-value State) fließt durch alle Schritte — nutze workflow_update_context um Ergebnisse zu speichern
+- workflow_status: Status eines Workflows oder aller aktiven abfragen
+- workflow_update_context: Kontext innerhalb eines Schrittes aktualisieren (Ergebnisse für nächsten Schritt)
+- workflow_cancel: Laufenden Workflow abbrechen
+- workflow_continue: Bei langen Aufgaben mit vielen Tool-Calls "brauche mehr Schritte" signalisieren — wird automatisch fortgesetzt
+- Beispiel: "Prüfe ob Server erreichbar → wenn nicht, warte 5 Min → prüfe nochmal → sende Alarm"
+  → workflow_create mit name="Server-Check", steps=[{action:"Ping Server..."}, {action:"Prüfe nochmal...", delay_minutes:5, condition:{"field":"server_down","equals":"true"}}]
+
 ## Selbst-Erweiterung
 Wenn du ein neues Tool brauchst:
 1. Installiere ggf. ein npm-Paket via shell (cd /home/mcde/whatsapp-claude && npm install paket)
@@ -268,7 +281,15 @@ function trimHistory(history) {
 
 // --- Agent Loop ---
 
-async function handleMessage(chatId, userMessage) {
+const MAX_CONTINUATIONS = 3;
+
+async function handleMessage(chatId, userMessage, options = {}) {
+  // Workflow-Context in den Prompt injizieren
+  if (options.workflowContext) {
+    const ctxStr = JSON.stringify(options.workflowContext);
+    userMessage = `[WORKFLOW: ${options.workflowName || "?"} | Schritt ${options.stepNum || "?"}]\nKontext: ${ctxStr}\n\n${userMessage}`;
+  }
+
   const { tools, definitions } = loadTools();
   const toolNames = [...tools.keys()];
 
@@ -319,8 +340,11 @@ async function handleMessage(chatId, userMessage) {
           if (!executor) {
             output = `Tool "${call.name}" nicht gefunden. Verfügbar: ${toolNames.join(", ")}`;
           } else {
-            // chatId für Reminder-Tool injizieren
+            // chatId für Reminder/Workflow-Tools injizieren
             if (call.name === "reminder_set" && !call.input.chatId) {
+              call.input.chatId = chatId;
+            }
+            if (call.name === "workflow_create" && !call.input.chatId) {
               call.input.chatId = chatId;
             }
             output = await executor(call.name, call.input);
@@ -344,6 +368,20 @@ async function handleMessage(chatId, userMessage) {
     provider.pushAssistant(history, result);
     try { db.messages.save(chatId, "assistant", history[history.length - 1].content); } catch {}
     return buildResponse(result.text || "(keine Antwort)");
+  }
+
+  // Auto-Continue prüfen: Hat der Agent workflow_continue aufgerufen?
+  const continueCount = options.continueCount || 0;
+  if (continueCount < MAX_CONTINUATIONS) {
+    try {
+      const workflowTool = require("./tools/workflow");
+      const cont = workflowTool.getContinueRequest();
+      if (cont) {
+        console.log(`  Auto-Continue (${continueCount + 1}/${MAX_CONTINUATIONS}): ${cont.status_message}`);
+        const continuePrompt = `[AUTO-CONTINUE] Zwischenbericht: ${cont.status_message}\n\nFortsetzung: ${cont.remaining_work}`;
+        return handleMessage(chatId, continuePrompt, { ...options, continueCount: continueCount + 1 });
+      }
+    } catch {}
   }
 
   return buildResponse("⚠️ Maximale Agent-Schritte erreicht. Versuche es mit einer einfacheren Anfrage.");
