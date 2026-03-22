@@ -445,6 +445,7 @@ ${getThemeCSS()}
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
   <div class="status-bar">
     <span>Uptime: <b id="uptime">-</b></span>
@@ -655,6 +656,7 @@ ${getThemeCSS()}
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
 </header>
 
@@ -934,6 +936,7 @@ ${getThemeCSS()}
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
 </header>
 
@@ -1286,6 +1289,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
 </header>
 
@@ -1710,6 +1714,7 @@ ${getThemeCSS()}
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
 </header>
 
@@ -3105,6 +3110,437 @@ loadThemes();
 </html>`;
 }
 
+// --- Tools HTML ---
+
+function getToolsHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+<title>JARVIS - Tool Manager</title>
+${getGoogleFontsLink(getActiveTheme())}
+${getThemeCSS()}
+<style>
+  body { height: 100vh; display: flex; flex-direction: column; }
+  .toolbar {
+    background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 8px 16px;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .spacer { flex: 1; }
+  .save-status { font-size: 12px; color: var(--color-success); }
+  .main {
+    flex: 1; display: flex; overflow: hidden;
+  }
+  /* Sidebar */
+  .sidebar {
+    width: 260px; min-width: 200px; background: var(--bg-primary);
+    border-right: 1px solid var(--border-color); overflow-y: auto; display: flex;
+    flex-direction: column;
+  }
+  .sidebar-header {
+    padding: 8px 12px; font-size: 11px; color: var(--text-muted); border-bottom: 1px solid var(--bg-tertiary);
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .tool-item {
+    padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--bg-tertiary);
+    transition: background 0.15s; display: flex; align-items: center; gap: 8px;
+  }
+  .tool-item:hover { background: var(--bg-secondary); }
+  .tool-item.active { background: color-mix(in srgb, var(--accent) 13%, transparent); border-left: 3px solid var(--accent); }
+  .tool-item .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .tool-item .status-dot.enabled { background: var(--color-success); }
+  .tool-item .status-dot.disabled { background: var(--text-dim); }
+  .tool-item .tool-info { flex: 1; min-width: 0; }
+  .tool-item .tool-name {
+    font-size: 12px; font-weight: 600; color: var(--text-bright);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tool-item .tool-meta {
+    font-size: 10px; color: var(--text-muted); margin-top: 3px;
+  }
+  .sidebar-empty {
+    padding: 20px 12px; color: var(--text-dim); text-align: center; font-size: 12px;
+  }
+  /* Editor */
+  .editor-pane {
+    flex: 1; display: flex; flex-direction: column; min-width: 0;
+    border-right: 1px solid var(--border-color);
+  }
+  .editor-pane .pane-header {
+    background: var(--bg-secondary); padding: 6px 16px; font-size: 11px; color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px;
+  }
+  .editor-pane .pane-header .line-count { margin-left: auto; }
+  #editor {
+    flex: 1; width: 100%; background: var(--bg-primary); color: var(--text-primary); border: none;
+    padding: 12px 16px; font-family: 'Fira Mono', 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.6;
+    resize: none; outline: none; tab-size: 2;
+  }
+  /* Info Panel */
+  .info-pane {
+    width: 280px; min-width: 220px; background: var(--bg-primary);
+    border-left: 0; overflow-y: auto; display: flex; flex-direction: column;
+    padding: 16px;
+  }
+  .info-pane h3 {
+    font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 0.5px; margin: 0 0 8px 0; font-weight: 600;
+  }
+  .info-pane .info-section { margin-bottom: 16px; }
+  .info-pane .info-row {
+    font-size: 12px; color: var(--text-primary); margin: 4px 0;
+    display: flex; justify-content: space-between;
+  }
+  .info-pane .info-row .label { color: var(--text-muted); }
+  .def-item {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: 6px; padding: 8px 10px; margin-bottom: 6px;
+  }
+  .def-item .def-name {
+    font-size: 12px; font-weight: 600; color: var(--accent); font-family: 'Fira Mono', monospace;
+  }
+  .def-item .def-desc {
+    font-size: 11px; color: var(--text-muted); margin-top: 3px; line-height: 1.4;
+  }
+  .btn-toggle {
+    width: 100%; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-weight: 600; border: 1px solid var(--border-color); margin-bottom: 8px;
+    background: var(--bg-secondary); color: var(--text-primary); transition: all 0.15s;
+  }
+  .btn-toggle:hover { border-color: var(--accent); }
+  .btn-toggle.enabled { border-color: var(--color-success); color: var(--color-success); }
+  .btn-toggle.disabled { border-color: var(--color-error); color: var(--color-error); }
+  .btn-delete-tool {
+    width: 100%; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-weight: 600; border: 1px solid var(--color-error); margin-top: 4px;
+    background: var(--bg-secondary); color: var(--color-error); transition: all 0.15s;
+  }
+  .btn-delete-tool:hover { background: color-mix(in srgb, var(--color-error) 13%, transparent); }
+  .welcome-msg {
+    display: flex; align-items: center; justify-content: center;
+    height: 100%; color: var(--text-dim); font-size: 14px; text-align: center;
+    padding: 20px; line-height: 1.8;
+  }
+  @media (max-width: 900px) {
+    .main { flex-direction: column; }
+    .sidebar { width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid var(--border-color); }
+    .editor-pane { border-right: none; border-bottom: 1px solid var(--border-color); }
+    .info-pane { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tool Manager</h1>
+  <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
+  <a href="/ha-editor">Smart Home Editor</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
+  <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
+  <a href="/workflows">Workflows</a>
+</header>
+
+<div class="toolbar">
+  <button class="btn btn-primary" id="newBtn">Neues Tool</button>
+  <span class="spacer"></span>
+  <span class="save-status" id="saveStatus"></span>
+  <button class="btn btn-primary" id="saveBtn" disabled>Speichern (Ctrl+S)</button>
+</div>
+
+<div class="main">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">Tools <span id="toolCount">0</span></div>
+    <div id="toolList"></div>
+  </div>
+  <div class="editor-pane">
+    <div class="pane-header">
+      <span id="fileName">-</span>
+      <span class="line-count" id="lineCount">0 Zeilen</span>
+    </div>
+    <textarea id="editor" spellcheck="false" placeholder="Tool ausw\\u00e4hlen oder neues Tool erstellen..."></textarea>
+  </div>
+  <div class="info-pane" id="infoPane">
+    <div class="welcome-msg" id="welcomeMsg">Tool ausw\\u00e4hlen um Details zu sehen</div>
+    <div id="infoContent" style="display:none">
+      <div class="info-section">
+        <h3>Tool-Definitionen</h3>
+        <div id="defList"></div>
+      </div>
+      <div class="info-section">
+        <h3>Datei-Info</h3>
+        <div class="info-row"><span class="label">Gr\\u00f6\\u00dfe</span><span id="infoSize">-</span></div>
+        <div class="info-row"><span class="label">Ge\\u00e4ndert</span><span id="infoModified">-</span></div>
+      </div>
+      <div class="info-section">
+        <h3>Aktionen</h3>
+        <button class="btn-toggle" id="toggleBtn">-</button>
+        <button class="btn-delete-tool" id="deleteBtn">Tool l\\u00f6schen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const editorEl = document.getElementById('editor');
+const saveBtn = document.getElementById('saveBtn');
+const newBtn = document.getElementById('newBtn');
+const saveStatus = document.getElementById('saveStatus');
+const fileNameEl = document.getElementById('fileName');
+const lineCountEl = document.getElementById('lineCount');
+const toolListEl = document.getElementById('toolList');
+const toolCountEl = document.getElementById('toolCount');
+const infoPane = document.getElementById('infoPane');
+const infoContent = document.getElementById('infoContent');
+const welcomeMsg = document.getElementById('welcomeMsg');
+const defList = document.getElementById('defList');
+const toggleBtn = document.getElementById('toggleBtn');
+const deleteBtn = document.getElementById('deleteBtn');
+
+let currentFile = null;
+let currentToolData = null;
+let originalContent = '';
+let dirty = false;
+let allTools = [];
+
+function showStatus(msg, color) {
+  saveStatus.textContent = msg;
+  saveStatus.style.color = color || 'var(--color-success)';
+  setTimeout(() => { saveStatus.textContent = ''; }, 3000);
+}
+
+function setDirty(d) {
+  dirty = d;
+  saveBtn.disabled = !d;
+  if (d) {
+    fileNameEl.textContent = currentFile ? currentFile + ' *' : '-';
+  } else {
+    fileNameEl.textContent = currentFile || '-';
+  }
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function loadTools() {
+  try {
+    const res = await fetch('/api/tools');
+    allTools = await res.json();
+    renderToolList();
+  } catch (e) {
+    showStatus('Fehler beim Laden: ' + e.message, 'var(--color-error)');
+  }
+}
+
+function renderToolList() {
+  toolCountEl.textContent = allTools.length;
+  if (!allTools.length) {
+    toolListEl.innerHTML = '<div class="sidebar-empty">Keine Tools gefunden</div>';
+    return;
+  }
+  toolListEl.innerHTML = allTools.map(t => {
+    const active = currentFile === t.filename ? ' active' : '';
+    const dotClass = t.enabled ? 'enabled' : 'disabled';
+    const subCount = t.definitions ? t.definitions.length : 0;
+    const errorHint = t.error ? ' (Fehler)' : '';
+    return '<div class="tool-item' + active + '" data-file="' + t.filename + '">'
+      + '<div class="status-dot ' + dotClass + '"></div>'
+      + '<div class="tool-info">'
+      + '<div class="tool-name">' + t.filename + '</div>'
+      + '<div class="tool-meta">' + subCount + ' Sub-Tools' + errorHint + '</div>'
+      + '</div></div>';
+  }).join('');
+
+  toolListEl.querySelectorAll('.tool-item').forEach(el => {
+    el.addEventListener('click', () => selectTool(el.dataset.file));
+  });
+}
+
+async function selectTool(filename) {
+  if (dirty && !confirm('Ungespeicherte \\u00c4nderungen verwerfen?')) return;
+  try {
+    const res = await fetch('/api/tools/' + encodeURIComponent(filename));
+    const data = await res.json();
+    currentFile = filename;
+    currentToolData = allTools.find(t => t.filename === filename);
+    editorEl.value = data.content;
+    originalContent = data.content;
+    setDirty(false);
+    updateLineCount();
+    updateInfoPanel();
+    renderToolList();
+  } catch (e) {
+    showStatus('Fehler: ' + e.message, 'var(--color-error)');
+  }
+}
+
+function updateLineCount() {
+  const lines = editorEl.value.split('\\n').length;
+  lineCountEl.textContent = lines + ' Zeilen';
+}
+
+function updateInfoPanel() {
+  if (!currentFile || !currentToolData) {
+    welcomeMsg.style.display = '';
+    infoContent.style.display = 'none';
+    return;
+  }
+  welcomeMsg.style.display = 'none';
+  infoContent.style.display = '';
+
+  // Definitions
+  if (currentToolData.definitions && currentToolData.definitions.length) {
+    defList.innerHTML = currentToolData.definitions.map(d =>
+      '<div class="def-item"><div class="def-name">' + d.name + '</div>'
+      + '<div class="def-desc">' + (d.description || '-') + '</div></div>'
+    ).join('');
+  } else if (currentToolData.error) {
+    defList.innerHTML = '<div class="def-item"><div class="def-name" style="color:var(--color-error)">Fehler</div>'
+      + '<div class="def-desc">' + currentToolData.error + '</div></div>';
+  } else {
+    defList.innerHTML = '<div class="sidebar-empty">Keine Definitionen</div>';
+  }
+
+  // File info
+  document.getElementById('infoSize').textContent = formatSize(currentToolData.size);
+  document.getElementById('infoModified').textContent = new Date(currentToolData.modified).toLocaleString('de-DE');
+
+  // Toggle button
+  toggleBtn.textContent = currentToolData.enabled ? 'Deaktivieren' : 'Aktivieren';
+  toggleBtn.className = 'btn-toggle ' + (currentToolData.enabled ? 'enabled' : 'disabled');
+}
+
+async function saveTool() {
+  if (!currentFile) return;
+  try {
+    const res = await fetch('/api/tools/' + encodeURIComponent(currentFile), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: editorEl.value }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      originalContent = editorEl.value;
+      setDirty(false);
+      showStatus('Gespeichert', 'var(--color-success)');
+      loadTools();
+    } else {
+      showStatus('Fehler: ' + (data.error || 'Unbekannt'), 'var(--color-error)');
+    }
+  } catch (e) {
+    showStatus('Fehler: ' + e.message, 'var(--color-error)');
+  }
+}
+
+async function createTool() {
+  const filename = prompt('Dateiname f\\u00fcr neues Tool (z.B. mein_tool.js):');
+  if (!filename) return;
+  try {
+    const res = await fetch('/api/tools', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showStatus('Tool erstellt: ' + data.filename, 'var(--color-success)');
+      await loadTools();
+      selectTool(data.filename);
+    } else {
+      showStatus('Fehler: ' + (data.error || 'Unbekannt'), 'var(--color-error)');
+    }
+  } catch (e) {
+    showStatus('Fehler: ' + e.message, 'var(--color-error)');
+  }
+}
+
+async function toggleTool() {
+  if (!currentFile) return;
+  try {
+    const res = await fetch('/api/tools/' + encodeURIComponent(currentFile) + '/toggle', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showStatus(data.enabled ? 'Aktiviert' : 'Deaktiviert', 'var(--color-success)');
+      await loadTools();
+      currentToolData = allTools.find(t => t.filename === currentFile);
+      updateInfoPanel();
+    }
+  } catch (e) {
+    showStatus('Fehler: ' + e.message, 'var(--color-error)');
+  }
+}
+
+async function deleteTool() {
+  if (!currentFile) return;
+  if (!confirm('Tool "' + currentFile + '" wirklich l\\u00f6schen?')) return;
+  try {
+    const res = await fetch('/api/tools/' + encodeURIComponent(currentFile), { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) {
+      showStatus('Gel\\u00f6scht', 'var(--color-success)');
+      currentFile = null;
+      currentToolData = null;
+      editorEl.value = '';
+      setDirty(false);
+      welcomeMsg.style.display = '';
+      infoContent.style.display = 'none';
+      loadTools();
+    }
+  } catch (e) {
+    showStatus('Fehler: ' + e.message, 'var(--color-error)');
+  }
+}
+
+// Event listeners
+editorEl.addEventListener('input', () => {
+  setDirty(editorEl.value !== originalContent);
+  updateLineCount();
+});
+
+saveBtn.addEventListener('click', saveTool);
+newBtn.addEventListener('click', createTool);
+toggleBtn.addEventListener('click', toggleTool);
+deleteBtn.addEventListener('click', deleteTool);
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    if (!saveBtn.disabled) saveTool();
+  }
+});
+
+// Tab key support in editor
+editorEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = editorEl.selectionStart;
+    const end = editorEl.selectionEnd;
+    editorEl.value = editorEl.value.substring(0, start) + '  ' + editorEl.value.substring(end);
+    editorEl.selectionStart = editorEl.selectionEnd = start + 2;
+    setDirty(editorEl.value !== originalContent);
+  }
+});
+
+loadTools();
+</script>
+</body>
+</html>`;
+}
+
 // --- Workflows HTML ---
 
 function getWorkflowsHTML() {
@@ -3515,6 +3951,7 @@ ${getThemeCSS()}
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
 </header>
 
@@ -3862,6 +4299,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
 </header>
 
@@ -4157,6 +4595,169 @@ function handleWorkflowUpdate(req, res, id) {
 function handleWorkflowDelete(req, res, id) {
   db.workflows.remove(id);
   originalLog("[Monitor] Workflow gelöscht: " + id);
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify({ ok: true }));
+}
+
+// --- Tools API Handlers ---
+
+const TOOLS_DIR = path.join(__dirname, "tools");
+
+function handleToolsList(req, res) {
+  try {
+    const files = fs.readdirSync(TOOLS_DIR).filter(f => f.endsWith(".js")).sort();
+    const result = files.map(filename => {
+      const fullPath = path.join(TOOLS_DIR, filename);
+      const stats = fs.statSync(fullPath);
+      const enabled = db.toolSettings.isEnabled(filename);
+      let definitions = [];
+      let error = null;
+      try {
+        delete require.cache[require.resolve(fullPath)];
+        const mod = require(fullPath);
+        if (mod.definitions) definitions = mod.definitions.map(d => ({ name: d.name, description: d.description || "" }));
+      } catch (e) {
+        error = e.message;
+      }
+      return { filename, size: stats.size, modified: stats.mtime.toISOString(), enabled, definitions, error };
+    });
+    result.sort((a, b) => {
+      if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+      return a.filename.localeCompare(b.filename);
+    });
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    res.end(JSON.stringify(result));
+  } catch (e) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+function handleToolRead(req, res, filename) {
+  if (!filename.endsWith(".js") || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Ungültiger Dateiname" }));
+    return;
+  }
+  const fullPath = path.join(TOOLS_DIR, filename);
+  if (!fs.existsSync(fullPath)) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Datei nicht gefunden" }));
+    return;
+  }
+  const content = fs.readFileSync(fullPath, "utf-8");
+  const enabled = db.toolSettings.isEnabled(filename);
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify({ filename, content, enabled }));
+}
+
+function handleToolWrite(req, res, filename) {
+  if (!filename.endsWith(".js") || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Ungültiger Dateiname" }));
+    return;
+  }
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      fs.writeFileSync(path.join(TOOLS_DIR, filename), body.content, "utf-8");
+      originalLog("[Monitor] Tool gespeichert: " + filename);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+
+function handleToolCreate(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      let filename = body.filename || "";
+      if (!filename.endsWith(".js")) filename += ".js";
+      if (filename.includes("..") || filename.includes("/") || filename.includes("\\") || filename.length < 4) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Ungültiger Dateiname" }));
+        return;
+      }
+      const fullPath = path.join(TOOLS_DIR, filename);
+      if (fs.existsSync(fullPath)) {
+        res.writeHead(409, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Datei existiert bereits" }));
+        return;
+      }
+      const template = `// Neues Tool – Beschreibung anpassen
+const definitions = [
+  {
+    name: "mein_tool",
+    description: "Beschreibung was dieses Tool tut",
+    input_schema: {
+      type: "object",
+      properties: {
+        param1: { type: "string", description: "Parameter 1" },
+      },
+      required: ["param1"],
+    },
+  },
+];
+
+async function execute(name, input) {
+  switch (name) {
+    case "mein_tool": {
+      return "Ergebnis";
+    }
+    default:
+      return "Unbekanntes Tool: " + name;
+  }
+}
+
+module.exports = { definitions, execute };
+`;
+      fs.writeFileSync(fullPath, template, "utf-8");
+      db.toolSettings.register(filename);
+      originalLog("[Monitor] Neues Tool erstellt: " + filename);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true, filename }));
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+}
+
+function handleToolToggle(req, res, filename) {
+  if (!filename.endsWith(".js") || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Ungültiger Dateiname" }));
+    return;
+  }
+  const newState = db.toolSettings.toggle(filename);
+  originalLog("[Monitor] Tool " + (newState ? "aktiviert" : "deaktiviert") + ": " + filename);
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify({ ok: true, enabled: newState }));
+}
+
+function handleToolDelete(req, res, filename) {
+  if (!filename.endsWith(".js") || filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Ungültiger Dateiname" }));
+    return;
+  }
+  const fullPath = path.join(TOOLS_DIR, filename);
+  if (!fs.existsSync(fullPath)) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Datei nicht gefunden" }));
+    return;
+  }
+  fs.unlinkSync(fullPath);
+  db.toolSettings.remove(filename);
+  originalLog("[Monitor] Tool gelöscht: " + filename);
   res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
   res.end(JSON.stringify({ ok: true }));
 }
@@ -4495,6 +5096,7 @@ ${getThemeCSS()}
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
 </header>
 
@@ -5380,6 +5982,27 @@ function startMonitor(port) {
     } else if (req.url.startsWith("/api/workflows/") && req.method === "DELETE") {
       const id = decodeURIComponent(req.url.replace("/api/workflows/", ""));
       handleWorkflowDelete(req, res, id);
+
+    // --- Tools ---
+    } else if (req.url === "/tools") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getToolsHTML());
+    } else if (req.url === "/api/tools" && req.method === "GET") {
+      handleToolsList(req, res);
+    } else if (req.url === "/api/tools" && req.method === "POST") {
+      handleToolCreate(req, res);
+    } else if (req.url.match(/^\/api\/tools\/[^/]+\/toggle$/) && req.method === "POST") {
+      const filename = decodeURIComponent(req.url.replace("/api/tools/", "").replace("/toggle", ""));
+      handleToolToggle(req, res, filename);
+    } else if (req.url.startsWith("/api/tools/") && req.method === "GET") {
+      const filename = decodeURIComponent(req.url.replace("/api/tools/", ""));
+      handleToolRead(req, res, filename);
+    } else if (req.url.startsWith("/api/tools/") && req.method === "PUT") {
+      const filename = decodeURIComponent(req.url.replace("/api/tools/", ""));
+      handleToolWrite(req, res, filename);
+    } else if (req.url.startsWith("/api/tools/") && req.method === "DELETE") {
+      const filename = decodeURIComponent(req.url.replace("/api/tools/", ""));
+      handleToolDelete(req, res, filename);
 
     // --- Roadmap ---
     } else if (req.url === "/roadmap") {

@@ -193,6 +193,11 @@ function loadTools() {
 
   for (const file of fs.readdirSync(TOOLS_DIR)) {
     if (!file.endsWith(".js")) continue;
+
+    // Tool-Settings: registrieren + prüfen ob deaktiviert
+    try { db.toolSettings.register(file); } catch {}
+    try { if (!db.toolSettings.isEnabled(file)) continue; } catch {}
+
     try {
       const fullPath = path.join(TOOLS_DIR, file);
       delete require.cache[require.resolve(fullPath)];
