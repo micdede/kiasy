@@ -5,7 +5,7 @@
   "main": "telegram.js",
   "scripts": {
     "start": "node telegram.js",
-    "start:whatsapp": "node index.js",
+    "start:whatsapp": "echo 'WhatsApp-Modus entfernt – nutze npm start für Telegram'",
     "dev": "node --watch telegram.js"
   },
   "dependencies": {
@@ -18,8 +18,6 @@
     "nodemailer": "^8.0.1",
     "openai": "^6.22.0",
     "pdf-parse": "^1.1.1",
-    "qrcode-terminal": "^0.12.0",
-    "tsdav": "^2.1.8",
-    "whatsapp-web.js": "^1.26.1-alpha.3"
+    "tsdav": "^2.1.8"
   }
 }

@@ -100,11 +100,6 @@ function getCleanupInfo() {
   const npmBytes = getDirSize(npmCache);
   categories.push({ id: "npm-cache", label: "NPM Cache", size: formatBytes(npmBytes), bytes: npmBytes, cleanable: true });
 
-  // wwebjs session backup
-  const wwebBackup = path.join(__dirname, ".wwebjs_auth", "session_backup");
-  const wwebBytes = getDirSize(wwebBackup);
-  categories.push({ id: "wwebjs-backup", label: "WA Session Backup", size: formatBytes(wwebBytes), bytes: wwebBytes, cleanable: true });
-
   // apt cache (read-only)
   const aptCache = "/var/cache/apt/archives";
   const aptBytes = getDirSize(aptCache);
@@ -150,9 +145,6 @@ function handleCleanup(req, res) {
         const dir = path.join(os.homedir(), ".npm", "_cacache");
         freed = getDirSize(dir);
         fs.rmSync(dir, { recursive: true, force: true });
-      } else if (id === "wwebjs-backup") {
-        const dir = path.join(__dirname, ".wwebjs_auth", "session_backup");
-        freed = cleanDir(dir, null);
       } else {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: false, error: "Unbekannte Kategorie" }));
@@ -607,7 +599,7 @@ setInterval(fetchSystem, 5000);
   }
 
   function renderCleanup(data) {
-    const icons = { temp: "\\ud83d\\udcc1", logs: "\\ud83d\\udcdd", "npm-cache": "\\ud83d\\udce6", "wwebjs-backup": "\\ud83d\\udcac", "apt-cache": "\\ud83d\\udee0", journal: "\\ud83d\\udcd3" };
+    const icons = { temp: "\\ud83d\\udcc1", logs: "\\ud83d\\udcdd", "npm-cache": "\\ud83d\\udce6", "apt-cache": "\\ud83d\\udee0", journal: "\\ud83d\\udcd3" };
     let html = "";
     data.categories.forEach(cat => {
       const icon = icons[cat.id] || "\\ud83d\\udcc2";
