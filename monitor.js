@@ -2294,7 +2294,7 @@ function getChatHTML() {
 </head>
 <body>
 <header>
-  <h1>JARVIS Chat</h1>
+  <a href="/" style="color:#58a6ff;text-decoration:none;font-size:16px;font-weight:600;">JARVIS Chat</a>
   <div class="header-actions">
     <button class="header-btn" id="ttsToggle" title="Antworten vorlesen">TTS</button>
     <button class="header-btn" id="clearBtn" title="Chat leeren">Leeren</button>
