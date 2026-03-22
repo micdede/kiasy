@@ -276,6 +276,7 @@ function getDashboardHTML() {
   <a href="/terminal" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Terminal</a>
   <a href="/settings" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Einstellungen</a>
   <a href="/roadmap" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Roadmap</a>
+  <a href="/workflows" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Workflows</a>
   <div class="status-bar">
     <span>Uptime: <b id="uptime">-</b></span>
     <span>Modell: <b id="model">-</b></span>
@@ -503,6 +504,7 @@ function getSystemHTML() {
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/workflows">Workflows</a>
 </header>
 
 <div class="content">
@@ -803,6 +805,7 @@ function getEditorHTML() {
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/workflows">Workflows</a>
 </header>
 
 <div class="toolbar">
@@ -1175,6 +1178,8 @@ function getSettingsHTML() {
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
+  <a href="/roadmap">Roadmap</a>
+  <a href="/workflows">Workflows</a>
 </header>
 
 <div class="banner" id="banner">
@@ -1601,6 +1606,7 @@ function getNotesHTML() {
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/workflows">Workflows</a>
 </header>
 
 <div class="toolbar">
@@ -2634,6 +2640,307 @@ if ("serviceWorker" in navigator) {
 </html>`;
 }
 
+// --- Workflows HTML ---
+
+function getWorkflowsHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+<title>JARVIS - Workflows</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px;
+  }
+  header {
+    background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; color: #58a6ff; font-weight: 600; }
+  header a {
+    color: #8b949e; text-decoration: none; font-size: 12px;
+    padding: 4px 10px; border: 1px solid #30363d; border-radius: 6px;
+  }
+  header a:hover { color: #c9d1d9; border-color: #58a6ff; }
+  .container { max-width: 900px; margin: 20px auto; padding: 0 16px; }
+
+  .toolbar {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .btn {
+    background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .btn:hover { border-color: #58a6ff; color: #58a6ff; }
+  .filter-btn { padding: 4px 12px; font-size: 11px; }
+  .filter-btn.active { background: #1f6feb22; border-color: #58a6ff; color: #58a6ff; }
+  .spacer { flex: 1; }
+  .status-msg {
+    font-size: 12px; color: #3fb950; opacity: 0; transition: opacity 0.3s; white-space: nowrap;
+  }
+  .status-msg.show { opacity: 1; }
+  .status-msg.error { color: #f85149; }
+
+  /* Workflow Cards */
+  .wf-list { display: flex; flex-direction: column; gap: 12px; }
+  .wf-card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    border-left: 3px solid #30363d; overflow: hidden;
+  }
+  .wf-card.status-running { border-left-color: #d29922; }
+  .wf-card.status-completed { border-left-color: #3fb950; }
+  .wf-card.status-failed { border-left-color: #f85149; }
+  .wf-card.status-cancelled { border-left-color: #8b949e; }
+  .wf-card.status-paused { border-left-color: #58a6ff; }
+
+  .wf-header {
+    padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+    cursor: pointer; user-select: none;
+  }
+  .wf-header:hover { background: #1c2128; }
+  .wf-toggle { color: #484f58; font-size: 10px; transition: transform 0.2s; }
+  .wf-toggle.open { transform: rotate(90deg); }
+  .wf-name { font-size: 14px; font-weight: 600; color: #e6edf3; flex: 1; }
+  .wf-badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .wf-badge-running { background: #d2992222; color: #d29922; }
+  .wf-badge-completed { background: #3fb95022; color: #3fb950; }
+  .wf-badge-failed { background: #f8514922; color: #f85149; }
+  .wf-badge-cancelled { background: #8b949e22; color: #8b949e; }
+  .wf-badge-paused { background: #58a6ff22; color: #58a6ff; }
+  .wf-progress { font-size: 11px; color: #8b949e; }
+  .wf-date { font-size: 10px; color: #484f58; }
+  .wf-actions button {
+    background: none; border: 1px solid #30363d; color: #8b949e;
+    padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .wf-actions button:hover { border-color: #58a6ff; color: #c9d1d9; }
+  .wf-actions .del-btn:hover { border-color: #f85149; color: #f85149; }
+
+  /* Progress Bar */
+  .progress-bar {
+    height: 4px; background: #21262d; border-radius: 2px; overflow: hidden;
+    width: 80px; flex-shrink: 0;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 2px; transition: width 0.3s;
+  }
+  .progress-fill.running { background: #d29922; }
+  .progress-fill.completed { background: #3fb950; }
+  .progress-fill.failed { background: #f85149; }
+
+  /* Steps Detail */
+  .wf-detail {
+    display: none; border-top: 1px solid #21262d; padding: 12px 16px;
+    background: #0d111766;
+  }
+  .wf-detail.open { display: block; }
+  .step {
+    display: flex; gap: 10px; align-items: flex-start; padding: 6px 0;
+    border-bottom: 1px solid #21262d; font-size: 12px;
+  }
+  .step:last-child { border-bottom: none; }
+  .step-icon { width: 20px; text-align: center; flex-shrink: 0; }
+  .step-num { color: #484f58; min-width: 30px; flex-shrink: 0; }
+  .step-action { flex: 1; color: #c9d1d9; word-break: break-word; }
+  .step-status { color: #8b949e; font-size: 11px; min-width: 70px; text-align: right; flex-shrink: 0; }
+  .step-meta { font-size: 10px; color: #484f58; margin-top: 2px; }
+  .step-result {
+    background: #161b22; border: 1px solid #21262d; border-radius: 4px;
+    padding: 6px 8px; margin-top: 4px; font-size: 11px; color: #8b949e;
+    max-height: 100px; overflow-y: auto; word-break: break-word;
+  }
+
+  .wf-context {
+    margin-top: 8px; padding: 8px; background: #161b22; border: 1px solid #21262d;
+    border-radius: 4px; font-size: 11px; color: #8b949e;
+  }
+  .wf-context-label { color: #58a6ff; font-weight: 600; margin-bottom: 4px; }
+
+  .empty-state { text-align: center; padding: 40px; color: #484f58; font-size: 14px; }
+
+  @media (max-width: 600px) {
+    .wf-header { flex-wrap: wrap; }
+    .progress-bar { width: 60px; }
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Workflows</h1>
+  <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
+  <a href="/ha-editor">Smart Home Editor</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
+  <a href="/roadmap">Roadmap</a>
+  <a href="/settings">Einstellungen</a>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <button class="btn filter-btn active" data-filter="all" onclick="setFilter('all')">Alle</button>
+    <button class="btn filter-btn" data-filter="running" onclick="setFilter('running')">Laufend</button>
+    <button class="btn filter-btn" data-filter="completed" onclick="setFilter('completed')">Abgeschlossen</button>
+    <button class="btn filter-btn" data-filter="failed" onclick="setFilter('failed')">Fehlgeschlagen</button>
+    <div class="spacer"></div>
+    <span class="status-msg" id="statusMsg"></span>
+  </div>
+
+  <div class="wf-list" id="wfList">
+    <div class="empty-state">Laden...</div>
+  </div>
+</div>
+
+<script>
+const statusLabels = { running: 'Laufend', completed: 'Abgeschlossen', failed: 'Fehlgeschlagen', cancelled: 'Abgebrochen', paused: 'Pausiert' };
+const stepIcons = { pending: '\\u23f3', running: '\\ud83d\\udd04', completed: '\\u2705', failed: '\\u274c', skipped: '\\u23ed\\ufe0f' };
+let allWorkflows = [];
+let currentFilter = 'all';
+let openCards = new Set();
+
+function escapeHtml(s) {
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+function showStatus(msg, isError) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-msg show' + (isError ? ' error' : '');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+  renderList();
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function toggleCard(id) {
+  if (openCards.has(id)) openCards.delete(id); else openCards.add(id);
+  renderList();
+}
+
+function renderList() {
+  const list = document.getElementById('wfList');
+  let filtered = allWorkflows;
+  if (currentFilter !== 'all') filtered = allWorkflows.filter(w => w.status === currentFilter);
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state">' +
+      (currentFilter === 'all' ? 'Keine Workflows vorhanden. Erstelle einen per Chat oder Telegram.' :
+       'Keine Workflows mit Status "' + (statusLabels[currentFilter] || currentFilter) + '"') +
+      '</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(w => {
+    const steps = w.steps || [];
+    const done = steps.filter(s => s.status === 'completed' || s.status === 'skipped').length;
+    const total = steps.length;
+    const pct = total > 0 ? Math.round(done / total * 100) : 0;
+    const isOpen = openCards.has(w.id);
+    const barClass = w.status === 'failed' ? 'failed' : w.status === 'completed' ? 'completed' : 'running';
+
+    let ctx = {};
+    try { ctx = JSON.parse(w.context || '{}'); } catch {}
+    const ctxKeys = Object.keys(ctx);
+
+    return '<div class="wf-card status-' + w.status + '">' +
+      '<div class="wf-header" onclick="toggleCard(\\'' + w.id + '\\')">' +
+        '<span class="wf-toggle ' + (isOpen ? 'open' : '') + '">\\u25b6</span>' +
+        '<span class="wf-name">' + escapeHtml(w.name) + '</span>' +
+        '<span class="wf-badge wf-badge-' + w.status + '">' + (statusLabels[w.status] || w.status) + '</span>' +
+        '<div class="progress-bar"><div class="progress-fill ' + barClass + '" style="width:' + pct + '%"></div></div>' +
+        '<span class="wf-progress">' + done + '/' + total + '</span>' +
+        '<span class="wf-date">' + formatDate(w.created) + '</span>' +
+        '<div class="wf-actions">' +
+          (w.status === 'running' ? '<button onclick="event.stopPropagation();cancelWf(\\'' + w.id + '\\')">Stopp</button>' : '') +
+          '<button class="del-btn" onclick="event.stopPropagation();deleteWf(\\'' + w.id + '\\')">Del</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="wf-detail ' + (isOpen ? 'open' : '') + '">' +
+        steps.map(s => {
+          let resultText = '';
+          if (s.result) {
+            try {
+              const r = JSON.parse(s.result);
+              resultText = r.text || r.error || '';
+            } catch { resultText = s.result; }
+          }
+          return '<div class="step">' +
+            '<span class="step-icon">' + (stepIcons[s.status] || '?') + '</span>' +
+            '<span class="step-num">#' + s.step_num + '</span>' +
+            '<div class="step-action">' + escapeHtml(s.action) +
+              (s.delay_minutes ? '<div class="step-meta">Verzögerung: ' + s.delay_minutes + ' Min</div>' : '') +
+              (s.condition ? '<div class="step-meta">Bedingung: ' + escapeHtml(s.condition) + '</div>' : '') +
+              (resultText ? '<div class="step-result">' + escapeHtml(resultText.substring(0, 500)) + '</div>' : '') +
+            '</div>' +
+            '<span class="step-status">' + (s.status === 'completed' ? formatDate(s.completed_at) : s.status) + '</span>' +
+          '</div>';
+        }).join('') +
+        (ctxKeys.length > 0 ? '<div class="wf-context"><div class="wf-context-label">Context:</div>' + escapeHtml(JSON.stringify(ctx, null, 2)) + '</div>' : '') +
+        (w.error ? '<div class="wf-context" style="border-color:#f8514944"><div class="wf-context-label" style="color:#f85149">Fehler:</div>' + escapeHtml(w.error) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function loadWorkflows() {
+  try {
+    const res = await fetch('/api/workflows');
+    allWorkflows = await res.json();
+    renderList();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+async function cancelWf(id) {
+  if (!confirm('Workflow abbrechen?')) return;
+  try {
+    await fetch('/api/workflows/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'cancelled' }) });
+    showStatus('Abgebrochen', false);
+    loadWorkflows();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+async function deleteWf(id) {
+  if (!confirm('Workflow löschen?')) return;
+  try {
+    await fetch('/api/workflows/' + id, { method: 'DELETE' });
+    showStatus('Gelöscht', false);
+    loadWorkflows();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+loadWorkflows();
+setInterval(loadWorkflows, 30000);
+</script>
+</body>
+</html>`;
+}
+
 // --- Roadmap HTML ---
 
 function getRoadmapHTML() {
@@ -2796,6 +3103,7 @@ function getRoadmapHTML() {
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/workflows">Workflows</a>
 </header>
 
 <div class="container">
@@ -3158,6 +3466,7 @@ function getTerminalHTML() {
   <a href="/reminders">Erinnerungen</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/workflows">Workflows</a>
 </header>
 
 <div class="main">
@@ -3401,6 +3710,59 @@ loadSession();
 </script>
 </body>
 </html>`;
+}
+
+// --- Workflows API Handlers ---
+
+function handleWorkflowsList(req, res) {
+  const all = db.workflows.getAll();
+  // Steps für jeden Workflow laden
+  const result = all.map((w) => {
+    w.steps = db.workflows.getSteps(w.id);
+    return w;
+  });
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify(result));
+}
+
+function handleWorkflowGet(req, res, id) {
+  const w = db.workflows.getById(id);
+  if (!w) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Workflow nicht gefunden" }));
+    return;
+  }
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify(w));
+}
+
+function handleWorkflowUpdate(req, res, id) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const updated = db.workflows.update(id, body);
+      if (!updated) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Workflow nicht gefunden" }));
+        return;
+      }
+      originalLog("[Monitor] Workflow aktualisiert: " + id);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleWorkflowDelete(req, res, id) {
+  db.workflows.remove(id);
+  originalLog("[Monitor] Workflow gelöscht: " + id);
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify({ ok: true }));
 }
 
 // --- Roadmap API Handlers ---
@@ -3765,6 +4127,7 @@ function getRemindersHTML() {
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
   <a href="/roadmap">Roadmap</a>
+  <a href="/workflows">Workflows</a>
 </header>
 
 <div class="container">
@@ -4631,6 +4994,22 @@ function startMonitor(port) {
       handleHaFileWrite(req, res, filename);
     } else if (req.url === "/api/ha-regenerate" && req.method === "POST") {
       handleHaRegenerate(req, res);
+
+    // --- Workflows ---
+    } else if (req.url === "/workflows") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getWorkflowsHTML());
+    } else if (req.url === "/api/workflows" && req.method === "GET") {
+      handleWorkflowsList(req, res);
+    } else if (req.url.startsWith("/api/workflows/") && req.method === "GET") {
+      const id = decodeURIComponent(req.url.replace("/api/workflows/", ""));
+      handleWorkflowGet(req, res, id);
+    } else if (req.url.startsWith("/api/workflows/") && req.method === "PUT") {
+      const id = decodeURIComponent(req.url.replace("/api/workflows/", ""));
+      handleWorkflowUpdate(req, res, id);
+    } else if (req.url.startsWith("/api/workflows/") && req.method === "DELETE") {
+      const id = decodeURIComponent(req.url.replace("/api/workflows/", ""));
+      handleWorkflowDelete(req, res, id);
 
     // --- Roadmap ---
     } else if (req.url === "/roadmap") {
