@@ -275,6 +275,7 @@ function getDashboardHTML() {
   <a href="/reminders" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Erinnerungen</a>
   <a href="/terminal" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Terminal</a>
   <a href="/settings" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Einstellungen</a>
+  <a href="/roadmap" style="color:#8b949e;text-decoration:none;font-size:12px;padding:4px 10px;border:1px solid #30363d;border-radius:6px;">Roadmap</a>
   <div class="status-bar">
     <span>Uptime: <b id="uptime">-</b></span>
     <span>Modell: <b id="model">-</b></span>
@@ -501,6 +502,7 @@ function getSystemHTML() {
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
 </header>
 
 <div class="content">
@@ -800,6 +802,7 @@ function getEditorHTML() {
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
 </header>
 
 <div class="toolbar">
@@ -1597,6 +1600,7 @@ function getNotesHTML() {
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
 </header>
 
 <div class="toolbar">
@@ -2630,6 +2634,391 @@ if ("serviceWorker" in navigator) {
 </html>`;
 }
 
+// --- Roadmap HTML ---
+
+function getRoadmapHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+<title>JARVIS - Roadmap</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117; color: #c9d1d9;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px;
+  }
+  header {
+    background: #161b22; border-bottom: 1px solid #30363d; padding: 12px 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; color: #58a6ff; font-weight: 600; }
+  header a {
+    color: #8b949e; text-decoration: none; font-size: 12px;
+    padding: 4px 10px; border: 1px solid #30363d; border-radius: 6px;
+  }
+  header a:hover { color: #c9d1d9; border-color: #58a6ff; }
+  .container { max-width: 900px; margin: 20px auto; padding: 0 16px; }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .btn {
+    background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .btn:hover { border-color: #58a6ff; color: #58a6ff; }
+  .btn-primary { background: #238636; border-color: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .filter-btn { padding: 4px 12px; font-size: 11px; }
+  .filter-btn.active { background: #1f6feb22; border-color: #58a6ff; color: #58a6ff; }
+  .spacer { flex: 1; }
+  .status-msg {
+    font-size: 12px; color: #3fb950; opacity: 0; transition: opacity 0.3s;
+    white-space: nowrap;
+  }
+  .status-msg.show { opacity: 1; }
+  .status-msg.error { color: #f85149; }
+
+  /* Create Form */
+  .create-form {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 16px; margin-bottom: 16px; display: none;
+  }
+  .create-form.show { display: block; }
+  .form-row {
+    display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .form-row label { font-size: 12px; color: #8b949e; min-width: 70px; }
+  .form-row input, .form-row textarea, .form-row select {
+    background: #0d1117; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 12px;
+    flex: 1; min-width: 150px;
+  }
+  .form-row textarea { min-height: 60px; resize: vertical; }
+  .form-row input:focus, .form-row textarea:focus, .form-row select:focus {
+    outline: none; border-color: #58a6ff;
+  }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Cards */
+  .card-list { display: flex; flex-direction: column; gap: 8px; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px 16px; display: flex; gap: 12px; align-items: flex-start;
+    border-left: 3px solid #30363d; transition: border-color 0.15s;
+  }
+  .card:hover { border-color: #58a6ff; }
+  .card.priority-high { border-left-color: #f85149; }
+  .card.priority-normal { border-left-color: #d29922; }
+  .card.priority-low { border-left-color: #8b949e; }
+  .card.status-done { opacity: 0.6; }
+
+  .card-body { flex: 1; min-width: 0; }
+  .card-title {
+    font-size: 14px; font-weight: 600; color: #e6edf3; margin-bottom: 4px;
+    word-break: break-word;
+  }
+  .card-desc {
+    font-size: 12px; color: #8b949e; line-height: 1.5; margin-bottom: 6px;
+    word-break: break-word;
+  }
+  .card-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .badge-idea { background: #8b949e22; color: #8b949e; }
+  .badge-planned { background: #1f6feb22; color: #58a6ff; }
+  .badge-in_progress { background: #d2992222; color: #d29922; }
+  .badge-done { background: #3fb95022; color: #3fb950; }
+  .badge-category { background: #21262d; color: #8b949e; border: 1px solid #30363d; }
+  .card-date { font-size: 10px; color: #484f58; }
+
+  .card-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+  .card-actions select {
+    background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 3px 6px; border-radius: 4px; font-size: 11px; font-family: inherit;
+    cursor: pointer;
+  }
+  .card-actions button {
+    background: none; border: 1px solid #30363d; color: #8b949e;
+    padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .card-actions button:hover { border-color: #58a6ff; color: #c9d1d9; }
+  .card-actions .del-btn:hover { border-color: #f85149; color: #f85149; }
+
+  /* Edit inline */
+  .edit-form {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 10px; margin-top: 8px;
+  }
+  .edit-form input, .edit-form textarea, .edit-form select {
+    background: #161b22; border: 1px solid #30363d; color: #c9d1d9;
+    padding: 4px 8px; border-radius: 4px; font-family: inherit; font-size: 12px;
+    width: 100%; margin-bottom: 6px;
+  }
+  .edit-form textarea { min-height: 50px; resize: vertical; }
+  .edit-form .edit-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+  .empty-state {
+    text-align: center; padding: 40px; color: #484f58; font-size: 14px;
+  }
+
+  @media (max-width: 600px) {
+    .card { flex-direction: column; }
+    .card-actions { align-self: flex-end; }
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Roadmap</h1>
+  <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
+  <a href="/ha-editor">Smart Home Editor</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
+  <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="toggleCreate()">+ Neuer Eintrag</button>
+    <div class="spacer"></div>
+    <button class="btn filter-btn active" data-filter="all" onclick="setFilter('all')">Alle</button>
+    <button class="btn filter-btn" data-filter="idea" onclick="setFilter('idea')">Idee</button>
+    <button class="btn filter-btn" data-filter="planned" onclick="setFilter('planned')">Geplant</button>
+    <button class="btn filter-btn" data-filter="in_progress" onclick="setFilter('in_progress')">In Arbeit</button>
+    <button class="btn filter-btn" data-filter="done" onclick="setFilter('done')">Erledigt</button>
+    <span class="status-msg" id="statusMsg"></span>
+  </div>
+
+  <div class="create-form" id="createForm">
+    <div class="form-row">
+      <label>Titel</label>
+      <input type="text" id="newTitle" placeholder="Feature / Idee / Task...">
+    </div>
+    <div class="form-row">
+      <label>Beschreibung</label>
+      <textarea id="newDesc" placeholder="Details (optional)"></textarea>
+    </div>
+    <div class="form-row">
+      <label>Status</label>
+      <select id="newStatus">
+        <option value="idea">Idee</option>
+        <option value="planned">Geplant</option>
+        <option value="in_progress">In Arbeit</option>
+        <option value="done">Erledigt</option>
+      </select>
+      <label>Priorität</label>
+      <select id="newPriority">
+        <option value="low">Niedrig</option>
+        <option value="normal" selected>Normal</option>
+        <option value="high">Hoch</option>
+      </select>
+      <label>Kategorie</label>
+      <input type="text" id="newCategory" placeholder="z.B. Backend, Frontend..." style="max-width:150px">
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="toggleCreate()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="createItem()">Erstellen</button>
+    </div>
+  </div>
+
+  <div class="card-list" id="cardList">
+    <div class="empty-state">Laden...</div>
+  </div>
+</div>
+
+<script>
+const statusLabels = { idea: 'Idee', planned: 'Geplant', in_progress: 'In Arbeit', done: 'Erledigt' };
+let allItems = [];
+let currentFilter = 'all';
+let editingId = null;
+
+function escapeHtml(s) {
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+function showStatus(msg, isError) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status-msg show' + (isError ? ' error' : '');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function toggleCreate() {
+  document.getElementById('createForm').classList.toggle('show');
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === f);
+  });
+  renderList();
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function renderList() {
+  const list = document.getElementById('cardList');
+  let filtered = allItems;
+  if (currentFilter !== 'all') filtered = allItems.filter(i => i.status === currentFilter);
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state">' +
+      (currentFilter === 'all' ? 'Noch keine Einträge. Erstelle den ersten!' : 'Keine Einträge mit Status "' + (statusLabels[currentFilter] || currentFilter) + '"') +
+      '</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(item => {
+    const isEditing = editingId === item.id;
+    return '<div class="card priority-' + item.priority + ' status-' + item.status + '" data-id="' + item.id + '">' +
+      '<div class="card-body">' +
+        '<div class="card-title">' + escapeHtml(item.title) + '</div>' +
+        (item.description ? '<div class="card-desc">' + escapeHtml(item.description) + '</div>' : '') +
+        '<div class="card-meta">' +
+          '<span class="badge badge-' + item.status + '">' + (statusLabels[item.status] || item.status) + '</span>' +
+          (item.category ? '<span class="badge badge-category">' + escapeHtml(item.category) + '</span>' : '') +
+          '<span class="card-date">' + formatDate(item.created) + '</span>' +
+        '</div>' +
+        (isEditing ? renderEditForm(item) : '') +
+      '</div>' +
+      '<div class="card-actions">' +
+        '<select onchange="changeStatus(' + item.id + ', this.value)" title="Status ändern">' +
+          Object.entries(statusLabels).map(([k,v]) => '<option value="' + k + '"' + (k === item.status ? ' selected' : '') + '>' + v + '</option>').join('') +
+        '</select>' +
+        '<button onclick="toggleEdit(' + item.id + ')" title="Bearbeiten">Edit</button>' +
+        '<button class="del-btn" onclick="deleteItem(' + item.id + ')" title="Löschen">Del</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderEditForm(item) {
+  return '<div class="edit-form">' +
+    '<input type="text" id="editTitle" value="' + escapeHtml(item.title) + '">' +
+    '<textarea id="editDesc">' + escapeHtml(item.description || '') + '</textarea>' +
+    '<div style="display:flex;gap:6px;margin-bottom:6px">' +
+      '<select id="editPriority">' +
+        '<option value="low"' + (item.priority === 'low' ? ' selected' : '') + '>Niedrig</option>' +
+        '<option value="normal"' + (item.priority === 'normal' ? ' selected' : '') + '>Normal</option>' +
+        '<option value="high"' + (item.priority === 'high' ? ' selected' : '') + '>Hoch</option>' +
+      '</select>' +
+      '<input type="text" id="editCategory" value="' + escapeHtml(item.category || '') + '" placeholder="Kategorie">' +
+    '</div>' +
+    '<div class="edit-actions">' +
+      '<button class="btn" onclick="toggleEdit(null)">Abbrechen</button>' +
+      '<button class="btn btn-primary" onclick="saveEdit(' + item.id + ')">Speichern</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// --- API ---
+async function loadItems() {
+  try {
+    const res = await fetch('/api/roadmap');
+    allItems = await res.json();
+    renderList();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+async function createItem() {
+  const title = document.getElementById('newTitle').value.trim();
+  if (!title) { showStatus('Titel erforderlich', true); return; }
+  try {
+    await fetch('/api/roadmap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description: document.getElementById('newDesc').value.trim(),
+        status: document.getElementById('newStatus').value,
+        priority: document.getElementById('newPriority').value,
+        category: document.getElementById('newCategory').value.trim(),
+      })
+    });
+    document.getElementById('newTitle').value = '';
+    document.getElementById('newDesc').value = '';
+    document.getElementById('newCategory').value = '';
+    toggleCreate();
+    showStatus('Erstellt!', false);
+    loadItems();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+async function changeStatus(id, status) {
+  try {
+    await fetch('/api/roadmap/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    showStatus(statusLabels[status] || status, false);
+    loadItems();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+function toggleEdit(id) {
+  editingId = editingId === id ? null : id;
+  renderList();
+}
+
+async function saveEdit(id) {
+  try {
+    await fetch('/api/roadmap/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: document.getElementById('editTitle').value.trim(),
+        description: document.getElementById('editDesc').value.trim(),
+        priority: document.getElementById('editPriority').value,
+        category: document.getElementById('editCategory').value.trim(),
+      })
+    });
+    editingId = null;
+    showStatus('Gespeichert!', false);
+    loadItems();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+async function deleteItem(id) {
+  if (!confirm('Eintrag löschen?')) return;
+  try {
+    await fetch('/api/roadmap/' + id, { method: 'DELETE' });
+    showStatus('Gelöscht', false);
+    loadItems();
+  } catch (err) { showStatus('Fehler: ' + err.message, true); }
+}
+
+loadItems();
+</script>
+</body>
+</html>`;
+}
+
 // --- Terminal HTML ---
 
 function getTerminalHTML() {
@@ -2768,6 +3157,7 @@ function getTerminalHTML() {
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
 </header>
 
 <div class="main">
@@ -3011,6 +3401,70 @@ loadSession();
 </script>
 </body>
 </html>`;
+}
+
+// --- Roadmap API Handlers ---
+
+function handleRoadmapList(req, res) {
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify(db.roadmap.getAll()));
+}
+
+function handleRoadmapCreate(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      if (!body.title) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Titel erforderlich" }));
+        return;
+      }
+      const item = db.roadmap.create(body);
+      originalLog("[Monitor] Roadmap-Item erstellt: " + body.title);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true, item }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleRoadmapUpdate(req, res, id) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const updated = db.roadmap.update(id, body);
+      if (!updated) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Item nicht gefunden" }));
+        return;
+      }
+      originalLog("[Monitor] Roadmap-Item aktualisiert: " + updated.title);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true, item: updated }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+function handleRoadmapDelete(req, res, id) {
+  const existing = db.roadmap.getById(id);
+  if (!existing) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Item nicht gefunden" }));
+    return;
+  }
+  db.roadmap.remove(id);
+  originalLog("[Monitor] Roadmap-Item gelöscht: " + existing.title);
+  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+  res.end(JSON.stringify({ ok: true }));
 }
 
 // --- Terminal API Handlers ---
@@ -3310,6 +3764,7 @@ function getRemindersHTML() {
   <a href="/notes">Wissensbasis</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/roadmap">Roadmap</a>
 </header>
 
 <div class="container">
@@ -4176,6 +4631,21 @@ function startMonitor(port) {
       handleHaFileWrite(req, res, filename);
     } else if (req.url === "/api/ha-regenerate" && req.method === "POST") {
       handleHaRegenerate(req, res);
+
+    // --- Roadmap ---
+    } else if (req.url === "/roadmap") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getRoadmapHTML());
+    } else if (req.url === "/api/roadmap" && req.method === "GET") {
+      handleRoadmapList(req, res);
+    } else if (req.url === "/api/roadmap" && req.method === "POST") {
+      handleRoadmapCreate(req, res);
+    } else if (req.url.startsWith("/api/roadmap/") && req.method === "PUT") {
+      const id = parseInt(req.url.replace("/api/roadmap/", ""));
+      handleRoadmapUpdate(req, res, id);
+    } else if (req.url.startsWith("/api/roadmap/") && req.method === "DELETE") {
+      const id = parseInt(req.url.replace("/api/roadmap/", ""));
+      handleRoadmapDelete(req, res, id);
 
     // --- Terminal ---
     } else if (req.url === "/terminal") {
