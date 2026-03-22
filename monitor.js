@@ -2750,7 +2750,7 @@ function getThemeEditorHTML() {
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>JARVIS - Theme Editor</title>
-\${getThemeCSS()}
+${getThemeCSS()}
 <style>
   .container { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
 
