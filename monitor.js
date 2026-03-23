@@ -686,6 +686,9 @@ ${getThemeCSS()}
     </div>
   </div>
 
+  <div class="sys-grid" id="sensors-grid" style="display:none">
+  </div>
+
   <div class="cleanup-section">
     <div class="cleanup-header">
       <span class="cleanup-title">Systembereinigung</span>
@@ -726,6 +729,32 @@ function updateSystemPanel(d) {
 
   document.getElementById("sys-uptime-value").textContent = "System: " + d.uptime.system + " \\u2014 Prozess: " + d.uptime.process;
   document.getElementById("sys-node-detail").textContent = "Heap: " + d.node.heapUsed + " / " + d.node.heapTotal + " \\u2014 RSS: " + d.node.rss;
+
+  // Sensors
+  const grid = document.getElementById("sensors-grid");
+  if (d.sensors && (d.sensors.temps.length || d.sensors.fans.length)) {
+    grid.style.display = "";
+    let html = "";
+    d.sensors.temps.forEach(t => {
+      const pct = t.crit ? Math.round((t.value / t.crit) * 100) : 0;
+      const color = t.value >= 80 ? "red" : t.value >= 60 ? "yellow" : "green";
+      const detail = (t.max ? "Max: " + t.max + "\\u00b0C" : "") + (t.crit ? " / Krit: " + t.crit + "\\u00b0C" : "");
+      html += '<div class="sys-card">' +
+        '<h3>' + escapeHtml(t.label) + '</h3>' +
+        '<div class="sys-value">' + t.value + '\\u00b0C</div>' +
+        (t.crit ? '<div class="sys-bar"><div class="sys-bar-fill ' + color + '" style="width:' + pct + '%"></div></div>' : '') +
+        '<div class="sys-detail">' + escapeHtml(detail) + '</div>' +
+        '</div>';
+    });
+    d.sensors.fans.forEach(f => {
+      html += '<div class="sys-card">' +
+        '<h3>' + escapeHtml(f.label) + '</h3>' +
+        '<div class="sys-value">' + f.value + ' RPM</div>' +
+        '<div class="sys-detail">' + escapeHtml(f.chip) + '</div>' +
+        '</div>';
+    });
+    grid.innerHTML = html;
+  }
 }
 
 function fetchSystem() {
@@ -5806,12 +5835,34 @@ function getSystemInfo() {
   const formatMB = (bytes) => (bytes / 1024 / 1024).toFixed(1) + " MB";
   const formatGB = (bytes) => (bytes / 1024 / 1024 / 1024).toFixed(1) + " GB";
 
+  // Temperatures & fans via lm-sensors
+  let sensors = { temps: [], fans: [] };
+  try {
+    const sData = JSON.parse(execSync("sensors -j 2>/dev/null", { encoding: "utf-8", timeout: 3000 }));
+    for (const [chip, data] of Object.entries(sData)) {
+      const adapter = data.Adapter || "";
+      for (const [label, values] of Object.entries(data)) {
+        if (label === "Adapter") continue;
+        for (const [key, val] of Object.entries(values)) {
+          if (key.includes("_input") && key.startsWith("temp")) {
+            const max = values[key.replace("_input", "_max")] || null;
+            const crit = values[key.replace("_input", "_crit")] || null;
+            sensors.temps.push({ chip, label, value: val, max, crit });
+          } else if (key.includes("_input") && key.startsWith("fan") && val > 0) {
+            sensors.fans.push({ chip, label, value: val });
+          }
+        }
+      }
+    }
+  } catch {}
+
   return {
     cpu: { model: cpus[0]?.model || "-", cores: cpus.length, loadAvg: os.loadavg().map(v => +v.toFixed(2)) },
     memory: { total: formatGB(totalMem), used: formatGB(usedMem), free: formatGB(freeMem), percent: memPercent },
     disk,
     uptime: { system: sysUptime, process: procUptime },
     node: { heapUsed: formatMB(mem.heapUsed), heapTotal: formatMB(mem.heapTotal), rss: formatMB(mem.rss) },
+    sensors,
   };
 }
 
