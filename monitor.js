@@ -3138,7 +3138,7 @@ function renderEditor(name) {
 
   let html = '<div class="editor-header">' +
     '<span class="editor-title">' + escapeHtml(name) + '</span>' +
-    '<span class="editor-badge">' + (isBuiltin ? 'Eingebaut (nur lesen)' : 'Custom') + '</span>' +
+    '<span class="editor-badge">' + (isBuiltin ? 'Eingebaut' : 'Custom') + '</span>' +
     (name === activeTheme ? '<span class="editor-badge" style="color:var(--color-success);border-color:var(--color-success)">Aktiv</span>' : '') +
   '</div>';
 
@@ -3151,21 +3151,19 @@ function renderEditor(name) {
         '<span class="var-label">' + escapeHtml(def.label) + '</span>';
       if (isColor) {
         html += '<input type="color" class="var-color" value="' + val + '" data-key="' + def.key + '"' +
-          (isBuiltin ? ' disabled' : ' onchange="updateVar(this)"') + '>';
+          ' onchange="updateVar(this)">';
       }
       html += '<input type="text" class="var-input" value="' + escapeHtml(val) + '" data-key="' + def.key + '"' +
-        (isBuiltin ? ' readonly' : ' oninput="updateVarText(this)"') + '>' +
+        ' oninput="updateVarText(this)">' +
       '</div>';
     }
     html += '</div>';
   }
 
-  if (!isBuiltin) {
-    html += '<div class="editor-actions">' +
-      '<button class="btn" onclick="resetEdits()">Zurücksetzen</button>' +
-      '<button class="btn btn-primary" onclick="saveTheme()">Speichern</button>' +
-    '</div>';
-  }
+  html += '<div class="editor-actions">' +
+    '<button class="btn" onclick="resetEdits()">Zurücksetzen</button>' +
+    '<button class="btn btn-primary" onclick="saveTheme()">' + (isBuiltin ? 'Als Custom speichern' : 'Speichern') + '</button>' +
+  '</div>';
 
   editor.innerHTML = html;
 }
@@ -3209,16 +3207,29 @@ function resetEdits() {
 
 async function saveTheme() {
   if (!selectedTheme) return;
+  let saveName = selectedTheme;
+  // Bei eingebauten Themes: als Custom-Kopie speichern
+  if (allThemes[selectedTheme].builtin) {
+    const input = prompt('Neuer Name für die Kopie:', selectedTheme + ' Custom');
+    if (!input) return;
+    saveName = input.trim();
+    if (!saveName) return;
+  }
   try {
-    const res = await fetch('/api/themes/' + selectedTheme, {
+    const res = await fetch('/api/themes/' + encodeURIComponent(saveName), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vars: editedVars })
     });
     const data = await res.json();
     if (data.error) { alert(data.error); return; }
-    allThemes[selectedTheme].vars = { ...editedVars };
-    alert('Theme gespeichert! Seite neu laden um Änderungen zu sehen.');
+    // Aktivieren und neu laden
+    await fetch('/api/theme', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: saveName })
+    });
+    location.reload();
   } catch (err) { alert('Fehler: ' + err.message); }
 }
 
