@@ -40,14 +40,14 @@ clear
 echo -e "${CYAN}"
 cat << 'LOGO'
 
-       ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗
-       ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝
-       ██║███████║██████╔╝██║   ██║██║███████╗
-  ██   ██║██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║
-  ╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║
-   ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝
+  ██╗  ██╗██╗ █████╗ ███████╗██╗   ██╗
+  ██║ ██╔╝██║██╔══██╗██╔════╝╚██╗ ██╔╝
+  █████╔╝ ██║███████║███████╗ ╚████╔╝
+  ██╔═██╗ ██║██╔══██║╚════██║  ╚██╔╝
+  ██║  ██╗██║██║  ██║███████║   ██║
+  ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝
 
-  Persoenlicher KI-Assistent — Interaktive Installation
+  KI-Assistent System — Interaktive Installation
 
 LOGO
 echo -e "${NC}"
@@ -56,8 +56,8 @@ echo -e "${BOLD}Willkommen!${NC} Dieses Script richtet deinen persönlichen"
 echo -e "KI-Assistenten ein. Du wirst Schritt für Schritt durch"
 echo -e "die Konfiguration geführt.\n"
 
-read -p "Wie soll dein Bot heißen? [JARVIS]: " bot_name
-bot_name="${bot_name:-JARVIS}"
+read -p "Wie soll dein Bot heißen? [KIASY]: " bot_name
+bot_name="${bot_name:-KIASY}"
 bot_name_lower=$(echo "$bot_name" | tr '[:upper:]' '[:lower:]')
 bot_name_upper=$(echo "$bot_name" | tr '[:lower:]' '[:upper:]')
 
