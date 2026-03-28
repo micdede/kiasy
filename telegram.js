@@ -37,11 +37,23 @@ bot.on("polling_error", (error) => {
   console.error("Polling-Fehler:", error.code || error.message);
 });
 
-console.log("Starte JARVIS (Telegram)...");
+const BOT = process.env.BOT_NAME || "JARVIS";
+
+function getActiveModel() {
+  const p = (process.env.LLM_PROVIDER || "anthropic").toLowerCase();
+  switch (p) {
+    case "ollama": return process.env.OLLAMA_MODEL || "llama3.1";
+    case "groq": return process.env.GROQ_MODEL || "llama-3.1-70b-versatile";
+    case "openai": return process.env.OPENAI_MODEL || "gpt-4o";
+    default: return process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514";
+  }
+}
+
+console.log(`Starte ${BOT} (Telegram)...`);
 
 bot.getMe().then((me) => {
-  console.log(`JARVIS ist bereit! (@${me.username})`);
-  console.log(`Modell: ${process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514"}`);
+  console.log(`${BOT} ist bereit! (@${me.username})`);
+  console.log(`Modell: ${getActiveModel()}`);
   if (ALLOWED_USERS.length > 0) {
     console.log(`Whitelist: ${ALLOWED_USERS.join(", ")}`);
   } else {
@@ -174,8 +186,8 @@ bot.on("message", async (msg) => {
 
     await bot.sendMessage(
       chatId,
-      `*JARVIS Status*\n\n` +
-        `Modell: ${process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514"}\n` +
+      `*${BOT} Status*\n\n` +
+        `Modell: ${getActiveModel()}\n` +
         `Tools geladen: ${toolCount}\n` +
         `Nachrichten im Verlauf: ${history.length}\n` +
         `Aktive Chats: ${agent.conversations.size}\n` +

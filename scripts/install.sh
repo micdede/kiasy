@@ -145,12 +145,22 @@ case "$llm_choice" in
         llm_provider="ollama"
         echo ""
         echo -e "  ${CYAN}→ Ollama installieren: https://ollama.com/download${NC}"
-        echo -e "  ${CYAN}→ Dann: ollama pull llama3.1${NC}"
+        echo -e "  ${CYAN}→ Modelle: https://ollama.com/search${NC}"
+        echo ""
+        echo -e "  ${BOLD}Empfohlene Modelle:${NC}"
+        echo -e "    ${GREEN}Cloud (kostenlos, schnell):${NC}"
+        echo "      minimax-m2.7:cloud  — sehr gut für Deutsch + Tool-Calling"
+        echo "      qwen3:32b           — stark, multilingual"
+        echo -e "    ${GREEN}Lokal (braucht GPU/RAM):${NC}"
+        echo "      llama3.1:8b         — 8 GB RAM, Basis-Qualität"
+        echo "      llama3.1:70b        — 48 GB RAM, sehr gut"
+        echo ""
+        echo -e "  ${CYAN}→ Modell laden: ollama pull <modellname>${NC}"
         echo ""
         read -p "  Ollama Base-URL [http://localhost:11434/v1]: " ollama_url
         ollama_url="${ollama_url:-http://localhost:11434/v1}"
-        read -p "  Modell [llama3.1]: " ollama_model
-        ollama_model="${ollama_model:-llama3.1}"
+        read -p "  Modell [minimax-m2.7:cloud]: " ollama_model
+        ollama_model="${ollama_model:-minimax-m2.7:cloud}"
         ;;
     3)
         llm_provider="groq"
