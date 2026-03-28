@@ -6,7 +6,7 @@ const definitions = [
   {
     name: "hw_info",
     description:
-      "Zeigt Hardware-Infos des JARVIS-Servers: CPU, RAM, Disk, Temperatur, Uptime, Netzwerk. " +
+      "Zeigt Hardware-Infos des Servers: CPU, RAM, Disk, Temperatur, Uptime, Netzwerk. " +
       "Nutze dies wenn der User nach System-Status, Hardware, Speicher, Temperatur oder Performance fragt.",
     input_schema: {
       type: "object",

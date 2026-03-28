@@ -3,8 +3,8 @@ const axios = require('axios');
 const definitions = [
     {
         name: "searxng_search",
-        description: "Durchsucht das Web via SearXNG (selbstgehostete Meta-Suchmaschine)",
-        parameters: {
+        description: "Durchsucht das Web via SearXNG (selbstgehostete Meta-Suchmaschine). Braucht SEARXNG_URL in .env.",
+        input_schema: {
             type: "object",
             properties: {
                 query: { type: "string", description: "Suchanfrage" },
@@ -21,7 +21,9 @@ async function execute(name, input) {
     if (name !== "searxng_search") return null;
 
     const { query, engines, language = "de", safe_search = 0 } = input;
-    const url = "http://myhass.de:9090/search";
+    const baseUrl = process.env.SEARXNG_URL;
+    if (!baseUrl) return "SearXNG nicht konfiguriert. Setze SEARXNG_URL in .env (z.B. http://localhost:8080)";
+    const url = baseUrl.replace(/\/$/, '') + "/search";
 
     try {
         const response = await axios.get(url, {
