@@ -1220,7 +1220,7 @@ function getSettingsHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Einstellungen</title>
+<title>KIASY - Einstellungen</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -1299,6 +1299,32 @@ ${getThemeCSS()}
   .save-btn:hover { background: var(--btn-primary-hover); }
   .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+  .avatar-section {
+    display: flex; align-items: center; gap: 16px; padding: 12px 0;
+  }
+  .avatar-preview {
+    width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--border-color);
+    object-fit: cover; background: var(--bg-tertiary);
+  }
+  .avatar-placeholder {
+    width: 80px; height: 80px; border-radius: 50%; border: 2px dashed var(--border-color);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; color: var(--text-dim); background: var(--bg-tertiary);
+  }
+  .avatar-actions { display: flex; flex-direction: column; gap: 6px; }
+  .avatar-actions label, .avatar-actions button {
+    font-size: 12px; padding: 5px 14px; border-radius: 5px; cursor: pointer;
+    border: 1px solid var(--border-color); background: var(--bg-tertiary);
+    color: var(--text-primary); font-family: inherit; text-align: center;
+    transition: all 0.15s;
+  }
+  .avatar-actions label:hover, .avatar-actions button:hover {
+    border-color: var(--accent); color: var(--accent);
+  }
+  .avatar-actions .delete-btn:hover { border-color: var(--color-error); color: var(--color-error); }
+  .avatar-status { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  #avatarFileInput { display: none; }
+
   @media (max-width: 600px) {
     .field-row { flex-direction: column; align-items: flex-start; gap: 4px; }
     .field-label { min-width: unset; }
@@ -1309,7 +1335,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>JARVIS Einstellungen</h1>
+  <h1>Einstellungen</h1>
   <a href="/">Monitor</a>
   <a href="/chat">Chat</a>
   <a href="/system">System</a>
@@ -1328,6 +1354,23 @@ ${getThemeCSS()}
 </div>
 
 <div class="settings-container">
+  <div class="settings-group">
+    <h2>Profil</h2>
+    <div class="fields">
+      <div class="field-row">
+        <label class="field-label">Profilbild</label>
+        <div class="avatar-section">
+          <div id="avatarContainer"><div class="avatar-placeholder">?</div></div>
+          <div class="avatar-actions">
+            <label for="avatarFileInput">Bild hochladen</label>
+            <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/webp">
+            <button class="delete-btn" id="avatarDeleteBtn" style="display:none" onclick="deleteAvatar()">Entfernen</button>
+            <div class="avatar-status" id="avatarStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="settings-group">
     <h2>Erscheinungsbild</h2>
     <div class="fields">
@@ -1350,6 +1393,21 @@ ${getThemeCSS()}
 
 <script>
 const SETTINGS_GROUPS = [
+  {
+    title: "Personalisierung",
+    fields: [
+      { key: "BOT_NAME", label: "Bot-Name", type: "text" },
+      { key: "OWNER_NAME", label: "Dein Name", type: "text" },
+      { key: "OWNER_CITY", label: "Stadt (Wetter)", type: "text" },
+      { key: "BOT_LANG", label: "Sprache", type: "select",
+        options: [
+          { value: "de", label: "Deutsch" },
+          { value: "en", label: "English" }
+        ]
+      },
+      { key: "TZ", label: "Zeitzone", type: "text" }
+    ]
+  },
   {
     title: "Monitor (Zugang)",
     fields: [
@@ -1598,6 +1656,69 @@ fetch("/api/settings")
     document.getElementById("settingsInner").innerHTML =
       '<div style="color:var(--color-error);padding:20px;text-align:center">Fehler beim Laden: ' + err.message + '</div>';
   });
+
+// ==================== Avatar ====================
+function loadAvatar() {
+  fetch("/api/avatar").then(r => {
+    if (r.ok) {
+      r.blob().then(blob => {
+        const url = URL.createObjectURL(blob);
+        document.getElementById("avatarContainer").innerHTML =
+          '<img src="' + url + '" class="avatar-preview" alt="Profilbild">';
+        document.getElementById("avatarDeleteBtn").style.display = "";
+      });
+    }
+  }).catch(() => {});
+}
+
+document.getElementById("avatarFileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    document.getElementById("avatarStatus").textContent = "Max. 5 MB";
+    return;
+  }
+  const status = document.getElementById("avatarStatus");
+  status.textContent = "Hochladen...";
+  try {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    const res = await fetch("/api/avatar", { method: "POST", body: formData });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = data.telegram ? "Gespeichert + Telegram aktualisiert" : "Gespeichert";
+      status.style.color = "var(--color-success)";
+      loadAvatar();
+    } else {
+      status.textContent = data.error || "Fehler";
+      status.style.color = "var(--color-error)";
+    }
+  } catch (err) {
+    status.textContent = "Fehler: " + err.message;
+    status.style.color = "var(--color-error)";
+  }
+  e.target.value = "";
+});
+
+async function deleteAvatar() {
+  if (!confirm("Profilbild entfernen?")) return;
+  const status = document.getElementById("avatarStatus");
+  try {
+    const res = await fetch("/api/avatar", { method: "DELETE" });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById("avatarContainer").innerHTML = '<div class="avatar-placeholder">?</div>';
+      document.getElementById("avatarDeleteBtn").style.display = "none";
+      status.textContent = data.telegram ? "Entfernt + Telegram aktualisiert" : "Entfernt";
+      status.style.color = "var(--color-success)";
+    }
+  } catch (err) {
+    status.textContent = "Fehler: " + err.message;
+    status.style.color = "var(--color-error)";
+  }
+}
+
+loadAvatar();
 </script>
 </body>
 </html>`;
@@ -6275,6 +6396,102 @@ function startMonitor(port) {
     } else if (req.url === "/theme-editor") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(getThemeEditorHTML());
+
+    // --- Avatar ---
+    } else if (req.url === "/api/avatar" && req.method === "GET") {
+      const avatarPath = path.join(__dirname, "avatar.png");
+      if (fs.existsSync(avatarPath)) {
+        res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
+        res.end(fs.readFileSync(avatarPath));
+      } else {
+        res.writeHead(404);
+        res.end("No avatar");
+      }
+    } else if (req.url === "/api/avatar" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", async () => {
+        try {
+          const body = Buffer.concat(chunks);
+          const contentType = req.headers["content-type"] || "";
+          const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
+          if (!boundaryMatch) throw new Error("Kein multipart boundary");
+          const boundary = boundaryMatch[1] || boundaryMatch[2];
+
+          // Binäres Splitting am Boundary
+          const delimBuf = Buffer.from("--" + boundary);
+          let imageData = null;
+          let start = 0;
+          while (start < body.length) {
+            const idx = body.indexOf(delimBuf, start);
+            if (idx === -1) break;
+            const nextIdx = body.indexOf(delimBuf, idx + delimBuf.length);
+            if (nextIdx === -1) break;
+            const part = body.slice(idx + delimBuf.length, nextIdx);
+            const headerEnd = part.indexOf("\r\n\r\n");
+            if (headerEnd === -1) { start = nextIdx; continue; }
+            const headers = part.slice(0, headerEnd).toString();
+            if (headers.includes("filename=")) {
+              imageData = part.slice(headerEnd + 4);
+              // Trailing \r\n entfernen
+              if (imageData.length > 2 && imageData[imageData.length - 2] === 0x0d && imageData[imageData.length - 1] === 0x0a) {
+                imageData = imageData.slice(0, -2);
+              }
+              break;
+            }
+            start = nextIdx;
+          }
+          if (!imageData || imageData.length < 100) throw new Error("Kein gültiges Bild");
+
+          const avatarPath = path.join(__dirname, "avatar.png");
+          fs.writeFileSync(avatarPath, imageData);
+
+          // Telegram Bot-Profilbild setzen
+          let telegramOk = false;
+          const token = process.env.TELEGRAM_TOKEN;
+          if (token) {
+            try {
+              const fileContent = fs.readFileSync(avatarPath);
+              const tgBoundary = "----TgAvatar" + Date.now();
+              const photoJson = JSON.stringify({ type: "static", photo: "attach://file" });
+              const tgBody = Buffer.concat([
+                Buffer.from([
+                  "--" + tgBoundary,
+                  'Content-Disposition: form-data; name="photo"',
+                  "",
+                  photoJson,
+                  "--" + tgBoundary,
+                  'Content-Disposition: form-data; name="file"; filename="avatar.png"',
+                  "Content-Type: image/png",
+                  "",
+                  ""
+                ].join("\r\n")),
+                fileContent,
+                Buffer.from("\r\n--" + tgBoundary + "--\r\n")
+              ]);
+              const axios = require("axios");
+              await axios.post(`https://api.telegram.org/bot${token}/setMyProfilePhoto`, tgBody, {
+                headers: { "Content-Type": `multipart/form-data; boundary=${tgBoundary}` },
+                timeout: 10000
+              });
+              telegramOk = true;
+            } catch (e) { console.error("Telegram Avatar-Fehler:", e.message); }
+          }
+
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, telegram: telegramOk }));
+        } catch (err) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+    } else if (req.url === "/api/avatar" && req.method === "DELETE") {
+      const avatarPath = path.join(__dirname, "avatar.png");
+      let telegramOk = false;
+      try { fs.unlinkSync(avatarPath); } catch {}
+      // Telegram-Foto kann nicht per API gelöscht werden, nur ersetzt
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, telegram: telegramOk }));
 
     // --- Settings ---
     } else if (req.url === "/settings") {
