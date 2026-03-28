@@ -1221,7 +1221,7 @@ function getSettingsHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>KIASY - Einstellungen</title>
+<title>${BOT_NAME} - Einstellungen</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
