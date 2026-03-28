@@ -4471,6 +4471,9 @@ ${getThemeCSS()}
       <button class="action-btn" onclick="quickAction('service-logs', null)">
         <span class="icon">&#x1F4CB;</span><span class="label">Service-Logs (50 Zeilen)</span>
       </button>
+      <button class="action-btn" onclick="quickAction('kiasy-update', 'KIASY auf die neueste Version aktualisieren?')">
+        <span class="icon">&#x2B06;</span><span class="label">KIASY Update</span>
+      </button>
     </div>
 
     <div class="action-group">
@@ -5066,6 +5069,19 @@ function handleTerminalAction(req, res) {
         case "service-logs":
           exec("journalctl -u kiasy --no-pager -n 50 2>/dev/null || echo 'Journal nicht verfügbar'", { timeout: 10000 }, (err, out) => {
             respond({ output: out || (err ? err.message : "Keine Logs") });
+          });
+          break;
+
+        case "kiasy-update":
+          exec('cd "' + __dirname + '" && git pull --rebase 2>&1 && npm install --production 2>&1', { timeout: 60000 }, (err, out) => {
+            const output = out || (err ? err.message : "");
+            const hasChanges = !output.includes("Already up to date") && !output.includes("Bereits aktuell");
+            if (hasChanges) {
+              respond({ message: "Update installiert — " + BOT_NAME + " wird neu gestartet...", output });
+              setTimeout(() => process.exit(1), 1000);
+            } else {
+              respond({ message: "Bereits auf dem neuesten Stand", output });
+            }
           });
           break;
 
