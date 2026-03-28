@@ -37,10 +37,9 @@ header() { echo -e "\n${BOLD}${CYAN}── $1 ──${NC}\n"; }
 # Bot-Name aus .env lesen
 BOT_NAME=$(grep '^BOT_NAME=' .env 2>/dev/null | cut -d= -f2)
 BOT_NAME="${BOT_NAME:-KIASY}"
-bot_name_lower=$(echo "$BOT_NAME" | tr '[:upper:]' '[:lower:]')
 
 echo ""
-echo -e "${BOLD}${CYAN}$BOT_NAME Update${NC}"
+echo -e "${BOLD}${CYAN}KIASY Update ($BOT_NAME)${NC}"
 echo ""
 
 # ============================================================
@@ -225,7 +224,7 @@ fi
 # ============================================================
 header "Service"
 
-service_name="${bot_name_lower}-telegram"
+service_name="kiasy"
 
 if systemctl is-active --quiet "$service_name" 2>/dev/null; then
     sudo systemctl restart "$service_name"

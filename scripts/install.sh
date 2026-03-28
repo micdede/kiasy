@@ -523,7 +523,7 @@ ok "Datendateien angelegt"
 echo ""
 echo -e "${BOLD}[7/7]${NC} Systemd Service..."
 
-service_name="${bot_name_lower}-telegram"
+service_name="kiasy"
 SERVICE_FILE="/etc/systemd/system/${service_name}.service"
 
 if [ -f "$SERVICE_FILE" ]; then
@@ -531,7 +531,7 @@ if [ -f "$SERVICE_FILE" ]; then
 else
     sudo tee "$SERVICE_FILE" > /dev/null << SVCEOF
 [Unit]
-Description=$bot_name Telegram Bot
+Description=KIASY - $bot_name Telegram Bot
 After=network-online.target
 Wants=network-online.target
 
