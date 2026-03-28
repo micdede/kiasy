@@ -8,6 +8,7 @@ const agent = require("./agent");
 const voice = require("./voice");
 const db = require("./lib/db");
 
+const BOT_NAME = process.env.BOT_NAME || "JARVIS";
 const MAX_EVENTS = 200;
 const events = [];
 const clients = new Set();
@@ -372,7 +373,7 @@ function getDashboardHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS Monitor</title>
+<title>${BOT_NAME} Monitor</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -436,7 +437,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1><span class="dot"></span> JARVIS Monitor</h1>
+  <h1><span class="dot"></span> ${BOT_NAME} Monitor</h1>
   <a href="/chat">Chat</a>
   <a href="/system">System</a>
   <a href="/ha-editor">Smart Home Editor</a>
@@ -568,7 +569,7 @@ function getSystemHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - System</title>
+<title>${BOT_NAME} - System</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -647,7 +648,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>JARVIS System</h1>
+  <h1>${BOT_NAME} System</h1>
   <a href="/">Monitor</a>
   <a href="/chat">Chat</a>
   <a href="/ha-editor">Smart Home Editor</a>
@@ -854,7 +855,7 @@ function getEditorHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Smart Home Editor</title>
+<title>${BOT_NAME} - Smart Home Editor</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -1736,7 +1737,7 @@ function getNotesHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Wissensbasis</title>
+<title>${BOT_NAME} - Wissensbasis</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -2392,7 +2393,7 @@ function getChatHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS Chat</title>
+<title>${BOT_NAME} Chat</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <link rel="manifest" href="/manifest.json">
@@ -2545,7 +2546,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <a href="/" style="color:var(--accent);text-decoration:none;font-size:16px;font-weight:600;border:none;padding:0;">JARVIS Chat</a>
+  <a href="/" style="color:var(--accent);text-decoration:none;font-size:16px;font-weight:600;border:none;padding:0;">${BOT_NAME} Chat</a>
   <div class="header-actions">
     <button class="header-btn" id="ttsToggle" title="Antworten vorlesen">TTS</button>
     <button class="header-btn" id="clearBtn" title="Chat leeren">Leeren</button>
@@ -2553,7 +2554,7 @@ ${getThemeCSS()}
 </header>
 
 <div id="messages">
-  <div class="empty-state">JARVIS</div>
+  <div class="empty-state">${BOT_NAME}</div>
 </div>
 <div class="typing" id="typing">
   <div class="typing-bubble">
@@ -2848,7 +2849,7 @@ clearBtn.addEventListener("click", async () => {
   if (!confirm("Chat-Verlauf leeren?")) return;
   try {
     await fetch("/api/chat/clear", { method: "POST" });
-    messagesEl.innerHTML = '<div class="empty-state">JARVIS</div>';
+    messagesEl.innerHTML = '<div class="empty-state">${BOT_NAME}</div>';
   } catch {}
 });
 
@@ -2904,7 +2905,7 @@ function getThemeEditorHTML() {
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-<title>JARVIS - Theme Editor</title>
+<title>${BOT_NAME} - Theme Editor</title>
 ${getThemeCSS()}
 <style>
   .container { max-width: 1100px; margin: 20px auto; padding: 0 16px; }
@@ -3272,7 +3273,7 @@ function getToolsHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Tool Manager</title>
+<title>${BOT_NAME} - Tool Manager</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -3703,7 +3704,7 @@ function getWorkflowsHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Workflows</title>
+<title>${BOT_NAME} - Workflows</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -3976,7 +3977,7 @@ function getRoadmapHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Roadmap</title>
+<title>${BOT_NAME} - Roadmap</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -4338,7 +4339,7 @@ function getTerminalHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Terminal</title>
+<title>${BOT_NAME} - Terminal</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -4456,16 +4457,16 @@ ${getThemeCSS()}
 <div class="main">
   <div class="sidebar">
     <div class="action-group">
-      <h2>JARVIS Service</h2>
+      <h2>${BOT_NAME} Service</h2>
       <div class="status-card">
         <div class="label">Status</div>
         <div class="value" id="serviceStatus">Laden...</div>
       </div>
-      <button class="action-btn success" onclick="quickAction('service-restart', 'JARVIS neustarten?')">
-        <span class="icon">&#x21bb;</span><span class="label">JARVIS neustarten</span>
+      <button class="action-btn success" onclick="quickAction('service-restart', '${BOT_NAME} neustarten?')">
+        <span class="icon">&#x21bb;</span><span class="label">${BOT_NAME} neustarten</span>
       </button>
-      <button class="action-btn" onclick="quickAction('service-stop', 'JARVIS stoppen?')">
-        <span class="icon">&#x23f9;</span><span class="label">JARVIS stoppen</span>
+      <button class="action-btn" onclick="quickAction('service-stop', '${BOT_NAME} stoppen?')">
+        <span class="icon">&#x23f9;</span><span class="label">${BOT_NAME} stoppen</span>
       </button>
       <button class="action-btn" onclick="quickAction('service-logs', null)">
         <span class="icon">&#x1F4CB;</span><span class="label">Service-Logs (50 Zeilen)</span>
@@ -4473,7 +4474,7 @@ ${getThemeCSS()}
     </div>
 
     <div class="action-group">
-      <h2>JARVIS Agent</h2>
+      <h2>${BOT_NAME} Agent</h2>
       <button class="action-btn" onclick="quickAction('agent-reset', 'Chat-History aller Nutzer löschen?')">
         <span class="icon">&#x1F5D1;</span><span class="label">Chat-History löschen</span>
       </button>
@@ -4491,7 +4492,7 @@ ${getThemeCSS()}
       <button class="action-btn warn" onclick="quickAction('system-reboot', 'System wirklich NEUSTARTEN?')">
         <span class="icon">&#x1F504;</span><span class="label">System neustarten</span>
       </button>
-      <button class="action-btn danger" onclick="quickAction('system-shutdown', 'System wirklich HERUNTERFAHREN?\\nJARVIS wird offline sein!')">
+      <button class="action-btn danger" onclick="quickAction('system-shutdown', 'System wirklich HERUNTERFAHREN?\\n${BOT_NAME} wird offline sein!')">
         <span class="icon">&#x23FB;</span><span class="label">System herunterfahren</span>
       </button>
     </div>
@@ -4522,7 +4523,7 @@ ${getThemeCSS()}
       <button class="clear-btn" onclick="clearTerminal()">Leeren</button>
     </div>
     <div id="terminal-output">
-      <div class="cmd-info">JARVIS WebTerminal bereit. Befehle eingeben oder Quick Actions nutzen.</div>
+      <div class="cmd-info">${BOT_NAME} WebTerminal bereit. Befehle eingeben oder Quick Actions nutzen.</div>
     </div>
     <div class="terminal-input-wrap">
       <span class="prompt">$</span>
@@ -5054,16 +5055,16 @@ function handleTerminalAction(req, res) {
           exec("sudo systemctl restart jarvis-telegram 2>&1", { timeout: 15000 }, (err, out, serr) => {
             if (err) {
               // Fallback: process.exit for self-restart
-              respond({ message: "JARVIS wird neu gestartet..." });
+              respond({ message: "${BOT_NAME} wird neu gestartet..." });
               setTimeout(() => process.exit(0), 500);
             } else {
-              respond({ message: "JARVIS Service neu gestartet", output: out || serr });
+              respond({ message: "${BOT_NAME} Service neu gestartet", output: out || serr });
             }
           });
           break;
 
         case "service-stop":
-          respond({ message: "JARVIS wird gestoppt..." });
+          respond({ message: "${BOT_NAME} wird gestoppt..." });
           setTimeout(() => process.exit(0), 500);
           break;
 
@@ -5145,7 +5146,7 @@ function getRemindersHTML() {
 <link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
-<title>JARVIS - Erinnerungen</title>
+<title>${BOT_NAME} - Erinnerungen</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
 <style>
@@ -5725,8 +5726,8 @@ function getManifestJSON() {
   const theme = getActiveTheme();
   const bgColor = theme === "tron" ? "#05070A" : "#0d1117";
   return JSON.stringify({
-    name: "JARVIS Chat",
-    short_name: "JARVIS",
+    name: "${BOT_NAME} Chat",
+    short_name: "${BOT_NAME}",
     start_url: "/chat",
     display: "standalone",
     background_color: bgColor,
@@ -6002,7 +6003,7 @@ function checkAuth(req, res) {
   }
 
   res.writeHead(401, {
-    "WWW-Authenticate": 'Basic realm="JARVIS Monitor"',
+    "WWW-Authenticate": `Basic realm="${BOT_NAME} Monitor"`,
     "Content-Type": "text/plain",
   });
   res.end("401 Unauthorized");
