@@ -55,9 +55,9 @@ bot.getMe().then((me) => {
   console.log(`${BOT} ist bereit! (@${me.username})`);
   console.log(`Modell: ${getActiveModel()}`);
   if (ALLOWED_USERS.length > 0) {
-    console.log(`Whitelist: ${ALLOWED_USERS.join(", ")}`);
+    console.log(`Telegram Whitelist: ${ALLOWED_USERS.join(", ")}`);
   } else {
-    console.log("Whitelist: deaktiviert (alle Nutzer erlaubt)");
+    console.log("Telegram Whitelist: deaktiviert (alle Nutzer erlaubt)");
   }
 });
 
