@@ -243,6 +243,70 @@ fi
 
 echo ""
 
+# --- E-Mail (IMAP/SMTP) ---
+echo -e "  ${BOLD}E-Mail${NC} — Mails lesen und senden (Gmail, Outlook, Yahoo, etc.)"
+echo -e "  ${CYAN}→ Gmail: App-Passwort nötig: https://myaccount.google.com/apppasswords${NC}"
+echo ""
+read -p "  E-Mail Integration? [j/N]: " opt_email
+opt_email="${opt_email:-n}"
+email_host=""
+email_user=""
+email_pass=""
+email_mode="read"
+email_mark_read="false"
+email_domains=""
+if [[ "$opt_email" =~ ^[jJyY]$ ]]; then
+    read -p "    IMAP-Host (z.B. imap.gmail.com): " email_host
+    [ -z "$email_host" ] && fail "Host ist erforderlich!"
+    read -p "    E-Mail-Adresse: " email_user
+    [ -z "$email_user" ] && fail "E-Mail ist erforderlich!"
+    read -s -p "    Passwort (App-Passwort): " email_pass
+    echo ""
+    [ -z "$email_pass" ] && fail "Passwort ist erforderlich!"
+    echo ""
+    echo "    Berechtigungen:"
+    read -p "      Mails senden erlauben? [j/N]: " email_rw
+    [[ "$email_rw" =~ ^[jJyY]$ ]] && email_mode="readwrite"
+    read -p "      Mails als gelesen markieren erlauben? [j/N]: " email_mr
+    [[ "$email_mr" =~ ^[jJyY]$ ]] && email_mark_read="true"
+    if [ "$email_mode" = "readwrite" ]; then
+        read -p "      Erlaubte Empfänger-Domains (kommagetrennt, z.B. gmail.com,firma.de): " email_domains
+    fi
+    ok "E-Mail konfiguriert ($email_mode)"
+else
+    info "E-Mail übersprungen"
+fi
+
+echo ""
+
+# --- Kalender (CalDAV) ---
+echo -e "  ${BOLD}Kalender${NC} — Termine verwalten (Google, iCloud, Nextcloud, etc.)"
+echo -e "  ${CYAN}→ Braucht eine CalDAV-URL deines Kalender-Anbieters${NC}"
+echo ""
+read -p "  Kalender Integration? [j/N]: " opt_caldav
+opt_caldav="${opt_caldav:-n}"
+caldav_url=""
+caldav_user=""
+caldav_pass=""
+caldav_mode="read"
+if [[ "$opt_caldav" =~ ^[jJyY]$ ]]; then
+    read -p "    CalDAV-URL: " caldav_url
+    [ -z "$caldav_url" ] && fail "URL ist erforderlich!"
+    read -p "    Benutzername: " caldav_user
+    [ -z "$caldav_user" ] && fail "Benutzername ist erforderlich!"
+    read -s -p "    Passwort: " caldav_pass
+    echo ""
+    [ -z "$caldav_pass" ] && fail "Passwort ist erforderlich!"
+    echo ""
+    read -p "      Termine erstellen/löschen erlauben? [j/N]: " caldav_rw
+    [[ "$caldav_rw" =~ ^[jJyY]$ ]] && caldav_mode="readwrite"
+    ok "Kalender konfiguriert ($caldav_mode)"
+else
+    info "Kalender übersprungen"
+fi
+
+echo ""
+
 # --- Home Assistant ---
 echo -e "  ${BOLD}Home Assistant${NC} — Smart Home Steuerung (Licht, Heizung, Sensoren...)"
 echo "  Brauchst du nur wenn du Home Assistant betreibst."
@@ -370,6 +434,8 @@ echo -e "  ${BOLD}Telegram:${NC}        Token gesetzt"
 echo ""
 echo -e "  ${BOLD}Features:${NC}"
 [[ "$opt_voice" =~ ^[jJyY]$ ]]   && echo "    ✓ Sprachnachrichten (Whisper $whisper_model)" || echo "    ✗ Sprachnachrichten"
+[[ "$opt_email" =~ ^[jJyY]$ ]]   && echo "    ✓ E-Mail ($email_mode)"                          || echo "    ✗ E-Mail"
+[[ "$opt_caldav" =~ ^[jJyY]$ ]]  && echo "    ✓ Kalender ($caldav_mode)"                       || echo "    ✗ Kalender"
 [[ "$opt_ha" =~ ^[jJyY]$ ]]      && echo "    ✓ Home Assistant"                              || echo "    ✗ Home Assistant"
 [[ "$opt_kerio" =~ ^[jJyY]$ ]]   && echo "    ✓ Kerio Mail/Kalender/Kontakte"                || echo "    ✗ Kerio Mail"
 [[ "$opt_dalle" =~ ^[jJyY]$ ]]   && echo "    ✓ DALL-E Bildgenerierung"                      || echo "    ✗ DALL-E"
@@ -509,6 +575,21 @@ $(env_line "KERIO_USER" "$kerio_user")
 $(env_line "KERIO_PASSWORD" "$kerio_pass")
 $(env_line "KERIO_FROM" "$kerio_from")
 
+# --- E-Mail (IMAP/SMTP) ---
+$(env_line "EMAIL_HOST" "$email_host")
+$(env_line "EMAIL_USER" "$email_user")
+$(env_line "EMAIL_PASSWORD" "$email_pass")
+$([[ "$opt_email" =~ ^[jJyY]$ ]] && echo "EMAIL_MODE=$email_mode" || echo "#EMAIL_MODE=read")
+$([[ "$opt_email" =~ ^[jJyY]$ ]] && echo "EMAIL_MARK_READ=$email_mark_read" || echo "#EMAIL_MARK_READ=false")
+$(env_line "EMAIL_ALLOWED_DOMAINS" "$email_domains")
+#EMAIL_WHITELIST=
+
+# --- Kalender (CalDAV) ---
+$(env_line "CALDAV_URL" "$caldav_url")
+$(env_line "CALDAV_USER" "$caldav_user")
+$(env_line "CALDAV_PASSWORD" "$caldav_pass")
+$([[ "$opt_caldav" =~ ^[jJyY]$ ]] && echo "CALDAV_MODE=$caldav_mode" || echo "#CALDAV_MODE=read")
+
 # --- Home Assistant ---
 $(env_line "HOMEASSISTANT_URL" "$ha_url")
 $(env_line "HOMEASSISTANT_TOKEN" "$ha_token")
@@ -617,6 +698,8 @@ echo "    • $(npm ls --depth=0 2>/dev/null | grep -c '─') NPM Packages"
 [[ "$opt_voice" =~ ^[jJyY]$ ]] && echo "    • Python venv (Whisper + Edge-TTS)"
 echo "    • Systemd Service: ${service_name}"
 [[ "$opt_monitor" =~ ^[jJyY]$ ]] && echo "    • Monitor Dashboard (Port ${monitor_port})"
+[[ "$opt_email" =~ ^[jJyY]$ ]] && echo "    • E-Mail (IMAP/SMTP)"
+[[ "$opt_caldav" =~ ^[jJyY]$ ]] && echo "    • Kalender (CalDAV)"
 [[ "$opt_ha" =~ ^[jJyY]$ ]] && echo "    • Home Assistant Integration"
 [[ "$opt_kerio" =~ ^[jJyY]$ ]] && echo "    • Kerio Mail/Kalender/Kontakte"
 [[ "$opt_dalle" =~ ^[jJyY]$ ]] && echo "    • DALL-E Bildgenerierung"

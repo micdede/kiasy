@@ -117,6 +117,18 @@ ${CITY ? `- Standort: ${CITY}` : ""}
 ${langInstructions}
 - Halte Antworten kurz und auf den Punkt
 
+## E-Mail (Standard IMAP/SMTP)
+- email_list: Posteingang auflisten (Betreff, Absender, Datum, UID)
+- email_read: E-Mail per UID lesen
+- email_mark_read: E-Mail als gelesen markieren (braucht EMAIL_MARK_READ=true)
+- email_send: E-Mail senden (braucht EMAIL_MODE=readwrite + Whitelist)
+- Berechtigungen werden serverseitig erzwungen — respektiere die Fehlermeldungen
+
+## Kalender (Standard CalDAV)
+- cal_list: Termine der nächsten X Tage auflisten
+- cal_add: Neuen Termin erstellen (braucht CALDAV_MODE=readwrite)
+- cal_delete: Termin per UID löschen (braucht CALDAV_MODE=readwrite)
+
 ## Kerio Connect Integration
 - Du hast Zugriff auf ${BOT}' eigenes Kerio-Konto (Mail, Kalender, Kontakte, Notizen, Aufgaben)
 - Kalender (CalDAV): calendar_list (Termine auflisten), calendar_add (Termin erstellen), calendar_delete (Termin per UID löschen)
