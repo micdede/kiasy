@@ -5052,24 +5052,24 @@ function handleTerminalAction(req, res) {
 
       switch (action) {
         case "service-restart":
-          exec("sudo systemctl restart jarvis-telegram 2>&1", { timeout: 15000 }, (err, out, serr) => {
+          exec("sudo systemctl restart kiasy 2>&1", { timeout: 15000 }, (err, out, serr) => {
             if (err) {
               // Fallback: process.exit for self-restart
-              respond({ message: "${BOT_NAME} wird neu gestartet..." });
+              respond({ message: BOT_NAME + " wird neu gestartet..." });
               setTimeout(() => process.exit(0), 500);
             } else {
-              respond({ message: "${BOT_NAME} Service neu gestartet", output: out || serr });
+              respond({ message: BOT_NAME + " Service neu gestartet", output: out || serr });
             }
           });
           break;
 
         case "service-stop":
-          respond({ message: "${BOT_NAME} wird gestoppt..." });
+          respond({ message: BOT_NAME + " wird gestoppt..." });
           setTimeout(() => process.exit(0), 500);
           break;
 
         case "service-logs":
-          exec("journalctl -u jarvis-telegram --no-pager -n 50 2>/dev/null || echo 'Journal nicht verfügbar'", { timeout: 10000 }, (err, out) => {
+          exec("journalctl -u kiasy --no-pager -n 50 2>/dev/null || echo 'Journal nicht verfügbar'", { timeout: 10000 }, (err, out) => {
             respond({ output: out || (err ? err.message : "Keine Logs") });
           });
           break;
@@ -5117,7 +5117,7 @@ function handleTerminalStatus(req, res) {
   let serviceStatus = "Unbekannt";
   let serviceRunning = false;
 
-  exec("systemctl is-active jarvis-telegram 2>/dev/null", { timeout: 5000 }, (err, out) => {
+  exec("systemctl is-active kiasy 2>/dev/null", { timeout: 5000 }, (err, out) => {
     const status = (out || "").trim();
     serviceRunning = status === "active";
     serviceStatus = serviceRunning ? "Aktiv (running)" : (status || "Gestoppt");
