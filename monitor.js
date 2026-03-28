@@ -5052,15 +5052,10 @@ function handleTerminalAction(req, res) {
 
       switch (action) {
         case "service-restart":
-          exec("sudo systemctl restart kiasy 2>&1", { timeout: 15000 }, (err, out, serr) => {
-            if (err) {
-              // Fallback: process.exit for self-restart
-              respond({ message: BOT_NAME + " wird neu gestartet..." });
-              setTimeout(() => process.exit(0), 500);
-            } else {
-              respond({ message: BOT_NAME + " Service neu gestartet", output: out || serr });
-            }
-          });
+          respond({ message: BOT_NAME + " wird neu gestartet..." });
+          // Kurz warten damit die Response rausgeht, dann mit exit(1) beenden
+          // systemd startet den Prozess automatisch neu (Restart=on-failure)
+          setTimeout(() => process.exit(1), 500);
           break;
 
         case "service-stop":
