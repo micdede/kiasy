@@ -1,15 +1,32 @@
 node_modules/
-.env
 temp/
 venv/
 notes/
 certs/
 logs/
+
+# Persönliche Konfiguration & Daten
+.env
 credentials.json
-chat-history.db
-chat-history.db-shm
-chat-history.db-wal
-jarvis.db
-jarvis.db-shm
-jarvis.db-wal
+reminders.json
+memory.json
+ha-devices*.md
+.onboarded
 .last-telegram-chat
+CLAUDE.md
+
+# Claude Code (persönliche Settings)
+.claude/settings.local.json
+
+# Persönliche Scripts (enthalten IPs/User)
+scripts/migrate.sh
+scripts/restore.sh
+
+# Generierte Service-Dateien (werden vom Install-Script erstellt)
+*.service
+setup.sh
+
+# Datenbanken
+*.db
+*.db-shm
+*.db-wal

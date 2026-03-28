@@ -4397,7 +4397,7 @@ ${getThemeCSS()}
 
   <div class="terminal-wrap">
     <div class="terminal-header">
-      <span>Verzeichnis: <span class="cwd" id="cwd">/home/mcde/whatsapp-claude</span></span>
+      <span>Verzeichnis: <span class="cwd" id="cwd">${__dirname}</span></span>
       <button class="clear-btn" onclick="clearTerminal()">Leeren</button>
     </div>
     <div id="terminal-output">
@@ -4418,7 +4418,7 @@ const runBtn = document.getElementById('runBtn');
 const cwdEl = document.getElementById('cwd');
 let cmdHistory = [];
 let historyIdx = -1;
-let currentCwd = '/home/mcde/whatsapp-claude';
+let currentCwd = '${__dirname}';
 
 function escapeHtml(s) {
   const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
@@ -4875,7 +4875,7 @@ function handleTerminalExec(req, res) {
       // cd handling: extract new cwd
       const cdMatch = cmd.match(/^cd\s+(.+)$/);
       if (cdMatch) {
-        const target = cdMatch[1].trim().replace(/^~/, process.env.HOME || "/home/mcde");
+        const target = cdMatch[1].trim().replace(/^~/, process.env.HOME || require("os").homedir());
         const newCwd = path.resolve(cwd, target);
         db.terminal.log("cmd", cmd);
         if (fs.existsSync(newCwd) && fs.statSync(newCwd).isDirectory()) {

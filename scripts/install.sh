@@ -62,7 +62,39 @@ bot_name_lower=$(echo "$bot_name" | tr '[:upper:]' '[:lower:]')
 bot_name_upper=$(echo "$bot_name" | tr '[:lower:]' '[:upper:]')
 
 echo ""
+read -p "Wie heißt du (Vorname)? [$(whoami)]: " owner_name
+owner_name="${owner_name:-$(whoami)}"
+
+echo ""
+read -p "In welcher Stadt wohnst du? (für Wetter, lokale Infos) [Berlin]: " owner_city
+owner_city="${owner_city:-Berlin}"
+
+echo ""
+# Zeitzone erkennen
+detected_tz=$(timedatectl show --value -p Timezone 2>/dev/null || echo "Europe/Berlin")
+read -p "Zeitzone? [$detected_tz]: " timezone
+timezone="${timezone:-$detected_tz}"
+
+echo ""
+# Sprache
+echo "  In welcher Sprache soll der Bot antworten?"
+echo ""
+echo -e "  ${BOLD}[1]${NC} Deutsch"
+echo -e "  ${BOLD}[2]${NC} English"
+echo ""
+read -p "  Auswahl [1]: " lang_choice
+lang_choice="${lang_choice:-1}"
+case "$lang_choice" in
+    2) bot_lang="en" ;;
+    *) bot_lang="de" ;;
+esac
+
+echo ""
 ok "Bot-Name: ${BOLD}$bot_name${NC}"
+ok "Besitzer: ${BOLD}$owner_name${NC}"
+ok "Stadt:    ${BOLD}$owner_city${NC}"
+ok "Zeitzone: ${BOLD}$timezone${NC}"
+ok "Sprache:  ${BOLD}$([ "$bot_lang" = "de" ] && echo "Deutsch" || echo "English")${NC}"
 
 # ============================================================
 #  2. LLM-Provider
@@ -101,6 +133,9 @@ case "$llm_choice" in
     1)
         llm_provider="anthropic"
         echo ""
+        echo -e "  ${CYAN}→ Account erstellen: https://console.anthropic.com${NC}"
+        echo -e "  ${CYAN}→ API-Key holen:     https://console.anthropic.com/settings/keys${NC}"
+        echo ""
         read -p "  Anthropic API-Key (sk-ant-...): " anthropic_key
         [ -z "$anthropic_key" ] && fail "API-Key ist erforderlich!"
         read -p "  Modell [claude-sonnet-4-20250514]: " claude_model
@@ -108,6 +143,9 @@ case "$llm_choice" in
         ;;
     2)
         llm_provider="ollama"
+        echo ""
+        echo -e "  ${CYAN}→ Ollama installieren: https://ollama.com/download${NC}"
+        echo -e "  ${CYAN}→ Dann: ollama pull llama3.1${NC}"
         echo ""
         read -p "  Ollama Base-URL [http://localhost:11434/v1]: " ollama_url
         ollama_url="${ollama_url:-http://localhost:11434/v1}"
@@ -117,6 +155,9 @@ case "$llm_choice" in
     3)
         llm_provider="groq"
         echo ""
+        echo -e "  ${CYAN}→ Account erstellen: https://console.groq.com${NC}"
+        echo -e "  ${CYAN}→ API-Key holen:     https://console.groq.com/keys${NC}"
+        echo ""
         read -p "  Groq API-Key (gsk_...): " groq_key
         [ -z "$groq_key" ] && fail "API-Key ist erforderlich!"
         read -p "  Modell [llama-3.1-70b-versatile]: " groq_model
@@ -124,6 +165,9 @@ case "$llm_choice" in
         ;;
     4)
         llm_provider="openai"
+        echo ""
+        echo -e "  ${CYAN}→ Account erstellen: https://platform.openai.com${NC}"
+        echo -e "  ${CYAN}→ API-Key holen:     https://platform.openai.com/api-keys${NC}"
         echo ""
         read -p "  OpenAI API-Key (sk-...): " openai_key_llm
         [ -z "$openai_key_llm" ] && fail "API-Key ist erforderlich!"
@@ -140,7 +184,11 @@ ok "LLM-Provider: ${BOLD}$llm_provider${NC}"
 header "Telegram (Pflicht)"
 
 echo "  Du brauchst einen Telegram Bot-Token."
-echo -e "  ${CYAN}→${NC} Erstelle einen Bot bei @BotFather in Telegram"
+echo ""
+echo -e "  ${CYAN}So geht's:${NC}"
+echo "  1. Telegram öffnen und @BotFather anschreiben"
+echo "  2. /newbot senden → Bot-Name und Username wählen"
+echo "  3. Den Token kopieren (sieht aus wie: 123456:ABC-DEF...)"
 echo ""
 
 read -p "  Bot-Token: " telegram_token
@@ -149,6 +197,7 @@ read -p "  Bot-Token: " telegram_token
 echo ""
 echo "  Telegram User-IDs einschränken (optional)."
 echo "  Nur diese User können mit dem Bot sprechen."
+echo -e "  ${CYAN}→ Deine User-ID findest du bei @userinfobot in Telegram${NC}"
 echo "  Leer lassen = jeder darf (nicht empfohlen)."
 echo ""
 read -p "  Erlaubte User-IDs (kommagetrennt): " telegram_users
@@ -163,13 +212,18 @@ echo "  Aktiviere nur was du brauchst. Alles kann später"
 echo -e "  in der ${BOLD}.env${NC} nachkonfiguriert werden.\n"
 
 # --- Sprachnachrichten ---
-read -p "  Sprachnachrichten (Whisper STT + Edge-TTS)? [j/N]: " opt_voice
+echo -e "  ${BOLD}Sprachnachrichten${NC} — Sprache-zu-Text (Whisper) + Text-zu-Sprache (Edge-TTS)"
+echo "  Kostenlos, wird lokal in einem Python-venv installiert."
+echo "  Braucht ca. 500 MB Speicher für das Basis-Modell."
+echo ""
+read -p "  Sprachnachrichten aktivieren? [j/N]: " opt_voice
 opt_voice="${opt_voice:-n}"
 whisper_model="base"
 tts_voice="de-DE-KillianNeural"
 if [[ "$opt_voice" =~ ^[jJyY]$ ]]; then
     read -p "    Whisper-Modell (tiny/base/small/medium) [base]: " whisper_model
     whisper_model="${whisper_model:-base}"
+    echo -e "    ${CYAN}→ TTS-Stimmen: https://gist.github.com/BettyJJ/17cbaa1de96235a7f5773b8571a4c138${NC}"
     read -p "    TTS-Stimme [de-DE-KillianNeural]: " tts_voice
     tts_voice="${tts_voice:-de-DE-KillianNeural}"
     ok "Sprachnachrichten aktiviert (Whisper: $whisper_model)"
@@ -180,6 +234,9 @@ fi
 echo ""
 
 # --- Home Assistant ---
+echo -e "  ${BOLD}Home Assistant${NC} — Smart Home Steuerung (Licht, Heizung, Sensoren...)"
+echo "  Brauchst du nur wenn du Home Assistant betreibst."
+echo ""
 read -p "  Home Assistant Integration? [j/N]: " opt_ha
 opt_ha="${opt_ha:-n}"
 ha_url=""
@@ -187,6 +244,7 @@ ha_token=""
 if [[ "$opt_ha" =~ ^[jJyY]$ ]]; then
     read -p "    Home Assistant URL [http://homeassistant.local:8123]: " ha_url
     ha_url="${ha_url:-http://homeassistant.local:8123}"
+    echo -e "    ${CYAN}→ Token erstellen: HA → Profil (unten links) → Langlebige Zugriffstokens${NC}"
     read -p "    Long-Lived Access Token: " ha_token
     [ -z "$ha_token" ] && warn "Kein Token angegeben — muss später in .env gesetzt werden"
     ok "Home Assistant konfiguriert"
@@ -197,7 +255,10 @@ fi
 echo ""
 
 # --- Kerio Mail ---
-read -p "  E-Mail/Kalender/Kontakte (Kerio Connect)? [j/N]: " opt_kerio
+echo -e "  ${BOLD}Kerio Connect${NC} — E-Mail, Kalender, Kontakte, Aufgaben"
+echo "  Nur wenn du einen Kerio Connect Mailserver betreibst."
+echo ""
+read -p "  Kerio Connect Integration? [j/N]: " opt_kerio
 opt_kerio="${opt_kerio:-n}"
 kerio_host=""
 kerio_user=""
@@ -221,7 +282,10 @@ fi
 echo ""
 
 # --- DALL-E ---
-read -p "  DALL-E Bildgenerierung (braucht OpenAI API-Key)? [j/N]: " opt_dalle
+echo -e "  ${BOLD}DALL-E${NC} — KI-Bildgenerierung (braucht OpenAI API-Key)"
+echo -e "  ${CYAN}→ API-Key: https://platform.openai.com/api-keys${NC}"
+echo ""
+read -p "  DALL-E Bildgenerierung? [j/N]: " opt_dalle
 opt_dalle="${opt_dalle:-n}"
 openai_key_dalle=""
 if [[ "$opt_dalle" =~ ^[jJyY]$ ]]; then
@@ -240,7 +304,10 @@ fi
 echo ""
 
 # --- Wissensbasis Git-Backup ---
-read -p "  Wissensbasis Git-Backup? [j/N]: " opt_kb_git
+echo -e "  ${BOLD}Wissensbasis Git-Backup${NC} — Notizen automatisch in ein Git-Repo sichern"
+echo "  Die Wissensbasis funktioniert auch ohne Git (lokal in notes/)."
+echo ""
+read -p "  Git-Backup aktivieren? [j/N]: " opt_kb_git
 opt_kb_git="${opt_kb_git:-n}"
 kb_git_repo=""
 if [[ "$opt_kb_git" =~ ^[jJyY]$ ]]; then
@@ -284,6 +351,9 @@ fi
 header "Zusammenfassung"
 
 echo -e "  ${BOLD}Bot-Name:${NC}        $bot_name"
+echo -e "  ${BOLD}Besitzer:${NC}        $owner_name ($owner_city)"
+echo -e "  ${BOLD}Sprache:${NC}         $([ "$bot_lang" = "de" ] && echo "Deutsch" || echo "English")"
+echo -e "  ${BOLD}Zeitzone:${NC}        $timezone"
 echo -e "  ${BOLD}LLM-Provider:${NC}    $llm_provider"
 echo -e "  ${BOLD}Telegram:${NC}        Token gesetzt"
 [ -n "$telegram_users" ] && echo -e "  ${BOLD}Erlaubte User:${NC}   $telegram_users"
@@ -409,6 +479,13 @@ $([ "$llm_provider" = "openai" ] && env_line "OPENAI_MODEL" "$openai_model" || e
 TELEGRAM_TOKEN=$telegram_token
 $(env_line "TELEGRAM_ALLOWED_USERS" "$telegram_users")
 
+# --- Personalisierung ---
+OWNER_NAME=$owner_name
+OWNER_CITY=$owner_city
+BOT_NAME=$bot_name
+BOT_LANG=$bot_lang
+TZ=$timezone
+
 # --- Allgemein ---
 MAX_TOKENS=4096
 
@@ -469,7 +546,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=$service_name
 
-Environment=HOME=$HOME TZ=Europe/Berlin
+Environment=HOME=$HOME TZ=$timezone
 
 NoNewPrivileges=true
 ProtectSystem=strict

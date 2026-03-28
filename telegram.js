@@ -1,5 +1,5 @@
-process.env.TZ = "Europe/Berlin";
 require("dotenv").config();
+process.env.TZ = process.env.TZ || "Europe/Berlin";
 const fs = require("fs");
 const path = require("path");
 const TelegramBot = require("node-telegram-bot-api");
@@ -53,8 +53,12 @@ bot.getMe().then((me) => {
 setInterval(() => { checkReminders(); checkWorkflows(); }, 60000);
 console.log("Reminder- & Workflow-Scheduler gestartet (60s Intervall)");
 
-// Mail-Watcher starten
-require("./mail-watcher").startMailWatcher(agent);
+// Mail-Watcher starten (nur wenn Kerio konfiguriert)
+if (process.env.KERIO_HOST && process.env.KERIO_USER && process.env.KERIO_PASSWORD) {
+  require("./mail-watcher").startMailWatcher(agent);
+} else {
+  console.log("Mail-Watcher übersprungen (Kerio nicht konfiguriert)");
+}
 
 // --- Nachrichten-Handler ---
 
@@ -106,16 +110,19 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  if (body.toLowerCase() === "/hilfe" || body.toLowerCase() === "!hilfe" || body === "/start") {
+  if (body.toLowerCase() === "/hilfe" || body.toLowerCase() === "!hilfe") {
+    const botName = process.env.BOT_NAME || "JARVIS";
     await bot.sendMessage(
       chatId,
-      "*JARVIS – Persönlicher Assistent*\n\n" +
+      `*${botName} – Persönlicher Assistent*\n\n` +
         "Schreib einfach was du brauchst.\n\n" +
         "*Fähigkeiten:*\n" +
         "- Shell-Befehle ausführen\n" +
         "- Web-Recherche\n" +
         "- Dateien lesen/schreiben\n" +
         "- Gedächtnis (merkt sich Dinge)\n" +
+        "- Wissensbasis (Notizen)\n" +
+        "- Erinnerungen & Workflows\n" +
         "- Selbst-Erweiterung\n\n" +
         "*Befehle:*\n" +
         "/reset – Konversation zurücksetzen\n" +
@@ -123,6 +130,29 @@ bot.on("message", async (msg) => {
         "/status – System-Status",
       { parse_mode: "Markdown" }
     );
+    return;
+  }
+
+  // --- Onboarding: Erster Start ---
+  const ONBOARDED_FILE = path.join(__dirname, ".onboarded");
+  if (body === "/start" && !fs.existsSync(ONBOARDED_FILE)) {
+    fs.writeFileSync(ONBOARDED_FILE, new Date().toISOString());
+    const botName = process.env.BOT_NAME || "JARVIS";
+    const ownerName = process.env.OWNER_NAME || "du";
+    const onboardingPrompt =
+      `Der Nutzer hat gerade /start gedrückt und dies ist das ERSTE Gespräch. ` +
+      `Stelle dich als ${botName} vor — kurz und freundlich. ` +
+      `Erkläre in 2-3 Sätzen was du kannst. ` +
+      `Dann stelle ${ownerName} ein paar Fragen um ihn/sie besser kennenzulernen:\n` +
+      `1. Was machst du beruflich / was sind deine Interessen?\n` +
+      `2. Wofür wirst du mich hauptsächlich nutzen?\n` +
+      `3. Gibt es etwas Wichtiges das ich über dich wissen sollte?\n` +
+      `Speichere alle Antworten mit memory_write (Kategorie: facts). ` +
+      `Stelle die Fragen EINZELN — nicht alle auf einmal. Starte mit der Vorstellung und der ersten Frage.`;
+    body = onboardingPrompt;
+  } else if (body === "/start") {
+    const botName = process.env.BOT_NAME || "JARVIS";
+    await bot.sendMessage(chatId, `${botName} ist bereit! Schreib /hilfe für eine Übersicht.`);
     return;
   }
 

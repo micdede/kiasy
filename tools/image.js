@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const OpenAI = require("openai");
 
-const ALLOWED_BASE = "/home/mcde";
+const ALLOWED_BASE = process.env.HOME || require("os").homedir();
 
 // Queue wird vom Agent-Loop gelesen und von index.js verarbeitet
 let imageQueue = [];
@@ -25,7 +25,7 @@ const definitions = [
   {
     name: "send_image",
     description:
-      "Sendet ein Bild per WhatsApp an Michael. Das Bild muss als Datei unter /home/mcde/ existieren. " +
+      `Sendet ein Bild an ${process.env.OWNER_NAME || "den Nutzer"}. Das Bild muss als Datei unter ${process.env.HOME || "/home"}/ existieren. ` +
       "Unterstützte Formate: PNG, JPG, GIF, WEBP. " +
       "Nutze zuerst shell oder file_write um das Bild zu erstellen/herunterzuladen, dann dieses Tool zum Senden.",
     input_schema: {

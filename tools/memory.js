@@ -10,7 +10,7 @@ const definitions = [
   {
     name: "memory_read",
     description:
-      "Liest das persistente Gedächtnis. Kategorien: facts (Fakten über Michael), " +
+      "Liest das persistente Gedächtnis. Kategorien: facts (Fakten über den Nutzer), " +
       "todos (Aufgaben/To-Dos), notes (freie Notizen). Ohne Kategorie wird alles zurückgegeben.",
     input_schema: {
       type: "object",

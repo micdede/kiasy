@@ -235,7 +235,7 @@ async function execute(name, input) {
                     month: "2-digit",
                     hour: "2-digit",
                     minute: "2-digit",
-                    timeZone: "Europe/Berlin",
+                    timeZone: process.env.TZ || "Europe/Berlin",
                   })
                 : "";
               const isUnread = !msg.flags.has("\\Seen") ? "🔵 " : "";
@@ -280,7 +280,7 @@ async function execute(name, input) {
             const subject = env.subject || "(kein Betreff)";
             const date = env.date
               ? new Date(env.date).toLocaleString("de-DE", {
-                  timeZone: "Europe/Berlin",
+                  timeZone: process.env.TZ || "Europe/Berlin",
                 })
               : "";
 

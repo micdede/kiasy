@@ -2,7 +2,7 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const ALLOWED_BASE = "/home/mcde";
+const ALLOWED_BASE = process.env.HOME || require("os").homedir();
 const LOG_FILE = path.join(__dirname, "..", "logs", "actions.log");
 const TIMEOUT = 30000;
 
@@ -16,7 +16,7 @@ const definitions = [
   {
     name: "shell",
     description:
-      "Führt einen Bash-Befehl aus. Arbeitsverzeichnis: /home/mcde/. " +
+      "Führt einen Bash-Befehl aus. " +
       "Timeout: 30 Sekunden. Nutze dies für: Systembefehle, npm/pip install, " +
       "Skripte starten, Git-Operationen, Prozesse prüfen.",
     input_schema: {
@@ -35,7 +35,7 @@ const definitions = [
 async function execute(name, input) {
   const { command } = input;
 
-  // Sicherheitscheck: kein Verlassen von /home/mcde
+  // Sicherheitscheck: kein Verlassen des Home-Verzeichnisses
   const dangerous = ["rm -rf /", "mkfs", "dd if=", "> /dev/", ":(){ :|:& };:"];
   if (dangerous.some((d) => command.includes(d))) {
     return "Befehl aus Sicherheitsgründen blockiert.";

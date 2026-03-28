@@ -96,7 +96,7 @@ function textToSpeech(text) {
 // --- Chatterbox-Variante (auskommentiert — lokal auf Unraid, für später wenn Deutsch besser wird) ---
 //
 // function textToSpeechChatterbox(text) {
-//   const TTS_API_URL = process.env.TTS_API_URL || "http://192.168.178.20:8004";
+//   const TTS_API_URL = process.env.TTS_API_URL || "http://localhost:8004";
 //   const TTS_VOICE_CB = process.env.TTS_VOICE || "de-DE-KillianNeural.wav";
 //   const id = Date.now();
 //   const mp3File = path.join(TEMP_DIR, `tts_${id}.mp3`);

@@ -11,7 +11,7 @@ const definitions = [
     name: "reminder_set",
     description:
       "Setzt eine Erinnerung für einen bestimmten Zeitpunkt. " +
-      "Michael wird dann proaktiv benachrichtigt.",
+      "Der Nutzer wird dann proaktiv benachrichtigt.",
     input_schema: {
       type: "object",
       properties: {
@@ -77,7 +77,7 @@ async function execute(name, input) {
 
       const dueDate = new Date(input.due);
       const formatted = dueDate.toLocaleString("de-DE", {
-        timeZone: "Europe/Berlin",
+        timeZone: process.env.TZ || "Europe/Berlin",
         weekday: "short",
         day: "2-digit",
         month: "2-digit",
@@ -108,7 +108,7 @@ async function execute(name, input) {
       return active
         .map((r) => {
           const due = new Date(r.due).toLocaleString("de-DE", {
-            timeZone: "Europe/Berlin",
+            timeZone: process.env.TZ || "Europe/Berlin",
             weekday: "short",
             day: "2-digit",
             month: "2-digit",

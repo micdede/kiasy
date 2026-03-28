@@ -5,7 +5,7 @@ const definitions = [
   {
     name: "chat_search",
     description:
-      "Volltextsuche im gesamten Chat-Verlauf mit Michael. Findet frühere Gespräche, Fragen und Antworten. Nutze dies wenn Michael fragt 'haben wir darüber gesprochen?' oder 'was habe ich letztens gesagt über...'",
+      "Volltextsuche im gesamten Chat-Verlauf. Findet frühere Gespräche, Fragen und Antworten. Nutze dies wenn der Nutzer fragt 'haben wir darüber gesprochen?' oder 'was habe ich letztens gesagt über...'",
     input_schema: {
       type: "object",
       properties: {
@@ -31,11 +31,13 @@ async function execute(name, input) {
       return `Keine Treffer für "${input.query}" im Chat-Verlauf.`;
     }
 
+    const owner = process.env.OWNER_NAME || "Nutzer";
+    const bot = process.env.BOT_NAME || "Bot";
     const lines = results.map((r, i) => {
       const ctx = r.context
-        .map((c) => `  ${c.role === "user" ? "Michael" : "JARVIS"}: ${c.text.substring(0, 150)}`)
+        .map((c) => `  ${c.role === "user" ? owner : bot}: ${c.text.substring(0, 150)}`)
         .join("\n");
-      return `${i + 1}. [${r.date}] ${r.role === "user" ? "Michael" : "JARVIS"}: ${r.text.substring(0, 200)}\n${ctx}`;
+      return `${i + 1}. [${r.date}] ${r.role === "user" ? owner : bot}: ${r.text.substring(0, 200)}\n${ctx}`;
     });
 
     return `${results.length} Treffer für "${input.query}":\n\n${lines.join("\n\n")}`;

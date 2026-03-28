@@ -84,7 +84,7 @@ function toICSDateBerlin(isoStr) {
     const d = new Date(isoStr);
     const parts = {};
     new Intl.DateTimeFormat("en-US", {
-      timeZone: "Europe/Berlin",
+      timeZone: process.env.TZ || "Europe/Berlin",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -108,7 +108,7 @@ function berlinToUTC(year, month, day, hour, minute, second) {
   const guess = Date.UTC(year, month - 1, day, hour, minute, second);
   const parts = {};
   new Intl.DateTimeFormat("en-US", {
-    timeZone: "Europe/Berlin",
+    timeZone: process.env.TZ || "Europe/Berlin",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -228,7 +228,7 @@ async function execute(name, input) {
             month: "2-digit",
             hour: "2-digit",
             minute: "2-digit",
-            timeZone: "Europe/Berlin",
+            timeZone: process.env.TZ || "Europe/Berlin",
           });
           return `• ${dt} – ${e.summary} [UID: ${e.uid}]`;
         });
@@ -277,7 +277,7 @@ async function execute(name, input) {
         });
 
         const startStr = new Date(input.start).toLocaleString("de-DE", {
-          timeZone: "Europe/Berlin",
+          timeZone: process.env.TZ || "Europe/Berlin",
         });
 
         return `✅ Termin erstellt: "${input.title}" am ${startStr} [UID: ${uid}]`;

@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const HA_URL = (process.env.HOMEASSISTANT_URL || 'http://192.168.178.8:8123').replace(/\/$/, '');
+const HA_URL = (process.env.HOMEASSISTANT_URL || 'http://homeassistant.local:8123').replace(/\/$/, '');
 const HA_TOKEN = process.env.HOMEASSISTANT_TOKEN;
 
 function haClient() {
@@ -225,7 +225,7 @@ async function getHistory(client, { entity_id, hours = 24 }) {
     const recent = entries.slice(-30);
     for (const entry of recent) {
       const time = new Date(entry.last_changed || entry.last_updated).toLocaleString('de-DE', {
-        timeZone: 'Europe/Berlin',
+        timeZone: process.env.TZ || 'Europe/Berlin',
         day: '2-digit',
         month: '2-digit',
         hour: '2-digit',
@@ -271,7 +271,7 @@ function formatEntityDetail(entity) {
 
   if (entity.last_changed) {
     const changed = new Date(entity.last_changed).toLocaleString('de-DE', {
-      timeZone: 'Europe/Berlin',
+      timeZone: process.env.TZ || 'Europe/Berlin',
     });
     result += `Letzte Änderung: ${changed}\n`;
   }

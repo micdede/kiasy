@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const ALLOWED_BASE = "/home/mcde";
+const ALLOWED_BASE = process.env.HOME || require("os").homedir();
 const MAX_READ_SIZE = 50000;
 
 function validatePath(filePath) {
@@ -18,7 +18,7 @@ const definitions = [
   {
     name: "file_read",
     description:
-      "Liest eine Datei (Text, Code, PDF). Pfad muss innerhalb /home/mcde/ liegen.",
+      `Liest eine Datei (Text, Code, PDF). Pfad muss innerhalb ${ALLOWED_BASE}/ liegen.`,
     input_schema: {
       type: "object",
       properties: {
@@ -31,7 +31,7 @@ const definitions = [
     name: "file_write",
     description:
       "Schreibt Inhalt in eine Datei. Erstellt Verzeichnisse automatisch. " +
-      "Pfad muss innerhalb /home/mcde/ liegen.",
+      `Pfad muss innerhalb ${ALLOWED_BASE}/ liegen.`,
     input_schema: {
       type: "object",
       properties: {
@@ -44,14 +44,14 @@ const definitions = [
   {
     name: "file_list",
     description:
-      "Listet Dateien und Verzeichnisse auf. Pfad muss innerhalb /home/mcde/ liegen.",
+      `Listet Dateien und Verzeichnisse auf. Pfad muss innerhalb ${ALLOWED_BASE}/ liegen.`,
     input_schema: {
       type: "object",
       properties: {
         path: {
           type: "string",
           description: "Verzeichnispfad",
-          default: "/home/mcde",
+          default: ALLOWED_BASE,
         },
       },
       required: ["path"],
@@ -75,7 +75,7 @@ async function execute(name, input) {
           const data = await pdfParse(buffer);
           return data.text.substring(0, MAX_READ_SIZE);
         } catch (error) {
-          return `PDF-Fehler: ${error.message}. Tipp: shell tool nutzen um "cd /home/mcde/whatsapp-claude && npm install pdf-parse" auszuführen.`;
+          return `PDF-Fehler: ${error.message}. Tipp: shell tool nutzen um "cd ${path.join(__dirname, "..")} && npm install pdf-parse" auszuführen.`;
         }
       }
 

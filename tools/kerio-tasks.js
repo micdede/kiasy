@@ -85,7 +85,7 @@ async function execute(name, input) {
             const status =
               t.status === 2 || t.percentComplete === 100 ? "✅" : "⬜";
             const due = t.dueDate
-              ? ` (fällig: ${new Date(t.dueDate).toLocaleDateString("de-DE", { timeZone: "Europe/Berlin" })})`
+              ? ` (fällig: ${new Date(t.dueDate).toLocaleDateString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin" })})`
               : "";
             return `${status} ${title}${due} [ID: ${t.id}]`;
           });
