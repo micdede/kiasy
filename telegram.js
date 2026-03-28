@@ -530,6 +530,7 @@ function splitMessage(text, maxLength) {
 function shutdown(signal) {
   console.log(`\n${signal} – fahre herunter...`);
   bot.stopPolling();
+  try { require("./lib/db").close(); } catch {}
   process.exit(0);
 }
 

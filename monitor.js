@@ -5058,12 +5058,12 @@ function handleTerminalAction(req, res) {
           respond({ message: BOT_NAME + " wird neu gestartet..." });
           // Kurz warten damit die Response rausgeht, dann mit exit(1) beenden
           // systemd startet den Prozess automatisch neu (Restart=on-failure)
-          setTimeout(() => process.exit(1), 500);
+          setTimeout(() => { try { db.close(); } catch {} process.exit(1); }, 500);
           break;
 
         case "service-stop":
           respond({ message: BOT_NAME + " wird gestoppt..." });
-          setTimeout(() => process.exit(0), 500);
+          setTimeout(() => { try { db.close(); } catch {} process.exit(0); }, 500);
           break;
 
         case "service-logs":
@@ -5078,7 +5078,7 @@ function handleTerminalAction(req, res) {
             const hasChanges = !output.includes("Already up to date") && !output.includes("Bereits aktuell");
             if (hasChanges) {
               respond({ message: "Update installiert — " + BOT_NAME + " wird neu gestartet...", output });
-              setTimeout(() => process.exit(1), 1000);
+              setTimeout(() => { try { db.close(); } catch {} process.exit(1); }, 1000);
             } else {
               respond({ message: "Bereits auf dem neuesten Stand", output });
             }
@@ -5728,7 +5728,7 @@ function handleRestart(req, res) {
   res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
   res.end(JSON.stringify({ ok: true }));
   originalLog("[Monitor] Neustart angefordert...");
-  setTimeout(() => process.exit(0), 500);
+  setTimeout(() => { try { db.close(); } catch {} process.exit(0); }, 500);
 }
 
 // --- PWA Manifest + Service Worker ---
