@@ -5073,7 +5073,7 @@ function handleTerminalAction(req, res) {
           break;
 
         case "kiasy-update":
-          exec('cd "' + __dirname + '" && git pull --rebase 2>&1 && npm install --production 2>&1', { timeout: 60000 }, (err, out) => {
+          exec('cd "' + __dirname + '" && git stash -q 2>/dev/null; git pull --rebase 2>&1 && npm install --production 2>&1; git stash pop -q 2>/dev/null', { timeout: 60000 }, (err, out) => {
             const output = out || (err ? err.message : "");
             const hasChanges = !output.includes("Already up to date") && !output.includes("Bereits aktuell");
             if (hasChanges) {

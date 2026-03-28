@@ -54,9 +54,9 @@ info "Aktuelle Version: $OLD_COMMIT"
 header "Code aktualisieren"
 
 # Lokale Änderungen prüfen
-if ! git diff --quiet HEAD -- 2>/dev/null; then
+if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
     warn "Lokale Änderungen erkannt — werden gesichert (git stash)"
-    git stash push -m "update-backup-$(date +%Y%m%d-%H%M%S)" --quiet
+    git stash push --include-untracked -m "update-backup-$(date +%Y%m%d-%H%M%S)" --quiet
     STASHED=true
 else
     STASHED=false
