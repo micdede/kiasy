@@ -191,7 +191,27 @@ else
 fi
 
 # ============================================================
-#  6. Neue .env-Variablen prüfen
+#  6. Service-Datei aktualisieren
+# ============================================================
+header "Service-Konfiguration"
+
+SERVICE_FILE="/etc/systemd/system/kiasy.service"
+if [ -f "$SERVICE_FILE" ]; then
+    # Restart=on-failure → Restart=always (damit Neustarts aus dem Monitor funktionieren)
+    if grep -q "Restart=on-failure" "$SERVICE_FILE" 2>/dev/null; then
+        sudo sed -i 's/Restart=on-failure/Restart=always/' "$SERVICE_FILE"
+        sudo sed -i 's/RestartSec=10/RestartSec=5/' "$SERVICE_FILE"
+        sudo systemctl daemon-reload
+        ok "Service-Datei aktualisiert (Restart=always)"
+    else
+        ok "Service-Datei bereits aktuell"
+    fi
+else
+    info "Keine Service-Datei gefunden"
+fi
+
+# ============================================================
+#  7. Neue .env-Variablen prüfen
 # ============================================================
 header "Konfiguration prüfen"
 
@@ -220,7 +240,7 @@ else
 fi
 
 # ============================================================
-#  7. Service neustarten
+#  8. Service neustarten
 # ============================================================
 header "Service"
 
