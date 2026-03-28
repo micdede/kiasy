@@ -1,7 +1,7 @@
 {
-  "name": "whatsapp-claude",
-  "version": "2.0.0",
-  "description": "JARVIS – Persönlicher KI-Assistent",
+  "name": "kiasy",
+  "version": "2.1.0",
+  "description": "KIASY – Persönlicher KI-Assistent (Telegram + Web Dashboard)",
   "main": "telegram.js",
   "scripts": {
     "start": "node telegram.js",

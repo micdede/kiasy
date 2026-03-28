@@ -383,7 +383,7 @@ header "Installation"
 # --- System-Pakete ---
 echo -e "${BOLD}[1/7]${NC} System-Pakete..."
 sudo apt update -qq
-sudo apt install -y -qq curl git ffmpeg openssl python3 python3-venv lm-sensors 2>/dev/null
+sudo apt install -y -qq curl git ffmpeg openssl python3 python3-venv lm-sensors build-essential sqlite3 2>/dev/null
 ok "System-Pakete installiert"
 
 # --- Node.js ---
