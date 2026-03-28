@@ -227,6 +227,18 @@ const BUILTIN_THEMES = {
     "glow-shadow": "none", "card-shadow": "none", "scan-lines": "none",
     "bg-gradient": "#0d1117",
   },
+  joy: {
+    "bg-primary": "#06081A", "bg-secondary": "rgba(15, 18, 50, 0.8)", "bg-tertiary": "rgba(100, 140, 255, 0.06)",
+    "border-color": "rgba(120, 160, 255, 0.18)", "border-glow": "rgba(140, 120, 255, 0.35)",
+    "text-primary": "#D8DEFF", "text-muted": "rgba(200, 210, 255, 0.55)", "text-dim": "rgba(180, 190, 255, 0.25)", "text-bright": "#F0F2FF",
+    "accent": "#7EB4FF", "accent-glow": "0 0 18px rgba(126, 180, 255, 0.4)", "accent-bg": "rgba(126, 180, 255, 0.08)",
+    "color-success": "#6EEDB0", "color-error": "#FF6B8A", "color-warning": "#FFB86E", "color-info": "#C8A0FF",
+    "btn-primary-bg": "rgba(140, 120, 255, 0.25)", "btn-primary-hover": "rgba(140, 120, 255, 0.4)",
+    "font-heading": "'Exo 2', sans-serif", "font-body": "'Exo 2', sans-serif",
+    "glow-shadow": "0 0 25px rgba(140, 120, 255, 0.12)", "card-shadow": "0 0 15px rgba(100, 140, 255, 0.06)",
+    "scan-lines": "none",
+    "bg-gradient": "radial-gradient(ellipse at 50% 50%, #0E1240, #06081A)",
+  },
   tron: {
     "bg-primary": "#05070A", "bg-secondary": "rgba(10, 20, 40, 0.6)", "bg-tertiary": "rgba(0, 240, 255, 0.05)",
     "border-color": "rgba(0, 240, 255, 0.2)", "border-glow": "rgba(0, 240, 255, 0.4)",
@@ -276,9 +288,14 @@ function isGlowTheme(themeName) {
 
 function getGoogleFontsLink(theme) {
   const vars = getThemeVars(theme);
-  const needsGoogle = vars["font-heading"]?.includes("Orbitron") || vars["font-body"]?.includes("Rajdhani");
-  if (needsGoogle) {
-    return '<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">';
+  const fonts = [];
+  const heading = vars["font-heading"] || "";
+  const body = vars["font-body"] || "";
+  if (heading.includes("Orbitron") || body.includes("Orbitron")) fonts.push("family=Orbitron:wght@400;600;700");
+  if (heading.includes("Rajdhani") || body.includes("Rajdhani")) fonts.push("family=Rajdhani:wght@400;500;600;700");
+  if (heading.includes("Exo 2") || body.includes("Exo 2")) fonts.push("family=Exo+2:wght@300;400;500;600;700");
+  if (fonts.length > 0) {
+    return `<link href="https://fonts.googleapis.com/css2?${fonts.join("&")}&display=swap" rel="stylesheet">`;
   }
   return '';
 }
