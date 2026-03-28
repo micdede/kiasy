@@ -17,8 +17,10 @@ Dein persönlicher KI-Assistent, selbst gehostet auf deinem eigenen Server. Komm
 | **Workflows** | Mehrstufige automatisierte Aufgaben |
 | **Sprachnachrichten** | Sprache-zu-Text (Whisper) + Text-zu-Sprache (Edge-TTS) |
 | **Bildgenerierung** | DALL-E Bildgenerierung (optional, braucht OpenAI Key) |
+| **E-Mail** | Mails lesen, senden, als gelesen markieren (IMAP/SMTP — Gmail, Outlook, etc.) |
+| **Kalender** | Termine verwalten (CalDAV — Google, iCloud, Nextcloud, etc.) |
 | **Smart Home** | Home Assistant Steuerung (optional) |
-| **E-Mail/Kalender** | Kerio Connect Integration (optional) |
+| **Kerio Connect** | E-Mail, Kalender, Kontakte, Aufgaben (optional) |
 | **Selbst-Erweiterung** | Bot kann sich selbst neue Tools bauen |
 | **Web-Dashboard** | Monitor, Chat, Terminal, Wissensbasis, Roadmap, Theme-Editor |
 
@@ -190,8 +192,10 @@ Unter **Einstellungen** (`/settings`) kannst du alles konfigurieren:
 - **KI-Modell** — Provider, Modell, API-Keys
 - **Sprache** — TTS-Stimme, Whisper-Modell
 - **Telegram** — Bot-Token, Whitelist
+- **E-Mail (IMAP/SMTP)** — Host, Zugangsdaten, Berechtigungen, Whitelist
+- **Kalender (CalDAV)** — URL, Zugangsdaten, Berechtigungen
 - **Home Assistant** — URL und Token
-- **E-Mail** — Kerio Connect Einstellungen
+- **E-Mail (Kerio)** — Kerio Connect Einstellungen
 - **Wissensbasis** — Git-Backup Repository
 
 Nach dem Speichern: "Neustart" klicken damit die Änderungen wirksam werden.
@@ -215,6 +219,49 @@ Wird im Install-Script aktiviert. Braucht Python venv mit Whisper + Edge-TTS.
 
 - **Whisper-Modelle:** `tiny` (schnell), `base` (Standard), `small`, `medium` (genauer)
 - **TTS-Stimmen:** Auswahl in den Einstellungen oder unter [Edge-TTS Stimmen](https://gist.github.com/BettyJJ/17cbaa1de96235a7f5773b8571a4c138)
+
+### E-Mail (IMAP/SMTP)
+
+Funktioniert mit Gmail, Outlook, Yahoo und jedem IMAP/SMTP-fähigen Anbieter.
+
+1. In den Einstellungen oder `.env`:
+   ```
+   EMAIL_HOST=imap.gmail.com
+   EMAIL_USER=dein@gmail.com
+   EMAIL_PASSWORD=app-passwort
+   ```
+2. **Gmail:** App-Passwort nötig → [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+3. **Outlook:** App-Passwort unter [account.live.com/proofs/manage](https://account.live.com/proofs/manage)
+
+**Berechtigungen** (in Einstellungen oder `.env`):
+
+| Einstellung | Werte | Default | Beschreibung |
+|-------------|-------|---------|-------------|
+| `EMAIL_MODE` | `read` / `readwrite` | `read` | Senden erlauben |
+| `EMAIL_MARK_READ` | `true` / `false` | `false` | Als gelesen markieren erlauben |
+| `EMAIL_ALLOWED_DOMAINS` | z.B. `gmail.com,firma.de` | leer (blockiert) | Senden nur an diese Domains |
+| `EMAIL_WHITELIST` | z.B. `chef@firma.de` | leer | Zusätzlich erlaubte Adressen |
+
+E-Mails **löschen** ist nicht implementiert (Sicherheit).
+
+### Kalender (CalDAV)
+
+Funktioniert mit Google Calendar, iCloud, Nextcloud, Radicale und jedem CalDAV-Server.
+
+1. In den Einstellungen oder `.env`:
+   ```
+   CALDAV_URL=https://caldav.example.com
+   CALDAV_USER=dein@example.com
+   CALDAV_PASSWORD=app-passwort
+   ```
+2. CalDAV-URLs nach Anbieter:
+   - **Google:** `https://www.googleapis.com/caldav/v2/USER/events`
+   - **iCloud:** `https://caldav.icloud.com`
+   - **Nextcloud:** `https://cloud.example.com/remote.php/dav`
+
+| Einstellung | Werte | Default | Beschreibung |
+|-------------|-------|---------|-------------|
+| `CALDAV_MODE` | `read` / `readwrite` | `read` | Termine erstellen/löschen erlauben |
 
 ### Home Assistant
 
@@ -274,6 +321,8 @@ kiasy/
 │   ├── web-browse.js    — Webseiten lesen
 │   ├── image.js         — Bilder senden/generieren
 │   ├── hardware.js      — System-Hardware-Info
+│   ├── email.js         — Standard E-Mail (IMAP/SMTP)
+│   ├── caldav.js        — Standard Kalender (CalDAV)
 │   ├── homeassistant.js — Home Assistant
 │   ├── workflow.js      — Workflows
 │   └── kerio-*.js       — Kerio Mail/Kalender/Kontakte
