@@ -1485,6 +1485,44 @@ const SETTINGS_GROUPS = [
     ]
   },
   {
+    title: "E-Mail (IMAP/SMTP)",
+    fields: [
+      { key: "EMAIL_HOST", label: "IMAP-Host (z.B. imap.gmail.com)", type: "text" },
+      { key: "EMAIL_USER", label: "E-Mail-Adresse", type: "text" },
+      { key: "EMAIL_PASSWORD", label: "Passwort (App-Passwort)", type: "password" },
+      { key: "EMAIL_SMTP_HOST", label: "SMTP-Host (optional, default: auto)", type: "text" },
+      { key: "EMAIL_FROM", label: "Absender (optional)", type: "text" },
+      { key: "EMAIL_MODE", label: "Berechtigung", type: "select",
+        options: [
+          { value: "read", label: "Nur lesen" },
+          { value: "readwrite", label: "Lesen + Senden" }
+        ]
+      },
+      { key: "EMAIL_MARK_READ", label: "Als gelesen markieren", type: "select",
+        options: [
+          { value: "false", label: "Nicht erlaubt" },
+          { value: "true", label: "Erlaubt" }
+        ]
+      },
+      { key: "EMAIL_ALLOWED_DOMAINS", label: "Senden: Erlaubte Domains", type: "text" },
+      { key: "EMAIL_WHITELIST", label: "Senden: Whitelist-Adressen", type: "text" }
+    ]
+  },
+  {
+    title: "Kalender (CalDAV)",
+    fields: [
+      { key: "CALDAV_URL", label: "CalDAV-URL", type: "text" },
+      { key: "CALDAV_USER", label: "Benutzername", type: "text" },
+      { key: "CALDAV_PASSWORD", label: "Passwort", type: "password" },
+      { key: "CALDAV_MODE", label: "Berechtigung", type: "select",
+        options: [
+          { value: "read", label: "Nur lesen" },
+          { value: "readwrite", label: "Lesen + Schreiben" }
+        ]
+      }
+    ]
+  },
+  {
     title: "Home Assistant",
     fields: [
       { key: "HOMEASSISTANT_URL", label: "URL", type: "text" },
@@ -1492,7 +1530,7 @@ const SETTINGS_GROUPS = [
     ]
   },
   {
-    title: "E-Mail (Kerio)",
+    title: "E-Mail (Kerio Connect)",
     fields: [
       { key: "KERIO_HOST", label: "Host", type: "text" },
       { key: "KERIO_USER", label: "Benutzer", type: "text" },
