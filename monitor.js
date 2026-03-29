@@ -1826,7 +1826,7 @@ async function loadOllamaModels() {
   if (!isOllama) { panel.style.display = 'none'; return; }
   panel.style.display = '';
 
-  const baseUrl = (urlInput ? urlInput.value : currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\/v1\/?$/, '');
+  const baseUrl = (urlInput ? urlInput.value : currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace('/v1', '');
   try {
     const res = await fetch('/api/ollama/models?base=' + encodeURIComponent(baseUrl));
     if (!res.ok) throw new Error('Nicht erreichbar');
@@ -1873,7 +1873,7 @@ function selectModel(name) {
 
 async function deleteModel(name) {
   if (!confirm('Modell "' + name + '" wirklich löschen?')) return;
-  const baseUrl = (currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\\/v1\\/?$/, '');
+  const baseUrl = (currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace('/v1', '');
   try {
     const res = await fetch('/api/ollama/models?base=' + encodeURIComponent(baseUrl) + '&name=' + encodeURIComponent(name), { method: 'DELETE' });
     const data = await res.json();
@@ -1886,7 +1886,7 @@ async function pullModel() {
   const name = document.getElementById('newModelName').value.trim();
   if (!name) return;
   const status = document.getElementById('pullStatus');
-  const baseUrl = (currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\\/v1\\/?$/, '');
+  const baseUrl = (currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace('/v1', '');
   status.textContent = 'Lade ' + name + '... (kann etwas dauern)';
   status.style.color = 'var(--color-warning)';
   try {
