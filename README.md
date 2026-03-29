@@ -21,6 +21,7 @@ Dein persönlicher KI-Assistent, selbst gehostet auf deinem eigenen Server. Komm
 | **Kalender** | Termine verwalten (CalDAV — Google, iCloud, Nextcloud, etc.) |
 | **Smart Home** | Home Assistant Steuerung (optional) |
 | **Kerio Connect** | E-Mail, Kalender, Kontakte, Aufgaben (optional) |
+| **Aufgaben-Delegation** | Aufgaben an Personen delegieren, per Mail senden, automatisch nachfassen |
 | **Selbst-Erweiterung** | Bot kann sich selbst neue Tools bauen |
 | **Web-Dashboard** | Monitor, Chat, Terminal, Wissensbasis, Roadmap, Theme-Editor |
 
@@ -142,6 +143,7 @@ https://DEIN-SERVER:3333
 | **Erinnerungen** (`/reminders`) | Erinnerungen verwalten |
 | **Terminal** (`/terminal`) | Web-Terminal mit Quick Actions (Restart, Update, Logs) |
 | **Tools** (`/tools`) | Tools aktivieren/deaktivieren, eigene erstellen |
+| **Delegationen** (`/delegations`) | Delegierte Aufgaben mit Status und Follow-up |
 | **Workflows** (`/workflows`) | Mehrstufige Workflows verwalten |
 | **Roadmap** (`/roadmap`) | Projekt-Roadmap / ToDo-Board |
 | **Theme-Editor** (`/theme-editor`) | Themes erstellen und anpassen |
@@ -263,6 +265,26 @@ Funktioniert mit Google Calendar, iCloud, Nextcloud, Radicale und jedem CalDAV-S
 |-------------|-------|---------|-------------|
 | `CALDAV_MODE` | `read` / `readwrite` | `read` | Termine erstellen/löschen erlauben |
 
+### Aufgaben-Delegation
+
+Aufgaben an Kollegen, Mitarbeiter oder Familie delegieren — per Mail mit automatischem Nachfassen.
+
+**So funktioniert's:**
+
+Per Telegram oder Mail an den Bot:
+- *"Schick Oliver (oliver@firma.de) diese Aufgaben: Server-Backup prüfen, SSL-Zertifikate erneuern. Deadline Freitag, alle 2 Tage nachfassen."*
+
+Was passiert:
+1. Oliver bekommt eine formatierte E-Mail mit den Aufgaben
+2. JARVIS fasst automatisch alle X Tage nach (Nachfass-Mail an Oliver)
+3. Du wirst per Telegram über den Status informiert
+4. Du sagst *"Oliver hat das Backup erledigt"* → Status wird aktualisiert
+5. Wenn alle Aufgaben erledigt → Delegation automatisch abgeschlossen
+
+**Dashboard:** Unter `/delegations` siehst du alle offenen und erledigten Aufgaben mit Statistik, Filtern und klickbaren Checkboxen.
+
+**Voraussetzung:** E-Mail muss konfiguriert sein (IMAP/SMTP oder Kerio).
+
 ### Home Assistant
 
 1. In Home Assistant: **Profil → Langlebige Zugriffstokens → Token erstellen**
@@ -323,6 +345,7 @@ kiasy/
 │   ├── hardware.js      — System-Hardware-Info
 │   ├── email.js         — Standard E-Mail (IMAP/SMTP)
 │   ├── caldav.js        — Standard Kalender (CalDAV)
+│   ├── delegation.js    — Aufgaben-Delegation + Follow-up
 │   ├── homeassistant.js — Home Assistant
 │   ├── workflow.js      — Workflows
 │   └── kerio-*.js       — Kerio Mail/Kalender/Kontakte
@@ -346,6 +369,7 @@ SQLite (`jarvis.db`) mit WAL-Modus. Tabellen:
 | `reminders` | Erinnerungen + Scheduler |
 | `kb_notes` | Wissensbasis-Index (FTS5 Volltext) |
 | `events` | Monitor-Events |
+| `delegations` / `delegation_tasks` | Delegierte Aufgaben + Follow-up |
 | `workflows` / `workflow_steps` | Mehrstufige Workflows |
 | `tool_settings` | Tool Enable/Disable |
 | `roadmap` | Projekt-Roadmap |
