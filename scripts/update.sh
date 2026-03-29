@@ -172,6 +172,32 @@ CREATE TABLE IF NOT EXISTS roadmap (
     updated     TEXT DEFAULT (datetime('now','localtime'))
 );
 
+-- Delegationen (falls noch nicht vorhanden)
+CREATE TABLE IF NOT EXISTS delegations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignee        TEXT NOT NULL,
+    assignee_email  TEXT NOT NULL,
+    context         TEXT DEFAULT 'work',
+    subject         TEXT NOT NULL,
+    deadline        TEXT,
+    followup_days   INTEGER DEFAULT 3,
+    last_followup   TEXT,
+    next_followup   TEXT,
+    status          TEXT DEFAULT 'open',
+    created         TEXT DEFAULT (datetime('now','localtime')),
+    updated         TEXT DEFAULT (datetime('now','localtime')),
+    completed_at    TEXT,
+    chat_id         TEXT
+);
+CREATE TABLE IF NOT EXISTS delegation_tasks (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    delegation_id INTEGER NOT NULL,
+    task          TEXT NOT NULL,
+    status        TEXT DEFAULT 'open',
+    completed_at  TEXT,
+    FOREIGN KEY (delegation_id) REFERENCES delegations(id) ON DELETE CASCADE
+);
+
 -- Terminal (falls noch nicht vorhanden)
 CREATE TABLE IF NOT EXISTS terminal_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

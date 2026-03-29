@@ -462,6 +462,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -673,6 +674,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -982,6 +984,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -1361,6 +1364,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -1919,6 +1923,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -3464,6 +3469,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -4031,6 +4037,223 @@ setInterval(loadWorkflows, 30000);
 </html>`;
 }
 
+// --- Delegations HTML ---
+
+function getDelegationsHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<title>${BOT_NAME} - Delegationen</title>
+${getGoogleFontsLink(getActiveTheme())}
+${getThemeCSS()}
+<style>
+  .content { max-width: 1000px; margin: 20px auto; padding: 0 16px; }
+  .stats { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px;
+    padding: 12px 18px; text-align: center; min-width: 100px;
+  }
+  .stat-card .num { font-size: 24px; font-weight: 700; color: var(--text-bright); }
+  .stat-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-top: 2px; }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-btn {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-muted);
+    padding: 5px 14px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 12px;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .filter-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .delegation {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px;
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .delegation.done { opacity: 0.6; }
+  .delegation.cancelled { opacity: 0.4; }
+  .del-header {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-bottom: 1px solid var(--bg-tertiary); cursor: pointer;
+  }
+  .del-header:hover { background: var(--bg-tertiary); }
+  .del-status { font-size: 18px; }
+  .del-info { flex: 1; }
+  .del-assignee { font-size: 14px; font-weight: 600; color: var(--text-bright); }
+  .del-subject { font-size: 12px; color: var(--text-muted); }
+  .del-meta { font-size: 11px; color: var(--text-dim); text-align: right; }
+  .del-progress { font-size: 12px; color: var(--color-success); }
+  .del-body { padding: 0 16px 12px; }
+  .task-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--bg-tertiary);
+  }
+  .task-row:last-child { border-bottom: none; }
+  .task-check {
+    width: 22px; height: 22px; border: 2px solid var(--border-color); border-radius: 4px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: all 0.15s; flex-shrink: 0;
+  }
+  .task-check:hover { border-color: var(--color-success); }
+  .task-check.done { background: var(--color-success); border-color: var(--color-success); color: #fff; }
+  .task-check.in_progress { background: var(--color-warning); border-color: var(--color-warning); color: #fff; }
+  .task-text { flex: 1; font-size: 13px; color: var(--text-primary); }
+  .task-text.done { text-decoration: line-through; color: var(--text-dim); }
+  .task-date { font-size: 10px; color: var(--text-dim); }
+  .del-actions { display: flex; gap: 6px; padding: 8px 16px; border-top: 1px solid var(--bg-tertiary); }
+  .del-actions button {
+    font-size: 11px; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--border-color); background: var(--bg-tertiary);
+    color: var(--text-muted); font-family: inherit;
+  }
+  .del-actions button:hover { border-color: var(--accent); color: var(--accent); }
+  .del-actions .cancel-btn:hover { border-color: var(--color-error); color: var(--color-error); }
+  .empty { text-align: center; padding: 40px; color: var(--text-dim); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>${BOT_NAME} Delegationen</h1>
+  <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/reminders">Erinnerungen</a>
+  <a href="/terminal">Terminal</a>
+  <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
+  <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
+</header>
+
+<div class="content">
+  <div class="stats" id="stats"></div>
+  <div class="filter-bar">
+    <button class="filter-btn active" data-filter="open" onclick="setFilter('open')">Offen</button>
+    <button class="filter-btn" data-filter="all" onclick="setFilter('all')">Alle</button>
+    <button class="filter-btn" data-filter="done" onclick="setFilter('done')">Erledigt</button>
+  </div>
+  <div id="delegationList"></div>
+</div>
+
+<script>
+let allDelegations = [];
+let currentFilter = 'open';
+
+function escapeHtml(s) {
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+async function loadDelegations() {
+  const res = await fetch('/api/delegations');
+  allDelegations = await res.json();
+  renderStats();
+  renderList();
+}
+
+function renderStats() {
+  const open = allDelegations.filter(d => d.status === 'open' || d.status === 'in_progress');
+  const done = allDelegations.filter(d => d.status === 'done');
+  let totalTasks = 0, doneTasks = 0;
+  allDelegations.forEach(d => {
+    totalTasks += d.tasks.length;
+    doneTasks += d.tasks.filter(t => t.status === 'done').length;
+  });
+  const assignees = new Set(open.map(d => d.assignee));
+  document.getElementById('stats').innerHTML =
+    '<div class="stat-card"><div class="num">' + open.length + '</div><div class="label">Offen</div></div>' +
+    '<div class="stat-card"><div class="num">' + done.length + '</div><div class="label">Erledigt</div></div>' +
+    '<div class="stat-card"><div class="num">' + doneTasks + '/' + totalTasks + '</div><div class="label">Aufgaben</div></div>' +
+    '<div class="stat-card"><div class="num">' + assignees.size + '</div><div class="label">Personen</div></div>';
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === f));
+  renderList();
+}
+
+function renderList() {
+  const list = document.getElementById('delegationList');
+  let filtered = allDelegations;
+  if (currentFilter === 'open') filtered = allDelegations.filter(d => d.status === 'open' || d.status === 'in_progress');
+  else if (currentFilter === 'done') filtered = allDelegations.filter(d => d.status === 'done');
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty">' + (currentFilter === 'open' ? 'Keine offenen Delegationen' : 'Keine Delegationen') + '</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(d => {
+    const doneCount = d.tasks.filter(t => t.status === 'done').length;
+    const icon = d.status === 'done' ? '\\u2705' : d.status === 'cancelled' ? '\\u274c' : '\\ud83d\\udccb';
+    const deadline = d.deadline ? new Date(d.deadline).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) : '';
+    const created = new Date(d.created).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+    let html = '<div class="delegation ' + d.status + '">';
+    html += '<div class="del-header" onclick="toggleBody(' + d.id + ')">';
+    html += '<span class="del-status">' + icon + '</span>';
+    html += '<div class="del-info"><div class="del-assignee">' + escapeHtml(d.assignee) + '</div>';
+    html += '<div class="del-subject">' + escapeHtml(d.subject) + '</div></div>';
+    html += '<div class="del-meta">';
+    html += '<div class="del-progress">' + doneCount + '/' + d.tasks.length + '</div>';
+    if (deadline) html += '<div>' + deadline + '</div>';
+    html += '<div>' + created + '</div>';
+    html += '</div></div>';
+
+    html += '<div class="del-body" id="body-' + d.id + '" style="display:none">';
+    d.tasks.forEach(t => {
+      const checkClass = t.status === 'done' ? 'done' : t.status === 'in_progress' ? 'in_progress' : '';
+      const checkIcon = t.status === 'done' ? '\\u2713' : t.status === 'in_progress' ? '~' : '';
+      const textClass = t.status === 'done' ? 'done' : '';
+      const dateStr = t.completed_at ? t.completed_at.substring(0, 10) : '';
+      html += '<div class="task-row">';
+      html += '<div class="task-check ' + checkClass + '" onclick="cycleTask(' + d.id + ',' + t.id + ',\\'' + t.status + '\\')">' + checkIcon + '</div>';
+      html += '<span class="task-text ' + textClass + '">' + escapeHtml(t.task) + '</span>';
+      if (dateStr) html += '<span class="task-date">' + dateStr + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    if (d.status !== 'done' && d.status !== 'cancelled') {
+      html += '<div class="del-actions">';
+      html += '<button onclick="cancelDelegation(' + d.id + ')" class="cancel-btn">Stornieren</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+function toggleBody(id) {
+  const el = document.getElementById('body-' + id);
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function cycleTask(delId, taskId, current) {
+  const next = current === 'open' ? 'in_progress' : current === 'in_progress' ? 'done' : 'open';
+  await fetch('/api/delegations/' + delId + '/tasks/' + taskId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: next })
+  });
+  loadDelegations();
+}
+
+async function cancelDelegation(id) {
+  if (!confirm('Delegation stornieren?')) return;
+  await fetch('/api/delegations/' + id, { method: 'DELETE' });
+  loadDelegations();
+}
+
+loadDelegations();
+setInterval(loadDelegations, 30000);
+</script>
+</body>
+</html>`;
+}
+
 // --- Roadmap HTML ---
 
 function getRoadmapHTML() {
@@ -4167,6 +4390,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -4515,6 +4739,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -5323,6 +5548,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
   <a href="/workflows">Workflows</a>
@@ -6253,6 +6479,35 @@ function startMonitor(port) {
     } else if (req.url.startsWith("/api/tools/") && req.method === "DELETE") {
       const filename = decodeURIComponent(req.url.replace("/api/tools/", ""));
       handleToolDelete(req, res, filename);
+
+    // --- Delegations ---
+    } else if (req.url === "/delegations") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getDelegationsHTML());
+    } else if (req.url === "/api/delegations" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify(db.delegations.getAll()));
+    } else if (req.url.match(/^\/api\/delegations\/\d+\/tasks\/\d+$/) && req.method === "PUT") {
+      const parts = req.url.match(/\/api\/delegations\/(\d+)\/tasks\/(\d+)/);
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          db.delegations.updateTaskStatus(parseInt(parts[2]), body.status);
+          if (body.status === "done") db.delegations.checkAutoComplete(parseInt(parts[1]));
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    } else if (req.url.match(/^\/api\/delegations\/\d+$/) && req.method === "DELETE") {
+      const id = parseInt(req.url.replace("/api/delegations/", ""));
+      db.delegations.remove(id);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true }));
 
     // --- Roadmap ---
     } else if (req.url === "/roadmap") {

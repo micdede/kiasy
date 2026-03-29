@@ -61,9 +61,9 @@ bot.getMe().then((me) => {
   }
 });
 
-// Reminder- & Workflow-Scheduler: prüft jede Minute auf fällige Erinnerungen und Workflow-Schritte
-setInterval(() => { checkReminders(); checkWorkflows(); }, 60000);
-console.log("Reminder- & Workflow-Scheduler gestartet (60s Intervall)");
+// Reminder- & Workflow- & Delegation-Scheduler: prüft jede Minute
+setInterval(() => { checkReminders(); checkWorkflows(); checkDelegationFollowups(); }, 60000);
+console.log("Reminder- & Workflow- & Delegation-Scheduler gestartet (60s Intervall)");
 
 // Mail-Watcher starten (nur wenn Kerio konfiguriert)
 if (process.env.KERIO_HOST && process.env.KERIO_USER && process.env.KERIO_PASSWORD) {
@@ -369,6 +369,48 @@ async function checkReminders() {
 
 const processingSteps = new Set();
 const db = require("./lib/db");
+
+async function checkDelegationFollowups() {
+  try {
+    const due = db.delegations.getDueFollowups();
+    if (due.length === 0) return;
+
+    const chatId = lastKnownChatId || (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).find(Boolean);
+    if (!chatId) return;
+
+    for (const d of due) {
+      const openTasks = d.tasks.filter(t => t.status !== "done");
+      if (openTasks.length === 0) {
+        db.delegations.updateStatus(d.id, "done");
+        continue;
+      }
+
+      // Follow-up per Agent (sendet Mail und berichtet zurück)
+      try {
+        const prompt = `Es ist Zeit für ein Follow-up bei Delegation #${d.id}. ` +
+          `Sende eine Nachfass-Mail an ${d.assignee} (${d.assignee_email}) mit dem Tool delegate_followup. ` +
+          `Delegation-ID: ${d.id}. Danach fasse mir kurz den Status zusammen.`;
+
+        const result = await agent.processMessage(prompt, chatId);
+        if (result && result.text) {
+          await bot.sendMessage(chatId, `📋 *Delegation Follow-up*\n\n${result.text}`, { parse_mode: "Markdown" }).catch(() => {
+            bot.sendMessage(chatId, `📋 Delegation Follow-up\n\n${result.text}`);
+          });
+        }
+      } catch (e) {
+        // Fallback: Nur Benachrichtigung
+        const taskList = openTasks.map(t => `  ⬜ ${t.task}`).join("\n");
+        await bot.sendMessage(chatId,
+          `📋 *Follow-up fällig: ${d.assignee}*\n${d.subject}\n\nOffene Aufgaben:\n${taskList}`,
+          { parse_mode: "Markdown" }
+        ).catch(() => {});
+        db.delegations.updateFollowup(d.id);
+      }
+    }
+  } catch (e) {
+    console.error("Delegation-Followup Fehler:", e.message);
+  }
+}
 
 async function checkWorkflows() {
   try {

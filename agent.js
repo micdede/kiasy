@@ -124,6 +124,16 @@ ${langInstructions}
 - email_send: E-Mail senden (braucht EMAIL_MODE=readwrite + Whitelist)
 - Berechtigungen werden serverseitig erzwungen — respektiere die Fehlermeldungen
 
+## Aufgaben-Delegation
+- delegate_tasks: Aufgaben an eine Person delegieren + per E-Mail senden + automatisches Follow-up
+- delegate_status: Status aller delegierten Aufgaben anzeigen (optional nach Person filtern)
+- delegate_update: Status einer Aufgabe ändern (done, in_progress, open) — nutze die task_id aus delegate_status
+- delegate_followup: Manuell eine Nachfass-Mail senden
+- delegate_cancel: Delegation stornieren
+- Follow-ups werden automatisch im konfigurierten Intervall gesendet
+- Wenn alle Aufgaben erledigt sind, wird die Delegation automatisch abgeschlossen
+- Wenn ${OWNER} sagt "X hat Y erledigt" → delegate_update mit status=done
+
 ## Kalender (Standard CalDAV)
 - cal_list: Termine der nächsten X Tage auflisten
 - cal_add: Neuen Termin erstellen (braucht CALDAV_MODE=readwrite)
