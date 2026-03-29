@@ -1320,6 +1320,23 @@ ${getThemeCSS()}
   .save-btn:hover { background: var(--btn-primary-hover); }
   .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+  .model-row {
+    display: flex; align-items: center; gap: 10px; padding: 6px 0;
+    border-bottom: 1px solid var(--bg-tertiary);
+  }
+  .model-row:last-child { border-bottom: none; }
+  .model-name { flex: 1; font-size: 13px; color: var(--text-primary); }
+  .model-info { font-size: 11px; color: var(--text-dim); }
+  .model-active { font-size: 10px; color: var(--color-success); background: rgba(63,185,80,0.1); padding: 2px 8px; border-radius: 10px; }
+  .model-btn {
+    font-size: 11px; padding: 3px 10px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--border-color); background: var(--bg-tertiary);
+    color: var(--text-muted); font-family: inherit;
+  }
+  .model-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .model-btn.active-btn { border-color: var(--color-success); color: var(--color-success); }
+  .model-btn.del-btn:hover { border-color: var(--color-error); color: var(--color-error); }
+
   .avatar-section {
     display: flex; align-items: center; gap: 16px; padding: 12px 0;
   }
@@ -1406,6 +1423,21 @@ ${getThemeCSS()}
     </div>
   </div>
   <div id="settingsInner"></div>
+
+  <div class="settings-group" id="ollamaModels" style="display:none">
+    <h2>Ollama Modelle</h2>
+    <div class="fields">
+      <div id="modelList" style="padding:4px 0"></div>
+      <div class="field-row" style="border:none;padding-top:8px">
+        <label class="field-label">Modell hinzufügen</label>
+        <div class="field-input-wrap" style="display:flex;gap:6px">
+          <input type="text" id="newModelName" placeholder="z.B. minimax-m2.7:cloud oder llama3.1:8b">
+          <button onclick="pullModel()" style="background:var(--btn-primary-bg);color:#fff;border:1px solid var(--btn-primary-hover);padding:6px 16px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;white-space:nowrap">Laden</button>
+        </div>
+      </div>
+      <div id="pullStatus" style="font-size:12px;color:var(--text-muted);padding:4px 0"></div>
+    </div>
+  </div>
 </div>
 
 <div class="save-bar">
@@ -1449,7 +1481,7 @@ const SETTINGS_GROUPS = [
         ]
       },
       { key: "OLLAMA_BASE_URL", label: "Ollama URL", type: "text", provider: "ollama" },
-      { key: "OLLAMA_MODEL", label: "Ollama Modell", type: "text", provider: "ollama" },
+      { key: "OLLAMA_MODEL", label: "Aktives Modell", type: "text", provider: "ollama", hidden: true },
       { key: "ANTHROPIC_API_KEY", label: "Anthropic API Key", type: "password", provider: "anthropic" },
       { key: "CLAUDE_MODEL", label: "Claude Modell", type: "text", provider: "anthropic" },
       { key: "GROQ_API_KEY", label: "Groq API Key", type: "password", provider: "groq" },
@@ -1779,6 +1811,112 @@ async function deleteAvatar() {
 }
 
 loadAvatar();
+
+// ==================== Ollama Model Manager ====================
+let ollamaModels = [];
+
+async function loadOllamaModels() {
+  const panel = document.getElementById('ollamaModels');
+  const providerSel = document.querySelector('[data-key="LLM_PROVIDER"]');
+  const urlInput = document.querySelector('[data-key="OLLAMA_BASE_URL"]');
+
+  // Nur anzeigen wenn Provider = ollama
+  const isOllama = (providerSel && providerSel.value === 'ollama') ||
+    (currentSettings.LLM_PROVIDER === 'ollama');
+  if (!isOllama) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  const baseUrl = (urlInput ? urlInput.value : currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\/v1\/?$/, '');
+  try {
+    const res = await fetch('/api/ollama/models?base=' + encodeURIComponent(baseUrl));
+    if (!res.ok) throw new Error('Nicht erreichbar');
+    const data = await res.json();
+    ollamaModels = data.models || [];
+    renderModels();
+  } catch (e) {
+    document.getElementById('modelList').innerHTML =
+      '<div style="color:var(--color-error);padding:8px 0;font-size:12px">Ollama nicht erreichbar (' + baseUrl + ')</div>';
+  }
+}
+
+function renderModels() {
+  const list = document.getElementById('modelList');
+  const activeModel = currentSettings.OLLAMA_MODEL || '';
+
+  if (ollamaModels.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim);padding:8px 0;font-size:12px">Keine Modelle geladen</div>';
+    return;
+  }
+
+  list.innerHTML = ollamaModels.map(m => {
+    const isActive = m.name === activeModel;
+    const size = m.size > 1e9 ? (m.size / 1e9).toFixed(1) + ' GB' :
+                 m.size > 1e6 ? (m.size / 1e6).toFixed(0) + ' MB' :
+                 m.size > 0 ? (m.size / 1e3).toFixed(0) + ' KB' : 'Cloud';
+    return '<div class="model-row">' +
+      '<span class="model-name">' + escapeHtml(m.name) + '</span>' +
+      '<span class="model-info">' + size + '</span>' +
+      (isActive ? '<span class="model-active">aktiv</span>' : '<button class="model-btn active-btn" onclick="selectModel(\\'' + escapeHtml(m.name) + '\\')">Aktivieren</button>') +
+      '<button class="model-btn del-btn" onclick="deleteModel(\\'' + escapeHtml(m.name) + '\\')" title="Modell löschen">\\u2715</button>' +
+      '</div>';
+  }).join('');
+}
+
+function selectModel(name) {
+  const input = document.querySelector('[data-key="OLLAMA_MODEL"]');
+  if (input) input.value = name;
+  currentSettings.OLLAMA_MODEL = name;
+  renderModels();
+  document.getElementById('saveStatus').textContent = 'Modell gewählt — bitte speichern';
+  document.getElementById('saveStatus').style.color = 'var(--color-warning)';
+}
+
+async function deleteModel(name) {
+  if (!confirm('Modell "' + name + '" wirklich löschen?')) return;
+  const baseUrl = (currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\\/v1\\/?$/, '');
+  try {
+    const res = await fetch('/api/ollama/models?base=' + encodeURIComponent(baseUrl) + '&name=' + encodeURIComponent(name), { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) loadOllamaModels();
+    else alert(data.error || 'Fehler');
+  } catch (e) { alert('Fehler: ' + e.message); }
+}
+
+async function pullModel() {
+  const name = document.getElementById('newModelName').value.trim();
+  if (!name) return;
+  const status = document.getElementById('pullStatus');
+  const baseUrl = (currentSettings.OLLAMA_BASE_URL || 'http://localhost:11434/v1').replace(/\\/v1\\/?$/, '');
+  status.textContent = 'Lade ' + name + '... (kann etwas dauern)';
+  status.style.color = 'var(--color-warning)';
+  try {
+    const res = await fetch('/api/ollama/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base: baseUrl, name })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = name + ' erfolgreich geladen!';
+      status.style.color = 'var(--color-success)';
+      document.getElementById('newModelName').value = '';
+      loadOllamaModels();
+    } else {
+      status.textContent = data.error || 'Fehler';
+      status.style.color = 'var(--color-error)';
+    }
+  } catch (e) {
+    status.textContent = 'Fehler: ' + e.message;
+    status.style.color = 'var(--color-error)';
+  }
+}
+
+// Provider-Wechsel beobachten
+setTimeout(() => {
+  const sel = document.querySelector('[data-key="LLM_PROVIDER"]');
+  if (sel) sel.addEventListener('change', () => setTimeout(loadOllamaModels, 100));
+  loadOllamaModels();
+}, 500);
 </script>
 </body>
 </html>`;
@@ -6479,6 +6617,46 @@ function startMonitor(port) {
     } else if (req.url.startsWith("/api/tools/") && req.method === "DELETE") {
       const filename = decodeURIComponent(req.url.replace("/api/tools/", ""));
       handleToolDelete(req, res, filename);
+
+    // --- Ollama Model Manager ---
+    } else if (req.url.startsWith("/api/ollama/models") && req.method === "GET") {
+      const params = new URL(req.url, "http://localhost").searchParams;
+      const base = params.get("base") || "http://localhost:11434";
+      const axios = require("axios");
+      axios.get(`${base}/api/tags`, { timeout: 5000 }).then(resp => {
+        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify(resp.data));
+      }).catch(e => {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Ollama nicht erreichbar: " + e.message }));
+      });
+    } else if (req.url.startsWith("/api/ollama/models") && req.method === "POST") {
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        const { base, name } = JSON.parse(Buffer.concat(chunks).toString());
+        const baseUrl = base || "http://localhost:11434";
+        const axios = require("axios");
+        axios.post(`${baseUrl}/api/pull`, { name, stream: false }, { timeout: 300000 }).then(() => {
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true }));
+        }).catch(e => {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.response?.data?.error || e.message }));
+        });
+      });
+    } else if (req.url.startsWith("/api/ollama/models") && req.method === "DELETE") {
+      const params = new URL(req.url, "http://localhost").searchParams;
+      const base = params.get("base") || "http://localhost:11434";
+      const name = params.get("name");
+      const axios = require("axios");
+      axios.delete(`${base}/api/delete`, { data: { name }, timeout: 10000 }).then(() => {
+        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ ok: true }));
+      }).catch(e => {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: e.response?.data?.error || e.message }));
+      });
 
     // --- Delegations ---
     } else if (req.url === "/delegations") {
