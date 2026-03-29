@@ -144,18 +144,25 @@ case "$llm_choice" in
     2)
         llm_provider="ollama"
         echo ""
-        echo -e "  ${CYAN}→ Ollama installieren: https://ollama.com/download${NC}"
-        echo -e "  ${CYAN}→ Modelle: https://ollama.com/search${NC}"
-        echo ""
         echo -e "  ${BOLD}Empfohlene Modelle:${NC}"
-        echo -e "    ${GREEN}Cloud (kostenlos, schnell):${NC}"
+        echo -e "    ${GREEN}Cloud (kostenlos, kein API-Key nötig):${NC}"
         echo "      minimax-m2.7:cloud  — sehr gut für Deutsch + Tool-Calling"
         echo "      qwen3:32b           — stark, multilingual"
         echo -e "    ${GREEN}Lokal (braucht GPU/RAM):${NC}"
         echo "      llama3.1:8b         — 8 GB RAM, Basis-Qualität"
         echo "      llama3.1:70b        — 48 GB RAM, sehr gut"
         echo ""
-        echo -e "  ${CYAN}→ Modell laden: ollama pull <modellname>${NC}"
+        install_ollama="n"
+        if command -v ollama &>/dev/null; then
+            ok "Ollama ist bereits installiert: $(ollama --version 2>/dev/null | head -1)"
+        else
+            echo -e "  Ollama ist ${BOLD}nicht installiert${NC} auf diesem System."
+            echo "  Ollama ist kostenlos und wird als eigener Service installiert."
+            echo "  Cloud-Modelle brauchen keinen API-Key und keine GPU."
+            echo ""
+            read -p "  Ollama jetzt installieren? [J/n]: " install_ollama
+            install_ollama="${install_ollama:-j}"
+        fi
         echo ""
         read -p "  Ollama Base-URL [http://localhost:11434/v1]: " ollama_url
         ollama_url="${ollama_url:-http://localhost:11434/v1}"
@@ -474,15 +481,47 @@ else
     ok "Node.js $(node --version) installiert"
 fi
 
+# --- Ollama (wenn gewählt) ---
+echo ""
+echo -e "${BOLD}[3/8]${NC} Ollama..."
+if [[ "$install_ollama" =~ ^[jJyY]$ ]]; then
+    info "Installiere Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh 2>/dev/null
+    # Warten bis der Service läuft
+    sleep 3
+    if command -v ollama &>/dev/null; then
+        ok "Ollama installiert: $(ollama --version 2>/dev/null | head -1)"
+        # Modell herunterladen
+        info "Lade Modell: $ollama_model (kann etwas dauern)..."
+        ollama pull "$ollama_model" 2>&1 | tail -1
+        ok "Modell $ollama_model bereit"
+    else
+        warn "Ollama-Installation fehlgeschlagen — bitte manuell installieren: https://ollama.com/download"
+    fi
+else
+    if [ "$llm_provider" = "ollama" ] && command -v ollama &>/dev/null; then
+        # Ollama war schon installiert, nur Modell laden falls nötig
+        if ! ollama list 2>/dev/null | grep -q "$ollama_model"; then
+            info "Lade Modell: $ollama_model..."
+            ollama pull "$ollama_model" 2>&1 | tail -1
+            ok "Modell $ollama_model bereit"
+        else
+            ok "Ollama + Modell $ollama_model bereits vorhanden"
+        fi
+    else
+        ok "Übersprungen"
+    fi
+fi
+
 # --- NPM Dependencies ---
 echo ""
-echo -e "${BOLD}[3/7]${NC} NPM Packages..."
+echo -e "${BOLD}[4/8]${NC} NPM Packages..."
 npm install --production 2>/dev/null
 ok "NPM Packages installiert"
 
 # --- Python venv (nur wenn Sprache aktiviert) ---
 echo ""
-echo -e "${BOLD}[4/7]${NC} Python venv..."
+echo -e "${BOLD}[5/8]${NC} Python venv..."
 if [[ "$opt_voice" =~ ^[jJyY]$ ]]; then
     if [ ! -d "venv" ]; then
         python3 -m venv venv
@@ -499,7 +538,7 @@ fi
 
 # --- Verzeichnisse + SSL ---
 echo ""
-echo -e "${BOLD}[5/7]${NC} Verzeichnisse + Zertifikate..."
+echo -e "${BOLD}[6/8]${NC} Verzeichnisse + Zertifikate..."
 mkdir -p temp logs notes certs
 
 if [[ "$opt_monitor" =~ ^[jJyY]$ ]] && [ ! -f "certs/cert.pem" ]; then
@@ -513,7 +552,7 @@ fi
 
 # --- .env generieren ---
 echo ""
-echo -e "${BOLD}[6/7]${NC} Konfiguration (.env)..."
+echo -e "${BOLD}[7/8]${NC} Konfiguration (.env)..."
 
 # Hilfsfunktion: auskommentiert wenn leer
 env_line() {
@@ -612,7 +651,7 @@ ok "Datendateien angelegt"
 
 # --- Systemd Service ---
 echo ""
-echo -e "${BOLD}[7/7]${NC} Systemd Service..."
+echo -e "${BOLD}[8/8]${NC} Systemd Service..."
 
 service_name="kiasy"
 SERVICE_FILE="/etc/systemd/system/${service_name}.service"
