@@ -1577,6 +1577,12 @@ const SETTINGS_GROUPS = [
     ]
   },
   {
+    title: "Support",
+    fields: [
+      { key: "SUPPORT_EMAIL", label: "Support E-Mail (für Diagnose-Reports)", type: "text" }
+    ]
+  },
+  {
     title: "Wissensbasis",
     fields: [
       { key: "GITHUB_NOTES_REPO", label: "GitHub Repo URL", type: "text" }
@@ -4930,6 +4936,16 @@ ${getThemeCSS()}
     </div>
 
     <div class="action-group">
+      <h2>Support</h2>
+      <button class="action-btn" onclick="quickAction('diagnose', null)">
+        <span class="icon">&#x1F50D;</span><span class="label">Diagnose-Report</span>
+      </button>
+      <button class="action-btn" onclick="quickAction('support-send', 'Diagnose-Report an Support senden?')">
+        <span class="icon">&#x1F4E7;</span><span class="label">Support kontaktieren</span>
+      </button>
+    </div>
+
+    <div class="action-group">
       <h2>Schnellbefehle</h2>
       <button class="action-btn" onclick="runCmd('df -h /')">
         <span class="icon">&#x1F4BE;</span><span class="label">Speicherplatz</span>
@@ -5513,6 +5529,122 @@ function handleTerminalAction(req, res) {
             }
           });
           break;
+
+        case "diagnose": {
+          const diag = [];
+          diag.push("=== KIASY Diagnose-Report ===");
+          diag.push("Datum: " + new Date().toLocaleString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin" }));
+          diag.push("");
+          // Version
+          try {
+            const ver = execSync('cd "' + __dirname + '" && git rev-parse --short HEAD 2>/dev/null', { encoding: "utf-8" }).trim();
+            const branch = execSync('cd "' + __dirname + '" && git branch --show-current 2>/dev/null', { encoding: "utf-8" }).trim();
+            diag.push("Version: " + ver + " (" + branch + ")");
+          } catch { diag.push("Version: unbekannt"); }
+          // System
+          diag.push("Node.js: " + process.version);
+          diag.push("OS: " + os.type() + " " + os.release() + " " + os.arch());
+          diag.push("Uptime System: " + Math.floor(os.uptime() / 3600) + "h");
+          diag.push("Uptime Prozess: " + Math.floor(process.uptime() / 60) + "m");
+          diag.push("RAM: " + Math.round(os.freemem() / 1024 / 1024) + " MB frei / " + Math.round(os.totalmem() / 1024 / 1024) + " MB");
+          // Config
+          diag.push("");
+          diag.push("Provider: " + (process.env.LLM_PROVIDER || "anthropic"));
+          diag.push("Modell: " + (process.env.OLLAMA_MODEL || process.env.CLAUDE_MODEL || process.env.GROQ_MODEL || process.env.OPENAI_MODEL || "-"));
+          if (process.env.OLLAMA_BASE_URL) diag.push("Ollama URL: " + process.env.OLLAMA_BASE_URL);
+          diag.push("Bot: " + (process.env.BOT_NAME || "KIASY"));
+          diag.push("TZ: " + (process.env.TZ || "Europe/Berlin"));
+          // Tools
+          try {
+            const toolFiles = require("fs").readdirSync(path.join(__dirname, "tools")).filter(f => f.endsWith(".js"));
+            const enabled = toolFiles.filter(f => { try { return db.toolSettings.isEnabled(f); } catch { return true; } });
+            diag.push("Tools: " + enabled.length + "/" + toolFiles.length + " aktiv");
+          } catch {}
+          // DB Stats
+          try {
+            const stats = db.messages.getStats();
+            diag.push("DB: " + stats.total + " Nachrichten, " + stats.chats + " Chats");
+            diag.push("Erinnerungen: " + db.reminders.getActive().length + " aktiv");
+            diag.push("Delegationen: " + db.delegations.count() + " offen");
+          } catch {}
+          // Logs
+          diag.push("");
+          diag.push("=== Letzte 20 Log-Zeilen ===");
+          try {
+            const logs = execSync("journalctl -u kiasy --no-pager -n 20 2>/dev/null || echo 'Journal nicht verfügbar'", { encoding: "utf-8", timeout: 5000 });
+            diag.push(logs.trim());
+          } catch { diag.push("(Logs nicht verfügbar)"); }
+
+          const report = diag.join("\n");
+          respond({ message: "Diagnose-Report erstellt", output: report });
+          break;
+        }
+
+        case "support-send": {
+          const supportEmail = process.env.SUPPORT_EMAIL;
+          if (!supportEmail) {
+            respond({ error: "SUPPORT_EMAIL nicht konfiguriert. Bitte in Einstellungen setzen." });
+            break;
+          }
+          // Diagnose-Report generieren (gleicher Code wie oben)
+          const lines = [];
+          lines.push("KIASY Diagnose-Report");
+          lines.push("Datum: " + new Date().toLocaleString("de-DE", { timeZone: process.env.TZ || "Europe/Berlin" }));
+          lines.push("Bot: " + (process.env.BOT_NAME || "KIASY"));
+          lines.push("Besitzer: " + (process.env.OWNER_NAME || "-"));
+          lines.push("");
+          try {
+            const ver = execSync('cd "' + __dirname + '" && git rev-parse --short HEAD 2>/dev/null', { encoding: "utf-8" }).trim();
+            lines.push("Version: " + ver);
+          } catch {}
+          lines.push("Node.js: " + process.version);
+          lines.push("OS: " + os.type() + " " + os.release());
+          lines.push("Provider: " + (process.env.LLM_PROVIDER || "anthropic"));
+          lines.push("Modell: " + (process.env.OLLAMA_MODEL || process.env.CLAUDE_MODEL || process.env.GROQ_MODEL || process.env.OPENAI_MODEL || "-"));
+          try {
+            const toolFiles = require("fs").readdirSync(path.join(__dirname, "tools")).filter(f => f.endsWith(".js"));
+            const enabled = toolFiles.filter(f => { try { return db.toolSettings.isEnabled(f); } catch { return true; } });
+            lines.push("Tools: " + enabled.length + "/" + toolFiles.length);
+          } catch {}
+          lines.push("");
+          lines.push("=== Letzte 30 Log-Zeilen ===");
+          try {
+            lines.push(execSync("journalctl -u kiasy --no-pager -n 30 2>/dev/null || echo '-'", { encoding: "utf-8", timeout: 5000 }).trim());
+          } catch {}
+
+          // Mail senden
+          const nodemailer = require("nodemailer");
+          let transporter;
+          const mailSubject = "KIASY Support: " + (process.env.BOT_NAME || "KIASY") + " (" + (process.env.OWNER_NAME || "Nutzer") + ")";
+          const mailBody = lines.join("\n");
+
+          if (process.env.EMAIL_HOST && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+            const smtpHost = process.env.EMAIL_SMTP_HOST || process.env.EMAIL_HOST.replace(/^imap\./, "smtp.");
+            transporter = nodemailer.createTransport({
+              host: smtpHost, port: parseInt(process.env.EMAIL_SMTP_PORT) || 587,
+              secure: (process.env.EMAIL_SMTP_PORT || "587") === "465",
+              auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
+              tls: { rejectUnauthorized: false },
+            });
+          } else if (process.env.KERIO_HOST && process.env.KERIO_USER && process.env.KERIO_PASSWORD) {
+            transporter = nodemailer.createTransport({
+              host: process.env.KERIO_HOST, port: 587, secure: false,
+              auth: { user: process.env.KERIO_USER, pass: process.env.KERIO_PASSWORD },
+              tls: { rejectUnauthorized: false },
+            });
+          } else {
+            respond({ error: "Kein E-Mail-Provider konfiguriert." });
+            break;
+          }
+          transporter.sendMail({
+            from: process.env.EMAIL_FROM || process.env.EMAIL_USER || process.env.KERIO_FROM || process.env.KERIO_USER,
+            to: supportEmail, subject: mailSubject, text: mailBody,
+          }, (err) => {
+            if (err) respond({ error: "Mail-Fehler: " + err.message });
+            else respond({ message: "Support-Mail gesendet an " + supportEmail });
+          });
+          break;
+        }
 
         case "agent-reset":
           try {

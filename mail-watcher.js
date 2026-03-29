@@ -110,11 +110,22 @@ async function processEmail(agent, envelope, source, folder = "INBOX") {
   const body = extractText(source);
 
   const folderInfo = folder !== "INBOX" ? ` [${folder}]` : "";
-  console.log(`  Mail-Watcher${folderInfo}: Verarbeite Mail von ${fromAddr}: "${subject}"`);
+
+  // Support-Mails: Absender = SUPPORT_EMAIL → als Admin-Befehl verarbeiten
+  const supportEmail = (process.env.SUPPORT_EMAIL || "").trim().toLowerCase();
+  const isSupportMail = supportEmail && fromAddr.toLowerCase() === supportEmail;
+
+  if (isSupportMail) {
+    console.log(`  Mail-Watcher: Support-Mail von ${fromAddr}: "${subject}"`);
+  } else {
+    console.log(`  Mail-Watcher${folderInfo}: Verarbeite Mail von ${fromAddr}: "${subject}"`);
+  }
 
   // Agent aufrufen mit eigenem Konversationskontext pro Absender
-  const chatId = `mail-${fromAddr}`;
-  const prompt = `Betreff: ${subject}\n\n${body}`;
+  const chatId = isSupportMail ? "support-remote" : `mail-${fromAddr}`;
+  const prompt = isSupportMail
+    ? `[SUPPORT-REMOTE] Der Support-Admin sendet folgenden Befehl per Mail. Führe ihn aus und antworte mit dem Ergebnis.\n\nBetreff: ${subject}\n\n${body}`
+    : `Betreff: ${subject}\n\n${body}`;
 
   try {
     const { text } = await agent.handleMessage(chatId, prompt);
