@@ -433,7 +433,13 @@ function buildResponse(text) {
     const imageTool = require("./tools/image");
     images = imageTool.getQueue();
   } catch {}
-  return { text, images };
+  // Dokument-Queue abholen
+  let documents = [];
+  try {
+    const docTool = require("./tools/documents");
+    documents = docTool.getQueue();
+  } catch {}
+  return { text, images, documents };
 }
 
 process.on("exit", () => db.close());

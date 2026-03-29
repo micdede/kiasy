@@ -208,7 +208,7 @@ bot.on("message", async (msg) => {
 
   // Agent verarbeiten lassen
   try {
-    const { text, images } = await agent.handleMessage(chatId, body);
+    const { text, images, documents } = await agent.handleMessage(chatId, body);
 
     clearInterval(typingInterval);
 
@@ -262,6 +262,21 @@ bot.on("message", async (msg) => {
           chatId,
           `Bild konnte nicht gesendet werden: ${path.basename(img.path)}`
         );
+      }
+    }
+
+    // Dokumente senden
+    if (documents && documents.length) {
+      for (const doc of documents) {
+        try {
+          await bot.sendDocument(chatId, doc.path, {
+            caption: doc.caption || "",
+          });
+          console.log(`  Dokument gesendet: ${doc.path}`);
+        } catch (docErr) {
+          console.error(`  Dokument-Fehler (${doc.path}):`, docErr.message);
+          await bot.sendMessage(chatId, `Dokument konnte nicht gesendet werden: ${path.basename(doc.path)}`);
+        }
       }
     }
   } catch (error) {
