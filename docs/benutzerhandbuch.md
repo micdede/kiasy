@@ -468,7 +468,7 @@ Einstellungen konnen auf zwei Wegen geandert werden:
 - Personalisierung — Bot-Name, dein Name, Stadt, Sprache, Zeitzone
 - Erscheinungsbild — Theme wahlen
 - Monitor — Benutzername und Passwort
-- KI-Modell — Provider, Modell, API-Keys
+- KI-Modell — Provider, API-Keys, Ollama Modell-Manager
 - Sprache — TTS-Stimme, Whisper-Modell
 - E-Mail — IMAP/SMTP Zugangsdaten und Berechtigungen
 - Kalender — CalDAV Zugangsdaten und Berechtigungen
@@ -524,6 +524,37 @@ Du kannst dem Bot auch mehrere Dinge auf einmal sagen:
 
     "Wie wird das Wetter morgen? Und erinnere mich um 8
      an den Regenschirm falls es regnet."
+
+### Ollama Modell-Manager
+
+Wenn du Ollama als Provider nutzt, findest du in den
+Einstellungen den Bereich "Ollama Modelle":
+
+Modell waehlen:
+  Alle geladenen Modelle werden aufgelistet. Das aktive
+  Modell ist grun markiert. Klicke "Aktivieren" um ein
+  anderes Modell zu nutzen.
+
+Modell hinzufuegen:
+  Gib den Modellnamen ein (z.B. qwen3:32b) und klicke
+  "Laden". Cloud-Modelle werden sofort verfuegbar,
+  lokale Modelle muessen heruntergeladen werden.
+
+  Empfohlene Cloud-Modelle (kostenlos, kein Download):
+    minimax-m2.7:cloud
+    deepseek-v3.2:cloud
+
+  Empfohlene lokale Modelle:
+    llama3.1:8b    (ca. 4.7 GB Download)
+    qwen2.5:7b     (ca. 4.7 GB Download)
+
+Modell loeschen:
+  Klicke das X neben einem Modell um es zu entfernen
+  und Speicherplatz freizugeben.
+
+TIPP: Der Modell-Manager funktioniert auch mit Ollama
+auf einem anderen Rechner — die URL wird unter
+"KI-Modell → Ollama URL" konfiguriert.
 
 ### Updates
 

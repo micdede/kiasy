@@ -153,19 +153,32 @@ Wahle mit 1 oder 2. Standard: Deutsch.
 ### Option 2: Ollama (empfohlen fur den Einstieg)
 
 Ollama ist kostenlos und bietet sowohl lokale als auch
-Cloud-Modelle.
+Cloud-Modelle. Kein API-Key noetig!
 
-1. Installiere Ollama: https://ollama.com/download
+Das Install-Script fragt dich:
 
-       curl -fsSL https://ollama.com/install.sh | sh
+    Ollama ist nicht installiert auf diesem System.
+    Ollama jetzt installieren? [J/n]:
 
-2. Lade ein Modell:
+Bei "j" wird Ollama automatisch installiert und das
+gewaehlte Modell heruntergeladen. Du musst nichts
+manuell machen.
 
-       ollama pull minimax-m2.7:cloud
+Falls Ollama bereits installiert ist (z.B. auf einem
+anderen Rechner), gibst du einfach die URL ein:
 
-3. Im Installer:
-   - Base-URL: http://localhost:11434/v1 (Enter)
-   - Modell: minimax-m2.7:cloud (Enter)
+    Ollama Base-URL [http://localhost:11434/v1]:
+
+Fuer einen anderen Rechner z.B.:
+
+    http://192.168.1.100:11434/v1
+
+Modell waehlen:
+
+    Modell [minimax-m2.7:cloud]:
+
+Weitere Modelle koennen spaeter in den Einstellungen
+unter "Ollama Modelle" hinzugefuegt oder geloescht werden.
 
 Empfohlene Modelle:
 

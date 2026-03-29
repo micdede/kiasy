@@ -39,7 +39,7 @@ Dein persönlicher KI-Assistent, selbst gehostet auf deinem eigenen Server. Komm
 
 | Provider | Kosten | Qualität | Beschreibung |
 |----------|--------|----------|-------------|
-| **Ollama** | Kostenlos | Sehr gut | Lokal oder Cloud-Modelle. Empfehlung: `minimax-m2.7:cloud` |
+| **Ollama** | Kostenlos | Sehr gut | Lokal oder Cloud-Modelle. Kann bei der Installation mit installiert werden. Empfehlung: `minimax-m2.7:cloud` |
 | **Groq** | Kostenlos | Gut | Cloud, schnell, Rate-Limits |
 | **Anthropic** | Bezahlt | Exzellent | Claude — beste Tool-Nutzung |
 | **OpenAI** | Bezahlt | Sehr gut | GPT-4o |
@@ -191,7 +191,7 @@ Unter **Einstellungen** (`/settings`) kannst du alles konfigurieren:
 - **Personalisierung** — Bot-Name, dein Name, Stadt, Sprache, Zeitzone
 - **Erscheinungsbild** — Theme wählen oder im Editor anpassen
 - **Monitor** — Benutzername und Passwort für das Dashboard
-- **KI-Modell** — Provider, Modell, API-Keys
+- **KI-Modell** — Provider, API-Keys, Ollama Modell-Manager (laden, wählen, löschen)
 - **Sprache** — TTS-Stimme, Whisper-Modell
 - **Telegram** — Bot-Token, Whitelist
 - **E-Mail (IMAP/SMTP)** — Host, Zugangsdaten, Berechtigungen, Whitelist
