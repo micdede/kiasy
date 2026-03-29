@@ -733,22 +733,22 @@ function barColor(pct) {
 
 function updateSystemPanel(d) {
   document.getElementById("sys-cpu-load").textContent = d.cpu.loadAvg.join("  /  ");
-  document.getElementById("sys-cpu-detail").textContent = d.cpu.cores + " Cores \\u2014 " + d.cpu.model;
+  document.getElementById("sys-cpu-detail").textContent = d.cpu.cores + " Cores — " + d.cpu.model;
 
   document.getElementById("sys-mem-value").textContent = d.memory.used + " / " + d.memory.total;
   const memBar = document.getElementById("sys-mem-bar");
   memBar.style.width = d.memory.percent + "%";
   memBar.className = "sys-bar-fill " + barColor(d.memory.percent);
-  document.getElementById("sys-mem-detail").textContent = d.memory.percent + "% belegt \\u2014 " + d.memory.free + " frei";
+  document.getElementById("sys-mem-detail").textContent = d.memory.percent + "% belegt — " + d.memory.free + " frei";
 
   document.getElementById("sys-disk-value").textContent = d.disk.used + " / " + d.disk.total;
   const diskBar = document.getElementById("sys-disk-bar");
   diskBar.style.width = d.disk.percent + "%";
   diskBar.className = "sys-bar-fill " + barColor(d.disk.percent);
-  document.getElementById("sys-disk-detail").textContent = d.disk.percent + "% belegt \\u2014 " + d.disk.free + " frei";
+  document.getElementById("sys-disk-detail").textContent = d.disk.percent + "% belegt — " + d.disk.free + " frei";
 
-  document.getElementById("sys-uptime-value").textContent = "System: " + d.uptime.system + " \\u2014 Prozess: " + d.uptime.process;
-  document.getElementById("sys-node-detail").textContent = "Heap: " + d.node.heapUsed + " / " + d.node.heapTotal + " \\u2014 RSS: " + d.node.rss;
+  document.getElementById("sys-uptime-value").textContent = "System: " + d.uptime.system + " — Prozess: " + d.uptime.process;
+  document.getElementById("sys-node-detail").textContent = "Heap: " + d.node.heapUsed + " / " + d.node.heapTotal + " — RSS: " + d.node.rss;
 
   // Sensors
   const grid = document.getElementById("sensors-grid");
@@ -758,10 +758,10 @@ function updateSystemPanel(d) {
     d.sensors.temps.forEach(t => {
       const pct = t.crit ? Math.round((t.value / t.crit) * 100) : 0;
       const color = t.value >= 80 ? "red" : t.value >= 60 ? "yellow" : "green";
-      const detail = (t.max ? "Max: " + t.max + "\\u00b0C" : "") + (t.crit ? " / Krit: " + t.crit + "\\u00b0C" : "");
+      const detail = (t.max ? "Max: " + t.max + "°C" : "") + (t.crit ? " / Krit: " + t.crit + "°C" : "");
       html += '<div class="sys-card">' +
         '<h3>' + escapeHtml(t.label) + '</h3>' +
-        '<div class="sys-value">' + t.value + '\\u00b0C</div>' +
+        '<div class="sys-value">' + t.value + '°C</div>' +
         (t.crit ? '<div class="sys-bar"><div class="sys-bar-fill ' + color + '" style="width:' + pct + '%"></div></div>' : '') +
         '<div class="sys-detail">' + escapeHtml(detail) + '</div>' +
         '</div>';
@@ -810,7 +810,7 @@ setInterval(fetchSystem, 5000);
     data.categories.forEach(cat => {
       const icon = icons[cat.id] || "\\ud83d\\udcc2";
       const btnClass = cat.cleanable ? "cleanup-btn" : "cleanup-btn disabled";
-      const btnText = cat.cleanable ? "Aufr\\u00e4umen" : "sudo";
+      const btnText = cat.cleanable ? "Aufräumen" : "sudo";
       const hint = cat.hint ? ' title="' + escapeHtml(cat.hint) + '"' : "";
       html += '<div class="cleanup-row">' +
         '<span class="cleanup-icon">' + icon + '</span>' +
@@ -827,7 +827,7 @@ setInterval(fetchSystem, 5000);
       btn.addEventListener("click", async () => {
         const id = btn.dataset.id;
         const cat = data.categories.find(c => c.id === id);
-        if (!confirm(cat.label + " (" + cat.size + ") aufr\\u00e4umen?")) return;
+        if (!confirm(cat.label + " (" + cat.size + ") aufräumen?")) return;
         btn.disabled = true;
         btn.textContent = "...";
         try {
@@ -3636,10 +3636,10 @@ ${getThemeCSS()}
       <span id="fileName">-</span>
       <span class="line-count" id="lineCount">0 Zeilen</span>
     </div>
-    <textarea id="editor" spellcheck="false" placeholder="Tool ausw\\u00e4hlen oder neues Tool erstellen..."></textarea>
+    <textarea id="editor" spellcheck="false" placeholder="Tool auswählen oder neues Tool erstellen..."></textarea>
   </div>
   <div class="info-pane" id="infoPane">
-    <div class="welcome-msg" id="welcomeMsg">Tool ausw\\u00e4hlen um Details zu sehen</div>
+    <div class="welcome-msg" id="welcomeMsg">Tool auswählen um Details zu sehen</div>
     <div id="infoContent" style="display:none">
       <div class="info-section">
         <h3>Tool-Definitionen</h3>
@@ -3647,13 +3647,13 @@ ${getThemeCSS()}
       </div>
       <div class="info-section">
         <h3>Datei-Info</h3>
-        <div class="info-row"><span class="label">Gr\\u00f6\\u00dfe</span><span id="infoSize">-</span></div>
-        <div class="info-row"><span class="label">Ge\\u00e4ndert</span><span id="infoModified">-</span></div>
+        <div class="info-row"><span class="label">Größe</span><span id="infoSize">-</span></div>
+        <div class="info-row"><span class="label">Geändert</span><span id="infoModified">-</span></div>
       </div>
       <div class="info-section">
         <h3>Aktionen</h3>
         <button class="btn-toggle" id="toggleBtn">-</button>
-        <button class="btn-delete-tool" id="deleteBtn">Tool l\\u00f6schen</button>
+        <button class="btn-delete-tool" id="deleteBtn">Tool löschen</button>
       </div>
     </div>
   </div>
@@ -3738,7 +3738,7 @@ function renderToolList() {
 }
 
 async function selectTool(filename) {
-  if (dirty && !confirm('Ungespeicherte \\u00c4nderungen verwerfen?')) return;
+  if (dirty && !confirm('Ungespeicherte Änderungen verwerfen?')) return;
   try {
     const res = await fetch('/api/tools/' + encodeURIComponent(filename));
     const data = await res.json();
@@ -3814,7 +3814,7 @@ async function saveTool() {
 }
 
 async function createTool() {
-  const filename = prompt('Dateiname f\\u00fcr neues Tool (z.B. mein_tool.js):');
+  const filename = prompt('Dateiname für neues Tool (z.B. mein_tool.js):');
   if (!filename) return;
   try {
     const res = await fetch('/api/tools', {
@@ -3853,12 +3853,12 @@ async function toggleTool() {
 
 async function deleteTool() {
   if (!currentFile) return;
-  if (!confirm('Tool "' + currentFile + '" wirklich l\\u00f6schen?')) return;
+  if (!confirm('Tool "' + currentFile + '" wirklich löschen?')) return;
   try {
     const res = await fetch('/api/tools/' + encodeURIComponent(currentFile), { method: 'DELETE' });
     const data = await res.json();
     if (data.ok) {
-      showStatus('Gel\\u00f6scht', 'var(--color-success)');
+      showStatus('Gelöscht', 'var(--color-success)');
       currentFile = null;
       currentToolData = null;
       editorEl.value = '';
