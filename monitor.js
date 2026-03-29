@@ -6681,7 +6681,7 @@ function startMonitor(port) {
       res.end(JSON.stringify({
         events,
         uptime: formatUptime(),
-        model: process.env.CLAUDE_MODEL || process.env.OLLAMA_MODEL || "unbekannt",
+        model: ((p) => { switch(p) { case "ollama": return process.env.OLLAMA_MODEL; case "groq": return process.env.GROQ_MODEL; case "openai": return process.env.OPENAI_MODEL; default: return process.env.CLAUDE_MODEL; } })((process.env.LLM_PROVIDER || "").toLowerCase()) || "unbekannt",
         clients: clients.size,
       }));
     } else if (req.url === "/api/system") {
