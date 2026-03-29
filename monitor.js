@@ -3621,9 +3621,27 @@ ${getThemeCSS()}
 
 <div class="toolbar">
   <button class="btn btn-primary" id="newBtn">Neues Tool</button>
+  <button class="btn" id="aiBtn" style="background:var(--accent-bg);border-color:var(--accent);color:var(--accent)">Mit KI erstellen</button>
   <span class="spacer"></span>
   <span class="save-status" id="saveStatus"></span>
   <button class="btn btn-primary" id="saveBtn" disabled>Speichern (Ctrl+S)</button>
+</div>
+
+<!-- KI Tool Generator Dialog -->
+<div id="aiDialog" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center">
+  <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;padding:20px;width:90%;max-width:500px">
+    <h2 style="margin:0 0 12px;font-size:16px;color:var(--text-bright)">Tool mit KI erstellen</h2>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px">Beschreibe was das Tool können soll. Die KI generiert den kompletten Code.</p>
+    <textarea id="aiPrompt" rows="5" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-primary);padding:10px;border-radius:6px;font-family:inherit;font-size:13px;resize:vertical" placeholder="z.B.: Ein Tool das den aktuellen Bitcoin-Kurs abruft und in EUR und USD anzeigt"></textarea>
+    <div style="margin-top:8px">
+      <input type="text" id="aiFilename" placeholder="Dateiname (z.B. bitcoin.js)" style="width:100%;background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-primary);padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px">
+    </div>
+    <div id="aiStatus" style="font-size:12px;color:var(--text-muted);margin-top:8px;min-height:18px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn" onclick="closeAiDialog()">Abbrechen</button>
+      <button class="btn btn-primary" id="aiGenerateBtn" onclick="generateWithAI()">Generieren</button>
+    </div>
+  </div>
 </div>
 
 <div class="main">
@@ -3880,8 +3898,67 @@ editorEl.addEventListener('input', () => {
 
 saveBtn.addEventListener('click', saveTool);
 newBtn.addEventListener('click', createTool);
+document.getElementById('aiBtn').addEventListener('click', () => {
+  document.getElementById('aiDialog').style.display = 'flex';
+  document.getElementById('aiPrompt').focus();
+});
 toggleBtn.addEventListener('click', toggleTool);
 deleteBtn.addEventListener('click', deleteTool);
+
+function closeAiDialog() {
+  document.getElementById('aiDialog').style.display = 'none';
+  document.getElementById('aiPrompt').value = '';
+  document.getElementById('aiFilename').value = '';
+  document.getElementById('aiStatus').textContent = '';
+}
+
+async function generateWithAI() {
+  const description = document.getElementById('aiPrompt').value.trim();
+  let filename = document.getElementById('aiFilename').value.trim();
+  if (!description) return;
+  if (!filename) {
+    // Dateiname aus Beschreibung ableiten
+    filename = description.toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 30) + '.js';
+  }
+  if (!filename.endsWith('.js')) filename += '.js';
+
+  const status = document.getElementById('aiStatus');
+  const btn = document.getElementById('aiGenerateBtn');
+  status.textContent = 'KI generiert Tool-Code... (kann etwas dauern)';
+  status.style.color = 'var(--color-warning)';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/tools/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description, filename }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      status.textContent = 'Fehler: ' + data.error;
+      status.style.color = 'var(--color-error)';
+      btn.disabled = false;
+      return;
+    }
+    // Code im Editor anzeigen
+    closeAiDialog();
+    currentFile = data.filename;
+    editorEl.value = data.code;
+    originalContent = '';
+    setDirty(true);
+    updateLineCount();
+    fileNameEl.textContent = data.filename;
+    welcomeMsg.style.display = 'none';
+    infoContent.style.display = 'none';
+    showStatus('KI-Tool generiert — bitte prüfen und speichern', 'var(--color-success)');
+  } catch (e) {
+    status.textContent = 'Fehler: ' + e.message;
+    status.style.color = 'var(--color-error)';
+  }
+  btn.disabled = false;
+}
 
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -5196,6 +5273,108 @@ function handleWorkflowDelete(req, res, id) {
   originalLog("[Monitor] Workflow gelöscht: " + id);
   res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
   res.end(JSON.stringify({ ok: true }));
+}
+
+// --- Tool AI Generator ---
+
+function handleToolGenerate(req, res) {
+  const chunks = [];
+  req.on("data", c => chunks.push(c));
+  req.on("end", () => {
+    try {
+      const { description, filename } = JSON.parse(Buffer.concat(chunks).toString());
+      if (!description) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Beschreibung fehlt" }));
+        return;
+      }
+
+      const prompt = `Du bist ein Node.js-Entwickler. Erstelle ein Tool-Modul für einen KI-Assistenten.
+
+Das Modul muss EXAKT dieses Format haben:
+\`\`\`javascript
+const definitions = [
+  {
+    name: "tool_name",
+    description: "Was das Tool tut",
+    input_schema: {
+      type: "object",
+      properties: {
+        param1: { type: "string", description: "Beschreibung" },
+      },
+      required: ["param1"],
+    },
+  },
+];
+
+async function execute(name, input) {
+  switch (name) {
+    case "tool_name": {
+      // Implementierung
+      return "Ergebnis als String";
+    }
+    default:
+      return "Unbekanntes Tool: " + name;
+  }
+}
+
+module.exports = { definitions, execute };
+\`\`\`
+
+REGELN:
+- Nur \`module.exports = { definitions, execute }\` exportieren
+- definitions ist ein Array mit Tool-Definitionen (name, description, input_schema)
+- execute ist eine async function die (name, input) bekommt
+- Rückgabe immer ein lesbarer String (kein JSON)
+- Verfügbare npm-Pakete: axios, cheerio, fs, path
+- Für HTTP-Requests: axios verwenden
+- Fehler abfangen und als "❌ Fehler: ..." zurückgeben
+- Keine console.log, kein process.exit
+- Tool-Namen in snake_case
+- Kommentare auf Deutsch
+
+Erstelle das Tool für folgende Beschreibung:
+${description}
+
+Antworte NUR mit dem JavaScript-Code, keine Erklärungen davor oder danach.`;
+
+      const { createProvider } = require("./providers");
+      const providerConfig = require("./agent").getProviderConfig ? require("./agent").getProviderConfig() : (() => {
+        const p = (process.env.LLM_PROVIDER || "anthropic").toLowerCase();
+        switch (p) {
+          case "ollama": return { provider: p, baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1", model: process.env.OLLAMA_MODEL || "llama3.1", maxTokens: 4096 };
+          case "groq": return { provider: p, apiKey: process.env.GROQ_API_KEY, model: process.env.GROQ_MODEL || "llama-3.1-70b-versatile", maxTokens: 4096 };
+          case "openai": return { provider: p, apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL || "gpt-4o", maxTokens: 4096 };
+          default: return { provider: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514", maxTokens: 4096 };
+        }
+      })();
+
+      const provider = createProvider(providerConfig);
+
+      provider.chat("Du bist ein erfahrener Node.js-Entwickler.", [{ role: "user", content: prompt }], [])
+        .then(response => {
+          let code = response.text || "";
+          // Code-Block extrahieren falls vorhanden
+          const codeMatch = code.match(/```(?:javascript|js)?\n([\s\S]*?)\n```/);
+          if (codeMatch) code = codeMatch[1];
+          // Cleanup
+          code = code.trim();
+          if (!code.includes("module.exports")) {
+            code += "\n\nmodule.exports = { definitions, execute };";
+          }
+
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true, code, filename: filename || "generated-tool.js" }));
+        })
+        .catch(err => {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "KI-Fehler: " + err.message }));
+        });
+    } catch (e) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
 }
 
 // --- Tools API Handlers ---
@@ -6735,6 +6914,8 @@ function startMonitor(port) {
       res.end(getToolsHTML());
     } else if (req.url === "/api/tools" && req.method === "GET") {
       handleToolsList(req, res);
+    } else if (req.url === "/api/tools/generate" && req.method === "POST") {
+      handleToolGenerate(req, res);
     } else if (req.url === "/api/tools" && req.method === "POST") {
       handleToolCreate(req, res);
     } else if (req.url.match(/^\/api\/tools\/[^/]+\/toggle$/) && req.method === "POST") {
