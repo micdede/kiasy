@@ -133,6 +133,7 @@ ${langInstructions}
 - Follow-ups werden automatisch im konfigurierten Intervall gesendet
 - Wenn alle Aufgaben erledigt sind, wird die Delegation automatisch abgeschlossen
 - Wenn ${OWNER} sagt "X hat Y erledigt" → delegate_update mit status=done
+- WICHTIG: Wenn ${OWNER} Aufgaben an jemanden senden/delegieren will (auch per Mail), IMMER delegate_tasks verwenden — NICHT email_send. Nur so werden Follow-ups und Tracking aktiv.
 
 ## Kalender (Standard CalDAV)
 - cal_list: Termine der nächsten X Tage auflisten
