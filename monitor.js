@@ -462,7 +462,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -675,7 +675,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -986,7 +986,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -1384,7 +1384,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -1582,18 +1582,8 @@ const SETTINGS_GROUPS = [
   },
   {
     title: "Community Chat",
-    fields: [
-      { key: "COMMUNITY_USER_ENABLED", label: "User-Chat aktiv", type: "select",
-        options: [{ value: "false", label: "Deaktiviert" }, { value: "true", label: "Aktiviert" }]
-      },
-      { key: "COMMUNITY_USER_NAME", label: "Dein Chat-Name", type: "text" },
-      { key: "COMMUNITY_USER_APIKEY", label: "User API-Key", type: "password" },
-      { key: "COMMUNITY_ASSISTANT_ENABLED", label: "Assistent-Chat aktiv", type: "select",
-        options: [{ value: "false", label: "Deaktiviert" }, { value: "true", label: "Aktiviert" }]
-      },
-      { key: "COMMUNITY_ASSISTANT_NAME", label: "Assistent Chat-Name", type: "text" },
-      { key: "COMMUNITY_ASSISTANT_APIKEY", label: "Assistent API-Key", type: "password" },
-    ]
+    fields: [],
+    custom: true,
   },
   {
     title: "Support",
@@ -1622,7 +1612,65 @@ function renderSettings(data) {
 
   SETTINGS_GROUPS.forEach(group => {
     html += '<div class="settings-group"><h2>' + escapeHtml(group.title) + '</h2><div class="fields">';
+
+    // Custom Community Chat Sektion
+    if (group.custom && group.title === 'Community Chat') {
+      const userEnabled = data.COMMUNITY_USER_ENABLED === 'true';
+      const userName = data.COMMUNITY_USER_NAME || '';
+      const userKey = data.COMMUNITY_USER_APIKEY || '';
+      const assistantEnabled = data.COMMUNITY_ASSISTANT_ENABLED === 'true';
+      const assistantName = data.COMMUNITY_ASSISTANT_NAME || '';
+      const assistantKey = data.COMMUNITY_ASSISTANT_APIKEY || '';
+
+      // User-Bereich
+      html += '<div style="padding:4px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase">User</div>';
+      if (userName && userKey) {
+        // Bereits registriert
+        html += '<div class="field-row"><label class="field-label">Chat-Name</label><div class="field-input-wrap"><input type="text" value="' + escapeHtml(userName) + '" disabled style="opacity:0.7"></div></div>';
+        html += '<div class="field-row"><label class="field-label">Status</label><div class="field-input-wrap" style="display:flex;gap:8px;align-items:center">';
+        html += '<select data-key="COMMUNITY_USER_ENABLED"><option value="false"' + (!userEnabled ? ' selected' : '') + '>Deaktiviert</option><option value="true"' + (userEnabled ? ' selected' : '') + '>Aktiviert</option></select>';
+        html += '</div></div>';
+        html += '<input type="hidden" data-key="COMMUNITY_USER_NAME" value="' + escapeHtml(userName) + '">';
+        html += '<input type="hidden" data-key="COMMUNITY_USER_APIKEY" value="' + escapeHtml(userKey) + '">';
+      } else {
+        // Noch nicht registriert
+        html += '<div class="field-row"><label class="field-label">Chat-Name</label><div class="field-input-wrap" style="display:flex;gap:6px">';
+        html += '<input type="text" id="communityUserReg" placeholder="Dein Chat-Name">';
+        html += '<button onclick="registerCommunity(\\'user\\')" style="background:var(--btn-primary-bg);color:#fff;border:1px solid var(--btn-primary-hover);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;white-space:nowrap">Registrieren</button>';
+        html += '</div></div>';
+        html += '<div id="communityUserStatus" style="font-size:11px;padding:2px 0 4px;min-height:16px"></div>';
+      }
+
+      // Assistent-Bereich (nur wenn User aktiv)
+      html += '<div style="padding:12px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;border-top:1px solid var(--bg-tertiary);margin-top:8px">Assistent</div>';
+      if (!userEnabled && !userName) {
+        html += '<div style="font-size:12px;color:var(--text-dim);padding:4px 0">Erst User aktivieren, dann kann der Assistent aktiviert werden.</div>';
+      } else if (assistantName && assistantKey) {
+        // Bereits registriert
+        html += '<div class="field-row"><label class="field-label">Chat-Name</label><div class="field-input-wrap"><input type="text" value="' + escapeHtml(assistantName) + '" disabled style="opacity:0.7"></div></div>';
+        html += '<div class="field-row"><label class="field-label">Status</label><div class="field-input-wrap">';
+        html += '<select data-key="COMMUNITY_ASSISTANT_ENABLED"><option value="false"' + (!assistantEnabled ? ' selected' : '') + '>Deaktiviert</option><option value="true"' + (assistantEnabled ? ' selected' : '') + '>Aktiviert</option></select>';
+        html += '</div></div>';
+        html += '<input type="hidden" data-key="COMMUNITY_ASSISTANT_NAME" value="' + escapeHtml(assistantName) + '">';
+        html += '<input type="hidden" data-key="COMMUNITY_ASSISTANT_APIKEY" value="' + escapeHtml(assistantKey) + '">';
+      } else {
+        // Noch nicht registriert
+        html += '<div class="field-row"><label class="field-label">Chat-Name</label><div class="field-input-wrap" style="display:flex;gap:6px">';
+        html += '<input type="text" id="communityAssistantReg" placeholder="Assistent Chat-Name">';
+        html += '<button onclick="registerCommunity(\\'assistant\\')" style="background:var(--btn-primary-bg);color:#fff;border:1px solid var(--btn-primary-hover);padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:12px;white-space:nowrap">Registrieren</button>';
+        html += '</div></div>';
+        html += '<div id="communityAssistantStatus" style="font-size:11px;padding:2px 0 4px;min-height:16px"></div>';
+      }
+
+      html += '</div></div>';
+      return;
+    }
+
     group.fields.forEach(field => {
+      if (field.hidden) {
+        html += '<input type="hidden" data-key="' + field.key + '" value="' + escapeHtml(data[field.key] || '') + '">';
+        return;
+      }
       const val = data[field.key] || "";
       const providerAttr = field.provider ? ' data-provider="' + field.provider + '"' : "";
       html += '<div class="field-row"' + providerAttr + '>';
@@ -1836,6 +1884,67 @@ async function deleteAvatar() {
 }
 
 loadAvatar();
+
+// ==================== Community Registration ====================
+async function registerCommunity(type) {
+  const inputId = type === 'user' ? 'communityUserReg' : 'communityAssistantReg';
+  const statusId = type === 'user' ? 'communityUserStatus' : 'communityAssistantStatus';
+  const input = document.getElementById(inputId);
+  const status = document.getElementById(statusId);
+  if (!input || !status) return;
+  const username = input.value.trim();
+  if (!username) { status.textContent = 'Bitte Name eingeben'; status.style.color = 'var(--color-error)'; return; }
+
+  status.textContent = 'Prüfe Verfügbarkeit...';
+  status.style.color = 'var(--color-warning)';
+
+  const API = 'https://kiasy.de/api/kiasyApi.php';
+  try {
+    const check = await fetch(API + '?action=check&username=' + encodeURIComponent(username));
+    const checkData = await check.json();
+    if (!checkData.available) {
+      status.textContent = '"' + username + '" ist bereits vergeben!';
+      status.style.color = 'var(--color-error)';
+      return;
+    }
+
+    status.textContent = 'Registriere...';
+    const reg = await fetch(API + '?action=register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username, type,
+        bot_name: currentSettings.BOT_NAME || 'KIASY',
+        owner_name: currentSettings.OWNER_NAME || '',
+      }),
+    });
+    const regData = await reg.json();
+
+    if (regData.ok) {
+      const prefix = type === 'user' ? 'COMMUNITY_USER' : 'COMMUNITY_ASSISTANT';
+      const settings = {};
+      settings[prefix + '_ENABLED'] = 'true';
+      settings[prefix + '_NAME'] = username;
+      settings[prefix + '_APIKEY'] = regData.api_key;
+
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+
+      status.textContent = 'Registriert! Seite wird neu geladen...';
+      status.style.color = 'var(--color-success)';
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      status.textContent = regData.error || 'Registrierung fehlgeschlagen';
+      status.style.color = 'var(--color-error)';
+    }
+  } catch (e) {
+    status.textContent = 'Verbindungsfehler: ' + e.message;
+    status.style.color = 'var(--color-error)';
+  }
+}
 
 // ==================== Ollama Model Manager ====================
 let ollamaModels = [];
@@ -2086,7 +2195,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -3633,7 +3742,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -4467,76 +4576,12 @@ function init() {
   }).catch(() => showSetup({}));
 }
 
-function showSetup(settings) {
+function showSetup() {
   const main = document.getElementById('chatMain');
   main.innerHTML = '<div class="setup-msg"><div class="register-box">' +
-    '<h3>Community Chat einrichten</h3>' +
-    '<p style="font-size:12px;color:var(--text-muted);margin:0 0 12px">Registriere einen Chat-Namen um teilzunehmen.</p>' +
-    '<input type="text" id="regUsername" placeholder="Chat-Name (z.B. Michael oder JARVIS)">' +
-    '<select id="regType"><option value="user">User</option><option value="assistant">Assistent</option></select>' +
-    '<button onclick="registerName()">Registrieren & prüfen</button>' +
-    '<div class="register-status" id="regStatus"></div>' +
+    '<h3>Community Chat</h3>' +
+    '<p style="font-size:13px;color:var(--text-muted);margin:0">Bitte richte den Community Chat in den <a href="/settings" style="color:var(--accent)">Einstellungen</a> ein.</p>' +
     '</div></div>';
-}
-
-async function registerName() {
-  const username = document.getElementById('regUsername').value.trim();
-  const type = document.getElementById('regType').value;
-  const status = document.getElementById('regStatus');
-  if (!username) return;
-
-  status.textContent = 'Prüfe...';
-  status.style.color = 'var(--color-warning)';
-
-  try {
-    // Erst prüfen
-    const check = await fetch(API_BASE + '?action=check&username=' + encodeURIComponent(username));
-    const checkData = await check.json();
-
-    if (!checkData.available) {
-      status.textContent = 'Name "' + username + '" ist bereits vergeben!';
-      status.style.color = 'var(--color-error)';
-      return;
-    }
-
-    // Registrieren
-    const botName = '${BOT_NAME}';
-    const ownerName = '${process.env.OWNER_NAME || ""}';
-    const reg = await fetch(API_BASE + '?action=register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, type, bot_name: botName, owner_name: ownerName }),
-    });
-    const regData = await reg.json();
-
-    if (regData.ok) {
-      // In Settings speichern
-      const key = type === 'user' ? 'COMMUNITY_USER' : 'COMMUNITY_ASSISTANT';
-      const settings = {};
-      settings[key + '_ENABLED'] = 'true';
-      settings[key + '_NAME'] = username;
-      settings[key + '_APIKEY'] = regData.api_key;
-
-      await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-
-      status.textContent = 'Registriert! Lade Chat...';
-      status.style.color = 'var(--color-success)';
-
-      myUsername = username;
-      myApiKey = regData.api_key;
-      setTimeout(() => showChat(), 1000);
-    } else {
-      status.textContent = regData.error || 'Fehler bei der Registrierung';
-      status.style.color = 'var(--color-error)';
-    }
-  } catch (e) {
-    status.textContent = 'Verbindungsfehler: ' + e.message;
-    status.style.color = 'var(--color-error)';
-  }
 }
 
 function showChat() {
@@ -4705,7 +4750,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -4974,7 +5019,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -5324,7 +5369,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -6363,7 +6408,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
-  <a href="/community">Community</a>
+  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
