@@ -31,3 +31,4 @@ setup.sh
 *.db
 *.db-shm
 *.db-wal
+tools/btc-price.js
