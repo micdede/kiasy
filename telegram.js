@@ -65,6 +65,77 @@ bot.getMe().then((me) => {
 setInterval(() => { checkReminders(); checkWorkflows(); checkDelegationFollowups(); }, 60000);
 console.log("Reminder- & Workflow- & Delegation-Scheduler gestartet (60s Intervall)");
 
+// Community-Listener starten (nur wenn Assistent aktiviert)
+if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_ASSISTANT_APIKEY) {
+  let communityLastId = 0;
+  const communityName = (process.env.COMMUNITY_ASSISTANT_NAME || "").toLowerCase();
+  const COMMUNITY_API = "https://kiasy.de/api/kiasyApi.php";
+  const COMMUNITY_KEY = process.env.COMMUNITY_ASSISTANT_APIKEY;
+
+  async function checkCommunityChat() {
+    try {
+      const axios = require("axios");
+      const res = await axios.get(COMMUNITY_API, {
+        params: { action: "messages", since: communityLastId, limit: 20 },
+        headers: { "X-API-Key": COMMUNITY_KEY },
+        timeout: 10000,
+      });
+
+      const messages = res.data.messages || [];
+      if (messages.length === 0) return;
+
+      for (const msg of messages) {
+        communityLastId = Math.max(communityLastId, msg.id);
+
+        // Eigene Nachrichten ignorieren
+        if (msg.username.toLowerCase() === communityName) continue;
+
+        // Prüfen ob der Assistent angesprochen wird
+        const text = (msg.message || "").toLowerCase();
+        const botName = (process.env.BOT_NAME || "KIASY").toLowerCase();
+        const mentioned = text.includes(communityName) ||
+          text.includes(botName) ||
+          text.includes("@" + communityName) ||
+          text.includes("@alle") ||
+          text.includes("@all");
+
+        if (!mentioned) continue;
+
+        console.log(`  Community: ${msg.username} hat ${communityName} angesprochen: "${msg.message.substring(0, 80)}"`);
+
+        // Agent antworten lassen
+        try {
+          const prompt = `Im Community Chat hat ${msg.username} (${msg.type}) folgendes geschrieben und dich dabei angesprochen:\n\n"${msg.message}"\n\nAntworte kurz und freundlich. Nutze community_send um deine Antwort im Chat zu posten.`;
+          await agent.handleMessage("community-chat", prompt);
+        } catch (e) {
+          console.error("  Community Agent-Fehler:", e.message);
+        }
+      }
+    } catch (e) {
+      // Stille Fehler — API nicht erreichbar ist ok
+    }
+  }
+
+  // Initial: letzte Message-ID holen damit er nicht alte Nachrichten beantwortet
+  (async () => {
+    try {
+      const axios = require("axios");
+      const res = await axios.get(COMMUNITY_API, {
+        params: { action: "messages", since: 0, limit: 1 },
+        headers: { "X-API-Key": COMMUNITY_KEY },
+        timeout: 10000,
+      });
+      const msgs = res.data.messages || [];
+      if (msgs.length > 0) communityLastId = msgs[msgs.length - 1].id;
+    } catch {}
+  })();
+
+  setInterval(checkCommunityChat, 30000);
+  console.log(`Community-Listener gestartet (30s, horcht auf: ${communityName})`);
+} else {
+  console.log("Community-Listener übersprungen (Assistent nicht aktiviert)");
+}
+
 // Mail-Watcher starten (nur wenn Kerio konfiguriert)
 if (process.env.KERIO_HOST && process.env.KERIO_USER && process.env.KERIO_PASSWORD) {
   require("./mail-watcher").startMailWatcher(agent);
