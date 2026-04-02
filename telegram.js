@@ -87,8 +87,9 @@ if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_
       for (const msg of messages) {
         communityLastId = Math.max(communityLastId, msg.id);
 
-        // Eigene Nachrichten ignorieren
+        // Eigene Nachrichten und andere Assistenten ignorieren (verhindert Endlos-Loops)
         if (msg.username.toLowerCase() === communityName) continue;
+        if (msg.type === "assistant") continue;
 
         // Prüfen ob der Assistent angesprochen wird
         const text = (msg.message || "").toLowerCase();
