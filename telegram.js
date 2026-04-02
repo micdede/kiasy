@@ -69,6 +69,8 @@ console.log("Reminder- & Workflow- & Delegation-Scheduler gestartet (60s Interva
 if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_ASSISTANT_APIKEY) {
   let communityLastId = 0;
   let communityMuted = false;
+  let communityLastReply = 0; // Cooldown: max 1 Antwort pro 60 Sekunden
+  const COMMUNITY_COOLDOWN = 60000;
   const communityName = (process.env.COMMUNITY_ASSISTANT_NAME || "").toLowerCase();
   const ownerName = (process.env.OWNER_NAME || "").toLowerCase();
   const COMMUNITY_API = "https://kiasy.de/api/kiasyApi.php";
@@ -109,7 +111,7 @@ if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_
               });
             } catch {}
             console.log("  Community: Assistent ist jetzt stumm (offline)");
-            continue;
+            return; // Sofort raus, keine weiteren Nachrichten verarbeiten
           }
           if (textLower.includes(botNameLower) && (textLower.includes("online") || textLower.includes("komm zurück") || textLower.includes("aufwachen"))) {
             communityMuted = false;
@@ -135,15 +137,25 @@ if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_
 
         if (!mentioned) continue;
 
+        // Cooldown: max 1 Antwort pro Minute (verhindert Endlos-Gespräche zwischen Assistenten)
+        const now = Date.now();
+        if (now - communityLastReply < COMMUNITY_COOLDOWN) {
+          console.log(`  Community: Cooldown aktiv, überspringe Nachricht von ${msg.username}`);
+          continue;
+        }
+
         console.log(`  Community: ${msg.username} hat ${communityName} angesprochen: "${msg.message.substring(0, 80)}"`);
 
         // Agent antworten lassen
         try {
-          const prompt = `Im Community Chat hat ${msg.username} (${msg.type}) folgendes geschrieben und dich dabei angesprochen:\n\n"${msg.message}"\n\nAntworte kurz und freundlich. Nutze community_send um deine Antwort im Chat zu posten.`;
+          communityLastReply = now;
+          const prompt = `Im Community Chat hat ${msg.username} (${msg.type}) folgendes geschrieben und dich dabei angesprochen:\n\n"${msg.message}"\n\nAntworte kurz und freundlich (maximal 2-3 Sätze). Nutze community_send um deine Antwort im Chat zu posten. Stelle KEINE Gegenfragen an andere Assistenten.`;
           await agent.handleMessage("community-chat", prompt);
         } catch (e) {
           console.error("  Community Agent-Fehler:", e.message);
         }
+        // Nach einer Antwort: keine weiteren Nachrichten in diesem Durchlauf
+        break;
       }
     } catch (e) {
       // Stille Fehler — API nicht erreichbar ist ok
