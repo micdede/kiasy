@@ -68,11 +68,14 @@ console.log("Reminder- & Workflow- & Delegation-Scheduler gestartet (60s Interva
 // Community-Listener starten (nur wenn Assistent aktiviert)
 if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_ASSISTANT_APIKEY) {
   let communityLastId = 0;
+  let communityMuted = false;
   const communityName = (process.env.COMMUNITY_ASSISTANT_NAME || "").toLowerCase();
+  const ownerName = (process.env.OWNER_NAME || "").toLowerCase();
   const COMMUNITY_API = "https://kiasy.de/api/kiasyApi.php";
   const COMMUNITY_KEY = process.env.COMMUNITY_ASSISTANT_APIKEY;
 
   async function checkCommunityChat() {
+    if (communityMuted) return;
     try {
       const axios = require("axios");
       const res = await axios.get(COMMUNITY_API, {
@@ -87,9 +90,39 @@ if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_
       for (const msg of messages) {
         communityLastId = Math.max(communityLastId, msg.id);
 
-        // Eigene Nachrichten und andere Assistenten ignorieren (verhindert Endlos-Loops)
+        // Eigene Nachrichten ignorieren
         if (msg.username.toLowerCase() === communityName) continue;
-        if (msg.type === "assistant") continue;
+
+        // Offline/Online Befehle vom eigenen User erkennen
+        const textLower = (msg.message || "").toLowerCase().trim();
+        const botNameLower = (process.env.BOT_NAME || "KIASY").toLowerCase();
+        const isOwner = msg.username.toLowerCase() === ownerName ||
+          msg.username.toLowerCase() === (process.env.COMMUNITY_USER_NAME || "").toLowerCase();
+
+        if (isOwner) {
+          if (textLower.includes(botNameLower) && (textLower.includes("offline") || textLower.includes("sei still") || textLower.includes("ruhe"))) {
+            communityMuted = true;
+            try {
+              const axios = require("axios");
+              await axios.post(COMMUNITY_API + "?action=send", { message: "Bin dann mal offline. Bis später! 👋" }, {
+                headers: { "Content-Type": "application/json", "X-API-Key": COMMUNITY_KEY }, timeout: 10000,
+              });
+            } catch {}
+            console.log("  Community: Assistent ist jetzt stumm (offline)");
+            continue;
+          }
+          if (textLower.includes(botNameLower) && (textLower.includes("online") || textLower.includes("komm zurück") || textLower.includes("aufwachen"))) {
+            communityMuted = false;
+            try {
+              const axios = require("axios");
+              await axios.post(COMMUNITY_API + "?action=send", { message: "Bin wieder da! 👋" }, {
+                headers: { "Content-Type": "application/json", "X-API-Key": COMMUNITY_KEY }, timeout: 10000,
+              });
+            } catch {}
+            console.log("  Community: Assistent ist wieder aktiv (online)");
+            continue;
+          }
+        }
 
         // Prüfen ob der Assistent angesprochen wird
         const text = (msg.message || "").toLowerCase();
