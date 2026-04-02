@@ -16,6 +16,22 @@ const startTime = Date.now();
 const TEMP_DIR = path.join(__dirname, "temp");
 const MAX_UPLOAD = 5 * 1024 * 1024; // 5 MB
 
+function getNav() {
+  const community = process.env.COMMUNITY_USER_ENABLED === "true" ? '\n  <a href="/community">Community</a>' : '';
+  return `<a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
+  <a href="/ha-editor">Smart Home</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/reminders">Erinnerungen</a>
+  <a href="/delegations">Delegationen</a>
+  <a href="/terminal">Terminal</a>
+  <a href="/settings">Einstellungen</a>${community}
+  <a href="/roadmap">Roadmap</a>
+  <a href="/tools">Tools</a>
+  <a href="/workflows">Workflows</a>`;
+}
+
 fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 // --- Event-Typen aus Log-Patterns erkennen ---
@@ -455,24 +471,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1><span class="dot"></span> ${BOT_NAME} Monitor</h1>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
-  <div class="status-bar">
-    <span>Uptime: <b id="uptime">-</b></span>
-    <span>Modell: <b id="model">-</b></span>
-    <span>Events: <b id="eventCount">0</b></span>
-    <span>Clients: <b id="clientCount">-</b></span>
-  </div>
+  ${getNav()}
 </header>
 <div class="filters">
   <button class="filter-btn active" data-type="all">Alle <span class="count" id="count-all">0</span></button>
@@ -668,18 +667,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>${BOT_NAME} System</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="content">
@@ -979,18 +967,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Smart Home Editor</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="toolbar">
@@ -1377,18 +1354,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Einstellungen</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="banner" id="banner">
@@ -2188,18 +2154,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Wissensbasis</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="toolbar">
@@ -3361,10 +3316,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Theme Editor</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/settings">Einstellungen</a>
-  <a href="/roadmap">Roadmap</a>
+  ${getNav()}
 </header>
 
 <div class="container">
@@ -3734,19 +3686,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Tool Manager</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="toolbar">
@@ -4286,15 +4226,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Workflows</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/settings">Einstellungen</a>
+  ${getNav()}
 </header>
 
 <div class="container">
@@ -4523,13 +4455,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>${BOT_NAME} Community</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/settings">Einstellungen</a>
-  <a href="/delegations">Delegationen</a>
-  <a href="/terminal">Terminal</a>
+  ${getNav()}
 </header>
 
 <div class="chat-container">
@@ -4743,17 +4669,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>${BOT_NAME} Delegationen</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
+  ${getNav()}
 </header>
 
 <div class="content">
@@ -5011,19 +4927,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Roadmap</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="container">
@@ -5362,18 +5266,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Terminal</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="main">
@@ -6401,18 +6294,7 @@ ${getThemeCSS()}
 <body>
 <header>
   <h1>Erinnerungen</h1>
-  <a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home Editor</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>
-  ${process.env.COMMUNITY_USER_ENABLED === "true" ? '<a href="/community">Community</a>' : ''}
-  <a href="/delegations">Delegationen</a>
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>
+  ${getNav()}
 </header>
 
 <div class="container">
