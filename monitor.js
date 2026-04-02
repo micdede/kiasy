@@ -3622,6 +3622,7 @@ ${getThemeCSS()}
 <div class="toolbar">
   <button class="btn btn-primary" id="newBtn">Neues Tool</button>
   <button class="btn" id="aiBtn" style="background:var(--accent-bg);border-color:var(--accent);color:var(--accent)">Mit KI erstellen</button>
+  <label class="btn" style="cursor:pointer"><input type="file" id="uploadZip" accept=".zip" style="display:none" onchange="uploadTool(this)">ZIP importieren</label>
   <span class="spacer"></span>
   <span class="save-status" id="saveStatus"></span>
   <button class="btn btn-primary" id="saveBtn" disabled>Speichern (Ctrl+S)</button>
@@ -3669,8 +3670,17 @@ ${getThemeCSS()}
         <div class="info-row"><span class="label">Geändert</span><span id="infoModified">-</span></div>
       </div>
       <div class="info-section">
+        <h3>Sichtbarkeit</h3>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn-toggle" id="visPrivate" onclick="setVisibility('private')" style="font-size:11px">Privat</button>
+          <button class="btn-toggle" id="visPublic" onclick="setVisibility('public')" style="font-size:11px">Öffentlich</button>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim)" id="visHint">Privat = nur lokal, Öffentlich = wird mit Git geteilt</div>
+      </div>
+      <div class="info-section">
         <h3>Aktionen</h3>
         <button class="btn-toggle" id="toggleBtn">-</button>
+        <button class="btn-toggle" id="downloadBtn" onclick="downloadTool()" style="margin-top:4px">Als ZIP herunterladen</button>
         <button class="btn-delete-tool" id="deleteBtn">Tool löschen</button>
       </div>
     </div>
@@ -3807,6 +3817,11 @@ function updateInfoPanel() {
   // Toggle button
   toggleBtn.textContent = currentToolData.enabled ? 'Deaktivieren' : 'Aktivieren';
   toggleBtn.className = 'btn-toggle ' + (currentToolData.enabled ? 'enabled' : 'disabled');
+
+  // Visibility
+  const vis = currentToolData.visibility || 'private';
+  document.getElementById('visPrivate').className = 'btn-toggle ' + (vis === 'private' ? 'enabled' : '');
+  document.getElementById('visPublic').className = 'btn-toggle ' + (vis === 'public' ? 'enabled' : '');
 }
 
 async function saveTool() {
@@ -3904,6 +3919,47 @@ document.getElementById('aiBtn').addEventListener('click', () => {
 });
 toggleBtn.addEventListener('click', toggleTool);
 deleteBtn.addEventListener('click', deleteTool);
+
+async function setVisibility(vis) {
+  if (!currentFile) return;
+  try {
+    const res = await fetch('/api/tools/' + encodeURIComponent(currentFile) + '/visibility', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visibility: vis }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showStatus(vis === 'public' ? 'Öffentlich — wird mit Git geteilt' : 'Privat — nur lokal', 'var(--color-success)');
+      currentToolData.visibility = vis;
+      updateInfoPanel();
+    }
+  } catch (e) { showStatus('Fehler: ' + e.message, 'var(--color-error)'); }
+}
+
+function downloadTool() {
+  if (!currentFile) return;
+  window.location.href = '/api/tools/' + encodeURIComponent(currentFile) + '/download';
+}
+
+async function uploadTool(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const res = await fetch('/api/tools/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.ok) {
+      showStatus('Tool importiert: ' + data.filename, 'var(--color-success)');
+      await loadTools();
+      selectTool(data.filename);
+    } else {
+      showStatus('Fehler: ' + (data.error || 'Unbekannt'), 'var(--color-error)');
+    }
+  } catch (e) { showStatus('Fehler: ' + e.message, 'var(--color-error)'); }
+  input.value = '';
+}
 
 function closeAiDialog() {
   document.getElementById('aiDialog').style.display = 'none';
@@ -5397,7 +5453,8 @@ function handleToolsList(req, res) {
       } catch (e) {
         error = e.message;
       }
-      return { filename, size: stats.size, modified: stats.mtime.toISOString(), enabled, definitions, error };
+      const visibility = db.toolSettings.getVisibility(filename);
+      return { filename, size: stats.size, modified: stats.mtime.toISOString(), enabled, visibility, definitions, error };
     });
     result.sort((a, b) => {
       if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
@@ -6921,6 +6978,126 @@ function startMonitor(port) {
     } else if (req.url.match(/^\/api\/tools\/[^/]+\/toggle$/) && req.method === "POST") {
       const filename = decodeURIComponent(req.url.replace("/api/tools/", "").replace("/toggle", ""));
       handleToolToggle(req, res, filename);
+    } else if (req.url.match(/^\/api\/tools\/[^/]+\/visibility$/) && req.method === "PUT") {
+      const filename = decodeURIComponent(req.url.replace("/api/tools/", "").replace("/visibility", ""));
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const { visibility } = JSON.parse(Buffer.concat(chunks).toString());
+          db.toolSettings.setVisibility(filename, visibility);
+          // .gitignore aktualisieren: private Tools ausschließen
+          try {
+            const gitignorePath = path.join(__dirname, ".gitignore");
+            let gitignore = fs.readFileSync(gitignorePath, "utf-8");
+            const entry = "tools/" + filename;
+            if (visibility === "private" && !gitignore.includes(entry)) {
+              gitignore = gitignore.trimEnd() + "\n" + entry + "\n";
+              fs.writeFileSync(gitignorePath, gitignore);
+            } else if (visibility === "public" && gitignore.includes(entry)) {
+              gitignore = gitignore.split("\n").filter(l => l.trim() !== entry).join("\n");
+              fs.writeFileSync(gitignorePath, gitignore);
+            }
+          } catch {}
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true, visibility }));
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    } else if (req.url.match(/^\/api\/tools\/[^/]+\/download$/) && req.method === "GET") {
+      const filename = decodeURIComponent(req.url.replace("/api/tools/", "").replace("/download", ""));
+      const filePath = path.join(TOOLS_DIR, filename);
+      if (!fs.existsSync(filePath)) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Tool nicht gefunden" }));
+        return;
+      }
+      // ZIP erstellen mit archiver-ähnlichem Ansatz (manuelles ZIP)
+      const { execSync } = require("child_process");
+      const zipPath = path.join(__dirname, "temp", filename.replace(".js", ".zip"));
+      try {
+        execSync(`cd "${TOOLS_DIR}" && zip -j "${zipPath}" "${filename}" 2>/dev/null`);
+        const zipData = fs.readFileSync(zipPath);
+        res.writeHead(200, {
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="${filename.replace(".js", ".zip")}"`,
+        });
+        res.end(zipData);
+        try { fs.unlinkSync(zipPath); } catch {}
+      } catch (e) {
+        // Fallback: direkt als .js senden
+        const content = fs.readFileSync(filePath);
+        res.writeHead(200, {
+          "Content-Type": "application/javascript",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        });
+        res.end(content);
+      }
+    } else if (req.url === "/api/tools/upload" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const body = Buffer.concat(chunks);
+          const contentType = req.headers["content-type"] || "";
+          const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
+          if (!boundaryMatch) throw new Error("Kein multipart boundary");
+          const boundary = boundaryMatch[1] || boundaryMatch[2];
+          const delimBuf = Buffer.from("--" + boundary);
+          let fileData = null;
+          let uploadFilename = null;
+          let start = 0;
+          while (start < body.length) {
+            const idx = body.indexOf(delimBuf, start);
+            if (idx === -1) break;
+            const nextIdx = body.indexOf(delimBuf, idx + delimBuf.length);
+            if (nextIdx === -1) break;
+            const part = body.slice(idx + delimBuf.length, nextIdx);
+            const headerEnd = part.indexOf("\r\n\r\n");
+            if (headerEnd === -1) { start = nextIdx; continue; }
+            const headers = part.slice(0, headerEnd).toString();
+            const fnMatch = headers.match(/filename="([^"]+)"/);
+            if (fnMatch) {
+              uploadFilename = fnMatch[1];
+              fileData = part.slice(headerEnd + 4);
+              if (fileData.length > 2 && fileData[fileData.length - 2] === 0x0d && fileData[fileData.length - 1] === 0x0a) {
+                fileData = fileData.slice(0, -2);
+              }
+              break;
+            }
+            start = nextIdx;
+          }
+          if (!fileData || !uploadFilename) throw new Error("Keine Datei gefunden");
+
+          // ZIP oder .js?
+          if (uploadFilename.endsWith(".zip")) {
+            const zipPath = path.join(__dirname, "temp", "upload_" + Date.now() + ".zip");
+            fs.writeFileSync(zipPath, fileData);
+            const { execSync } = require("child_process");
+            execSync(`cd "${TOOLS_DIR}" && unzip -o "${zipPath}" "*.js" 2>/dev/null`);
+            const extracted = execSync(`unzip -l "${zipPath}" 2>/dev/null`, { encoding: "utf-8" });
+            const jsMatch = extracted.match(/(\S+\.js)/);
+            try { fs.unlinkSync(zipPath); } catch {}
+            const extractedName = jsMatch ? jsMatch[1] : "uploaded-tool.js";
+            db.toolSettings.register(extractedName);
+            res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+            res.end(JSON.stringify({ ok: true, filename: extractedName }));
+          } else if (uploadFilename.endsWith(".js")) {
+            const targetPath = path.join(TOOLS_DIR, uploadFilename);
+            fs.writeFileSync(targetPath, fileData);
+            db.toolSettings.register(uploadFilename);
+            res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+            res.end(JSON.stringify({ ok: true, filename: uploadFilename }));
+          } else {
+            throw new Error("Nur .zip oder .js Dateien erlaubt");
+          }
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
     } else if (req.url.startsWith("/api/tools/") && req.method === "GET") {
       const filename = decodeURIComponent(req.url.replace("/api/tools/", ""));
       handleToolRead(req, res, filename);
