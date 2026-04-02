@@ -92,8 +92,9 @@ if (process.env.COMMUNITY_ASSISTANT_ENABLED === "true" && process.env.COMMUNITY_
       for (const msg of messages) {
         communityLastId = Math.max(communityLastId, msg.id);
 
-        // Eigene Nachrichten ignorieren
+        // Eigene Nachrichten und andere Assistenten ignorieren
         if (msg.username.toLowerCase() === communityName) continue;
+        if (msg.type === "assistant") continue;
 
         // Offline/Online Befehle vom eigenen User erkennen
         const textLower = (msg.message || "").toLowerCase().trim();
