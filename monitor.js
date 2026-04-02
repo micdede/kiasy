@@ -4610,7 +4610,7 @@ async function loadMessages() {
         const icon = isAssistant ? '🤖' : '👤';
         const cls = isSelf ? 'self' : (isAssistant ? 'assistant' : 'user');
         const time = msg.created_at ? msg.created_at.substring(11, 16) : '';
-        const displayName = isAssistant ? msg.username + ' (' + (msg.bot_name || '?') + ')' : msg.username;
+        const displayName = msg.username;
 
         const el = document.createElement('div');
         el.className = 'msg ' + cls;
