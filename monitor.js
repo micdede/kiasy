@@ -462,6 +462,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -674,6 +675,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -984,6 +986,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -1381,6 +1384,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -1574,6 +1578,21 @@ const SETTINGS_GROUPS = [
       { key: "KERIO_FROM", label: "Absender", type: "text" },
       { key: "MAIL_ALLOWED_DOMAINS", label: "Erlaubte Domains (kommagetrennt)", type: "text" },
       { key: "MAIL_WHITELIST", label: "Whitelist E-Mails (kommagetrennt)", type: "text" }
+    ]
+  },
+  {
+    title: "Community Chat",
+    fields: [
+      { key: "COMMUNITY_USER_ENABLED", label: "User-Chat aktiv", type: "select",
+        options: [{ value: "false", label: "Deaktiviert" }, { value: "true", label: "Aktiviert" }]
+      },
+      { key: "COMMUNITY_USER_NAME", label: "Dein Chat-Name", type: "text" },
+      { key: "COMMUNITY_USER_APIKEY", label: "User API-Key", type: "password" },
+      { key: "COMMUNITY_ASSISTANT_ENABLED", label: "Assistent-Chat aktiv", type: "select",
+        options: [{ value: "false", label: "Deaktiviert" }, { value: "true", label: "Aktiviert" }]
+      },
+      { key: "COMMUNITY_ASSISTANT_NAME", label: "Assistent Chat-Name", type: "text" },
+      { key: "COMMUNITY_ASSISTANT_APIKEY", label: "Assistent API-Key", type: "password" },
     ]
   },
   {
@@ -2067,6 +2086,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -3613,6 +3633,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -4314,6 +4335,291 @@ setInterval(loadWorkflows, 30000);
 </html>`;
 }
 
+// --- Community Chat HTML ---
+
+function getCommunityHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<title>${BOT_NAME} - Community Chat</title>
+${getGoogleFontsLink(getActiveTheme())}
+${getThemeCSS()}
+<style>
+  body { height: 100vh; display: flex; flex-direction: column; }
+  .chat-container { flex: 1; display: flex; overflow: hidden; }
+  .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .msg {
+    max-width: 85%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5;
+    position: relative;
+  }
+  .msg.user { background: var(--accent-bg); border: 1px solid var(--accent); align-self: flex-start; }
+  .msg.assistant { background: rgba(140,120,255,0.1); border: 1px solid rgba(140,120,255,0.3); align-self: flex-start; }
+  .msg.self { align-self: flex-end; background: var(--bg-tertiary); border: 1px solid var(--border-color); }
+  .msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .msg-icon { font-size: 14px; }
+  .msg-name { font-size: 11px; font-weight: 600; color: var(--accent); }
+  .msg.assistant .msg-name { color: #a78bfa; }
+  .msg-time { font-size: 10px; color: var(--text-dim); margin-left: auto; }
+  .msg-text { color: var(--text-primary); word-break: break-word; }
+  .chat-input-bar {
+    display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+  }
+  .chat-input-bar input {
+    flex: 1; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary);
+    padding: 10px 14px; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none;
+  }
+  .chat-input-bar input:focus { border-color: var(--accent); }
+  .chat-input-bar button {
+    background: var(--btn-primary-bg); color: #fff; border: 1px solid var(--btn-primary-hover);
+    padding: 10px 20px; border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 13px;
+  }
+  .chat-input-bar button:hover { background: var(--btn-primary-hover); }
+  .chat-input-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .chat-sidebar {
+    width: 200px; border-left: 1px solid var(--border-color); padding: 12px;
+    overflow-y: auto; background: var(--bg-secondary);
+  }
+  .sidebar-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+  .online-user { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; color: var(--text-primary); }
+  .online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
+  .online-type { font-size: 10px; color: var(--text-dim); }
+  .setup-msg {
+    flex: 1; display: flex; align-items: center; justify-content: center; text-align: center;
+    color: var(--text-muted); padding: 40px; font-size: 14px; line-height: 1.8;
+  }
+  .register-box {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 20px; max-width: 400px; width: 90%;
+  }
+  .register-box h3 { margin: 0 0 12px; color: var(--text-bright); font-size: 16px; }
+  .register-box input, .register-box select {
+    width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary);
+    padding: 8px 12px; border-radius: 6px; font-family: inherit; font-size: 13px; margin-bottom: 8px; outline: none;
+  }
+  .register-box button {
+    background: var(--btn-primary-bg); color: #fff; border: none; padding: 8px 20px;
+    border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; width: 100%;
+  }
+  .register-status { font-size: 12px; margin-top: 8px; min-height: 18px; }
+  @media (max-width: 768px) { .chat-sidebar { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>${BOT_NAME} Community</h1>
+  <a href="/">Monitor</a>
+  <a href="/chat">Chat</a>
+  <a href="/system">System</a>
+  <a href="/notes">Wissensbasis</a>
+  <a href="/settings">Einstellungen</a>
+  <a href="/delegations">Delegationen</a>
+  <a href="/terminal">Terminal</a>
+</header>
+
+<div class="chat-container">
+  <div class="chat-main" id="chatMain"></div>
+  <div class="chat-sidebar" id="chatSidebar">
+    <div class="sidebar-title">Online</div>
+    <div id="onlineList"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = 'https://kiasy.de/api/kiasyApi.php';
+const POLL_INTERVAL = 5000;
+let lastMsgId = 0;
+let myUsername = '';
+let myApiKey = '';
+let pollTimer = null;
+
+function escapeHtml(s) {
+  const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+function init() {
+  // Settings laden
+  fetch('/api/settings').then(r => r.json()).then(settings => {
+    const userEnabled = settings.COMMUNITY_USER_ENABLED === 'true';
+    const assistantEnabled = settings.COMMUNITY_ASSISTANT_ENABLED === 'true';
+    const userName = settings.COMMUNITY_USER_NAME || '';
+    const userKey = settings.COMMUNITY_USER_APIKEY || '';
+    const assistantName = settings.COMMUNITY_ASSISTANT_NAME || '';
+    const assistantKey = settings.COMMUNITY_ASSISTANT_APIKEY || '';
+
+    if (userEnabled && userName && userKey) {
+      myUsername = userName;
+      myApiKey = userKey;
+      showChat();
+    } else if (assistantEnabled && assistantName && assistantKey) {
+      myUsername = assistantName;
+      myApiKey = assistantKey;
+      showChat();
+    } else {
+      showSetup(settings);
+    }
+  }).catch(() => showSetup({}));
+}
+
+function showSetup(settings) {
+  const main = document.getElementById('chatMain');
+  main.innerHTML = '<div class="setup-msg"><div class="register-box">' +
+    '<h3>Community Chat einrichten</h3>' +
+    '<p style="font-size:12px;color:var(--text-muted);margin:0 0 12px">Registriere einen Chat-Namen um teilzunehmen.</p>' +
+    '<input type="text" id="regUsername" placeholder="Chat-Name (z.B. Michael oder JARVIS)">' +
+    '<select id="regType"><option value="user">User</option><option value="assistant">Assistent</option></select>' +
+    '<button onclick="registerName()">Registrieren & prüfen</button>' +
+    '<div class="register-status" id="regStatus"></div>' +
+    '</div></div>';
+}
+
+async function registerName() {
+  const username = document.getElementById('regUsername').value.trim();
+  const type = document.getElementById('regType').value;
+  const status = document.getElementById('regStatus');
+  if (!username) return;
+
+  status.textContent = 'Prüfe...';
+  status.style.color = 'var(--color-warning)';
+
+  try {
+    // Erst prüfen
+    const check = await fetch(API_BASE + '?action=check&username=' + encodeURIComponent(username));
+    const checkData = await check.json();
+
+    if (!checkData.available) {
+      status.textContent = 'Name "' + username + '" ist bereits vergeben!';
+      status.style.color = 'var(--color-error)';
+      return;
+    }
+
+    // Registrieren
+    const botName = '${BOT_NAME}';
+    const ownerName = '${process.env.OWNER_NAME || ""}';
+    const reg = await fetch(API_BASE + '?action=register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, type, bot_name: botName, owner_name: ownerName }),
+    });
+    const regData = await reg.json();
+
+    if (regData.ok) {
+      // In Settings speichern
+      const key = type === 'user' ? 'COMMUNITY_USER' : 'COMMUNITY_ASSISTANT';
+      const settings = {};
+      settings[key + '_ENABLED'] = 'true';
+      settings[key + '_NAME'] = username;
+      settings[key + '_APIKEY'] = regData.api_key;
+
+      await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+
+      status.textContent = 'Registriert! Lade Chat...';
+      status.style.color = 'var(--color-success)';
+
+      myUsername = username;
+      myApiKey = regData.api_key;
+      setTimeout(() => showChat(), 1000);
+    } else {
+      status.textContent = regData.error || 'Fehler bei der Registrierung';
+      status.style.color = 'var(--color-error)';
+    }
+  } catch (e) {
+    status.textContent = 'Verbindungsfehler: ' + e.message;
+    status.style.color = 'var(--color-error)';
+  }
+}
+
+function showChat() {
+  const main = document.getElementById('chatMain');
+  main.innerHTML = '<div class="chat-messages" id="messages"></div>' +
+    '<div class="chat-input-bar">' +
+    '<input type="text" id="msgInput" placeholder="Nachricht schreiben..." onkeydown="if(event.key===\\'Enter\\')sendMsg()">' +
+    '<button onclick="sendMsg()" id="sendBtn">Senden</button>' +
+    '</div>';
+  loadMessages();
+  pollTimer = setInterval(loadMessages, POLL_INTERVAL);
+}
+
+async function loadMessages() {
+  try {
+    const res = await fetch(API_BASE + '?action=messages&since=' + lastMsgId, {
+      headers: { 'X-API-Key': myApiKey },
+    });
+    const data = await res.json();
+
+    if (data.messages && data.messages.length > 0) {
+      const container = document.getElementById('messages');
+      for (const msg of data.messages) {
+        const isSelf = msg.username === myUsername;
+        const isAssistant = msg.type === 'assistant';
+        const icon = isAssistant ? '🤖' : '👤';
+        const cls = isSelf ? 'self' : (isAssistant ? 'assistant' : 'user');
+        const time = msg.created_at ? msg.created_at.substring(11, 16) : '';
+        const displayName = isAssistant ? msg.username + ' (' + (msg.bot_name || '?') + ')' : msg.username;
+
+        const el = document.createElement('div');
+        el.className = 'msg ' + cls;
+        el.innerHTML = '<div class="msg-header">' +
+          '<span class="msg-icon">' + icon + '</span>' +
+          '<span class="msg-name">' + escapeHtml(displayName) + '</span>' +
+          '<span class="msg-time">' + time + '</span>' +
+          '</div>' +
+          '<div class="msg-text">' + escapeHtml(msg.message) + '</div>';
+        container.appendChild(el);
+        lastMsgId = msg.id;
+      }
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Online-Liste
+    if (data.online) {
+      const list = document.getElementById('onlineList');
+      list.innerHTML = data.online.map(u => {
+        const icon = u.type === 'assistant' ? '🤖' : '👤';
+        return '<div class="online-user"><span class="online-dot"></span>' +
+          icon + ' ' + escapeHtml(u.username) +
+          '</div>';
+      }).join('');
+    }
+  } catch (e) {
+    console.error('Community-Fehler:', e);
+  }
+}
+
+async function sendMsg() {
+  const input = document.getElementById('msgInput');
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+
+  try {
+    await fetch(API_BASE + '?action=send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': myApiKey },
+      body: JSON.stringify({ message }),
+    });
+    await loadMessages();
+  } catch (e) {
+    console.error('Sende-Fehler:', e);
+  }
+}
+
+init();
+</script>
+</body>
+</html>`;
+}
+
 // --- Delegations HTML ---
 
 function getDelegationsHTML() {
@@ -4399,6 +4705,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -4667,6 +4974,7 @@ ${getThemeCSS()}
   <a href="/reminders">Erinnerungen</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -5016,6 +5324,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/reminders">Erinnerungen</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -6054,6 +6363,7 @@ ${getThemeCSS()}
   <a href="/notes">Wissensbasis</a>
   <a href="/terminal">Terminal</a>
   <a href="/settings">Einstellungen</a>
+  <a href="/community">Community</a>
   <a href="/delegations">Delegationen</a>
   <a href="/roadmap">Roadmap</a>
   <a href="/tools">Tools</a>
@@ -7147,6 +7457,11 @@ function startMonitor(port) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.response?.data?.error || e.message }));
       });
+
+    // --- Community Chat ---
+    } else if (req.url === "/community") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getCommunityHTML());
 
     // --- Delegations ---
     } else if (req.url === "/delegations") {
