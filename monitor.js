@@ -6857,6 +6857,24 @@ function handleChatSend(req, res) {
         return;
       }
       const result = await agent.handleMessage("web-chat", msg);
+
+      // Telegram-Nachrichten aus der Queue senden
+      if (result.telegramMessages && result.telegramMessages.length) {
+        const TelegramBot = require("node-telegram-bot-api");
+        const tgToken = process.env.TELEGRAM_TOKEN;
+        const tgChatId = process.env.TELEGRAM_OWNER_CHAT_ID;
+        if (tgToken && tgChatId) {
+          const tgBot = new TelegramBot(tgToken);
+          for (const tgMsg of result.telegramMessages) {
+            try {
+              await tgBot.sendMessage(tgChatId, tgMsg, { parse_mode: "Markdown" }).catch(() =>
+                tgBot.sendMessage(tgChatId, tgMsg)
+              );
+            } catch {}
+          }
+        }
+      }
+
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify({ text: result.text, images: result.images || [] }));
     } catch (err) {
