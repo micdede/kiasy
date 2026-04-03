@@ -16,6 +16,20 @@ const startTime = Date.now();
 const TEMP_DIR = path.join(__dirname, "temp");
 const MAX_UPLOAD = 5 * 1024 * 1024; // 5 MB
 
+// Service-Name erkennen (kiasy oder jarvis-telegram für ältere Installationen)
+let SERVICE_NAME = "kiasy";
+try {
+  const { execSync } = require("child_process");
+  const active = execSync("systemctl is-active kiasy 2>/dev/null", { encoding: "utf-8" }).trim();
+  if (active !== "active") throw new Error();
+} catch {
+  try {
+    const { execSync } = require("child_process");
+    const active = execSync("systemctl is-active jarvis-telegram 2>/dev/null", { encoding: "utf-8" }).trim();
+    if (active === "active") SERVICE_NAME = "jarvis-telegram";
+  } catch {}
+}
+
 function getNav() {
   const community = process.env.COMMUNITY_USER_ENABLED === "true" ? '\n  <a href="/community">Community</a>' : '';
   return `<a href="/">Monitor</a>
@@ -5995,7 +6009,7 @@ function handleTerminalAction(req, res) {
           break;
 
         case "service-logs":
-          exec("journalctl -u kiasy --no-pager -n 50 2>/dev/null || echo 'Journal nicht verfügbar'", { timeout: 10000 }, (err, out) => {
+          exec("journalctl -u " + SERVICE_NAME + " --no-pager -n 50 2>/dev/null || echo 'Journal nicht verfügbar'", { timeout: 10000 }, (err, out) => {
             respond({ output: out || (err ? err.message : "Keine Logs") });
           });
           break;
@@ -6054,7 +6068,7 @@ function handleTerminalAction(req, res) {
           diag.push("");
           diag.push("=== Letzte 20 Log-Zeilen ===");
           try {
-            const logs = execSync("journalctl -u kiasy --no-pager -n 20 2>/dev/null || echo 'Journal nicht verfügbar'", { encoding: "utf-8", timeout: 5000 });
+            const logs = execSync("journalctl -u " + SERVICE_NAME + " --no-pager -n 20 2>/dev/null || echo 'Journal nicht verfügbar'", { encoding: "utf-8", timeout: 5000 });
             diag.push(logs.trim());
           } catch { diag.push("(Logs nicht verfügbar)"); }
 
@@ -6092,7 +6106,7 @@ function handleTerminalAction(req, res) {
           lines.push("");
           lines.push("=== Letzte 30 Log-Zeilen ===");
           try {
-            lines.push(execSync("journalctl -u kiasy --no-pager -n 30 2>/dev/null || echo '-'", { encoding: "utf-8", timeout: 5000 }).trim());
+            lines.push(execSync("journalctl -u " + SERVICE_NAME + " --no-pager -n 30 2>/dev/null || echo '-'", { encoding: "utf-8", timeout: 5000 }).trim());
           } catch {}
 
           // Mail senden
@@ -6172,7 +6186,7 @@ function handleTerminalStatus(req, res) {
   let serviceStatus = "Unbekannt";
   let serviceRunning = false;
 
-  exec("systemctl is-active kiasy 2>/dev/null", { timeout: 5000 }, (err, out) => {
+  exec("systemctl is-active " + SERVICE_NAME + " 2>/dev/null", { timeout: 5000 }, (err, out) => {
     const status = (out || "").trim();
     serviceRunning = status === "active";
     serviceStatus = serviceRunning ? "Aktiv (running)" : (status || "Gestoppt");
