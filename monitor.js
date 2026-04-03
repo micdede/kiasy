@@ -1320,6 +1320,38 @@ ${getThemeCSS()}
   .save-btn:hover { background: var(--btn-primary-hover); }
   .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+  .tg-user-row {
+    display: flex; align-items: center; gap: 8px; padding: 8px 0;
+    border-bottom: 1px solid var(--bg-tertiary); font-size: 12px;
+  }
+  .tg-user-row:last-child { border-bottom: none; }
+  .tg-user-id { color: var(--text-dim); min-width: 100px; font-family: monospace; font-size: 11px; }
+  .tg-user-name { color: var(--accent); min-width: 100px; }
+  .tg-user-info { flex: 1; color: var(--text-primary); }
+  .tg-user-info input {
+    width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary);
+    padding: 4px 8px; border-radius: 4px; font-family: inherit; font-size: 11px; outline: none;
+  }
+  .tg-user-info input:focus { border-color: var(--accent); }
+  .tg-user-del {
+    background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 14px; padding: 2px 6px;
+  }
+  .tg-user-del:hover { color: var(--color-error); }
+  .tg-user-owner { font-size: 10px; color: var(--color-success); background: rgba(63,185,80,0.1); padding: 1px 6px; border-radius: 8px; }
+  .tg-add-row { display: flex; gap: 6px; padding: 8px 0; }
+  .tg-add-row input {
+    background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary);
+    padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none;
+  }
+  .tg-add-row input:focus { border-color: var(--accent); }
+  .tg-add-btn {
+    background: var(--btn-primary-bg); color: #fff; border: 1px solid var(--btn-primary-hover);
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 12px; white-space: nowrap;
+  }
+  .tg-add-btn:hover { background: var(--btn-primary-hover); }
+  .tg-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tg-status { font-size: 11px; min-height: 16px; padding: 2px 0; }
+
   .model-row {
     display: flex; align-items: center; gap: 10px; padding: 6px 0;
     border-bottom: 1px solid var(--bg-tertiary);
@@ -1507,9 +1539,9 @@ const SETTINGS_GROUPS = [
     title: "Telegram",
     fields: [
       { key: "TELEGRAM_TOKEN", label: "Bot Token", type: "password" },
-      { key: "TELEGRAM_ALLOWED_USERS", label: "Erlaubte User-IDs", type: "text" },
-      { key: "TELEGRAM_OWNER_CHAT_ID", label: "Deine Chat-ID (für Benachrichtigungen)", type: "text" }
-    ]
+      { key: "TELEGRAM_OWNER_CHAT_ID", label: "Deine Chat-ID (für Benachrichtigungen)", type: "text" },
+    ],
+    customAfter: "telegramUsers",
   },
   {
     title: "E-Mail (IMAP/SMTP)",
@@ -1680,11 +1712,25 @@ function renderSettings(data) {
 
       html += '</div></div>';
     });
+
+    // Custom-Block nach den Feldern
+    if (group.customAfter === 'telegramUsers') {
+      html += '<div style="padding:8px 0 4px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;border-top:1px solid var(--bg-tertiary);margin-top:4px">Erlaubte Nutzer</div>';
+      html += '<div id="tgUserList"></div>';
+      html += '<div class="tg-add-row">';
+      html += '<input type="text" id="tgAddId" placeholder="Telegram User-ID" style="width:120px">';
+      html += '<input type="text" id="tgAddInfo" placeholder="Notiz (z.B. Oliver, Arbeit)" style="flex:1">';
+      html += '<button class="tg-add-btn" onclick="addTgUser()">Hinzufügen</button>';
+      html += '</div>';
+      html += '<div class="tg-status" id="tgStatus"></div>';
+    }
+
     html += '</div></div>';
   });
 
   container.innerHTML = html;
   updateProviderVisibility();
+  loadTgUsers();
 
   // Provider change listener
   const providerSelect = document.querySelector('[data-key="LLM_PROVIDER"]');
@@ -1808,6 +1854,85 @@ fetch("/api/settings")
     document.getElementById("settingsInner").innerHTML =
       '<div style="color:var(--color-error);padding:20px;text-align:center">Fehler beim Laden: ' + err.message + '</div>';
   });
+
+// ==================== Telegram User Management ====================
+let tgUsers = []; // { id, username, info }
+
+function loadTgUsers() {
+  fetch('/api/telegram/users').then(r => r.json()).then(data => {
+    tgUsers = data.users || [];
+    renderTgUsers();
+  }).catch(() => {});
+}
+
+function renderTgUsers() {
+  const list = document.getElementById('tgUserList');
+  if (!list) return;
+  const ownerId = currentSettings.TELEGRAM_OWNER_CHAT_ID || '';
+  if (tgUsers.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:4px 0">Keine Nutzer eingetragen</div>';
+    return;
+  }
+  list.innerHTML = tgUsers.map(u => {
+    const isOwner = u.id === ownerId;
+    return '<div class="tg-user-row">' +
+      '<span class="tg-user-id">' + escapeHtml(u.id) + '</span>' +
+      '<span class="tg-user-name">' + escapeHtml(u.username || '-') + '</span>' +
+      '<div class="tg-user-info"><input type="text" value="' + escapeHtml(u.info || '') + '" onchange="updateTgUserInfo(\\'' + u.id + '\\', this.value)" placeholder="Notiz..."></div>' +
+      (isOwner ? '<span class="tg-user-owner">Owner</span>' : '') +
+      '<button class="tg-user-del" onclick="removeTgUser(\\'' + u.id + '\\')" title="Entfernen">\\u2715</button>' +
+      '</div>';
+  }).join('');
+}
+
+async function addTgUser() {
+  const idInput = document.getElementById('tgAddId');
+  const infoInput = document.getElementById('tgAddInfo');
+  const status = document.getElementById('tgStatus');
+  const id = idInput.value.trim();
+  if (!id || !/^\\d+$/.test(id)) {
+    status.textContent = 'Bitte gültige numerische ID eingeben';
+    status.style.color = 'var(--color-error)';
+    return;
+  }
+  status.textContent = 'Telegram-Info wird abgerufen...';
+  status.style.color = 'var(--color-warning)';
+  try {
+    const res = await fetch('/api/telegram/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, info: infoInput.value.trim() }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = 'Nutzer hinzugefügt: ' + (data.username || id);
+      status.style.color = 'var(--color-success)';
+      idInput.value = '';
+      infoInput.value = '';
+      loadTgUsers();
+    } else {
+      status.textContent = data.error || 'Fehler';
+      status.style.color = 'var(--color-error)';
+    }
+  } catch (e) {
+    status.textContent = 'Fehler: ' + e.message;
+    status.style.color = 'var(--color-error)';
+  }
+}
+
+async function updateTgUserInfo(id, info) {
+  await fetch('/api/telegram/users/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ info }),
+  });
+}
+
+async function removeTgUser(id) {
+  if (!confirm('Nutzer ' + id + ' entfernen?')) return;
+  await fetch('/api/telegram/users/' + id, { method: 'DELETE' });
+  loadTgUsers();
+}
 
 // ==================== Avatar ====================
 function loadAvatar() {
@@ -7423,6 +7548,128 @@ function startMonitor(port) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: e.response?.data?.error || e.message }));
       });
+
+    // --- Telegram User Management ---
+    } else if (req.url === "/api/telegram/users" && req.method === "GET") {
+      // User-Liste laden
+      let users = [];
+      try {
+        const row = db.db.prepare("SELECT value FROM terminal_state WHERE key = 'telegram_users'").get();
+        users = row ? JSON.parse(row.value) : [];
+      } catch {}
+      // Sync: IDs aus TELEGRAM_ALLOWED_USERS die noch nicht in der Liste sind
+      const allowedIds = (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).filter(Boolean);
+      for (const id of allowedIds) {
+        if (!users.find(u => u.id === id)) {
+          users.push({ id, username: "", info: "" });
+        }
+      }
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ users }));
+
+    } else if (req.url === "/api/telegram/users" && req.method === "POST") {
+      // User hinzufügen + Telegram-Username abrufen
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const { id, info } = JSON.parse(Buffer.concat(chunks).toString());
+          if (!id) throw new Error("ID fehlt");
+
+          // Telegram-Username abrufen
+          let username = "";
+          const token = process.env.TELEGRAM_TOKEN;
+          const axios = require("axios");
+          const fetchUser = token
+            ? axios.get("https://api.telegram.org/bot" + token + "/getChat?chat_id=" + id, { timeout: 5000 })
+                .then(r => {
+                  const chat = r.data.result || {};
+                  username = chat.username ? "@" + chat.username : chat.first_name || "";
+                  return username;
+                }).catch(() => "")
+            : Promise.resolve("");
+
+          fetchUser.then(() => {
+            // User-Liste laden und ergänzen
+            let users = [];
+            try {
+              const row = db.db.prepare("SELECT value FROM terminal_state WHERE key = 'telegram_users'").get();
+              users = row ? JSON.parse(row.value) : [];
+            } catch {}
+
+            if (users.find(u => u.id === id)) {
+              res.writeHead(409, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "ID bereits vorhanden" }));
+              return;
+            }
+
+            users.push({ id, username, info: info || "" });
+            db.db.prepare("INSERT OR REPLACE INTO terminal_state (key, value) VALUES (?, ?)").run("telegram_users", JSON.stringify(users));
+
+            // TELEGRAM_ALLOWED_USERS in .env aktualisieren
+            const allIds = users.map(u => u.id).join(",");
+            const envPath = path.join(__dirname, ".env");
+            let env = fs.readFileSync(envPath, "utf-8");
+            if (env.includes("TELEGRAM_ALLOWED_USERS=")) {
+              env = env.replace(/TELEGRAM_ALLOWED_USERS=.*/, "TELEGRAM_ALLOWED_USERS=" + allIds);
+            } else {
+              env += "\nTELEGRAM_ALLOWED_USERS=" + allIds;
+            }
+            fs.writeFileSync(envPath, env);
+
+            res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+            res.end(JSON.stringify({ ok: true, username, id }));
+          });
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+
+    } else if (req.url.match(/^\/api\/telegram\/users\/\d+$/) && req.method === "PUT") {
+      // Info aktualisieren
+      const id = req.url.replace("/api/telegram/users/", "");
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const { info } = JSON.parse(Buffer.concat(chunks).toString());
+          let users = [];
+          try {
+            const row = db.db.prepare("SELECT value FROM terminal_state WHERE key = 'telegram_users'").get();
+            users = row ? JSON.parse(row.value) : [];
+          } catch {}
+          const user = users.find(u => u.id === id);
+          if (user) user.info = info || "";
+          db.db.prepare("INSERT OR REPLACE INTO terminal_state (key, value) VALUES (?, ?)").run("telegram_users", JSON.stringify(users));
+          res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+
+    } else if (req.url.match(/^\/api\/telegram\/users\/\d+$/) && req.method === "DELETE") {
+      // User entfernen
+      const id = req.url.replace("/api/telegram/users/", "");
+      let users = [];
+      try {
+        const row = db.db.prepare("SELECT value FROM terminal_state WHERE key = 'telegram_users'").get();
+        users = row ? JSON.parse(row.value) : [];
+      } catch {}
+      users = users.filter(u => u.id !== id);
+      db.db.prepare("INSERT OR REPLACE INTO terminal_state (key, value) VALUES (?, ?)").run("telegram_users", JSON.stringify(users));
+
+      // .env aktualisieren
+      const allIds = users.map(u => u.id).join(",");
+      const envPath = path.join(__dirname, ".env");
+      let env = fs.readFileSync(envPath, "utf-8");
+      env = env.replace(/TELEGRAM_ALLOWED_USERS=.*/, "TELEGRAM_ALLOWED_USERS=" + allIds);
+      fs.writeFileSync(envPath, env);
+
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ ok: true }));
 
     // --- Community Chat ---
     } else if (req.url === "/community") {
