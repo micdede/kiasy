@@ -67,6 +67,8 @@ bot.getMe().then((me) => {
 });
 
 // Reminder- & Workflow- & Delegation-Scheduler: prüft jede Minute
+// Sofort einmal prüfen (fängt überfällige Reminders nach Neustart ab)
+setTimeout(() => { checkReminders(); checkWorkflows(); checkDelegationFollowups(); }, 5000);
 setInterval(() => { checkReminders(); checkWorkflows(); checkDelegationFollowups(); }, 60000);
 console.log("Reminder- & Workflow- & Delegation-Scheduler gestartet (60s Intervall)");
 
@@ -468,12 +470,17 @@ async function checkReminders() {
     const reminder = require("./tools/reminder");
     const due = reminder.getDueReminders();
 
-    const fallbackChatId = (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).find(Boolean)
-      || lastKnownChatId || null;
+    const fallbackChatId = process.env.TELEGRAM_OWNER_CHAT_ID
+      || lastKnownChatId
+      || (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).find(Boolean)
+      || null;
 
     for (const r of due) {
       const chatId = r.chatId || fallbackChatId;
-      if (!chatId) continue;
+      if (!chatId) {
+        console.error("  Reminder übersprungen (keine Chat-ID): " + r.text.substring(0, 50));
+        continue;
+      }
       if (processingReminders.has(r.id)) continue;
 
       processingReminders.add(r.id);
