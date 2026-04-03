@@ -19,6 +19,11 @@ if (!TELEGRAM_TOKEN) {
 let ALLOWED_USERS = process.env.TELEGRAM_ALLOWED_USERS
   ? process.env.TELEGRAM_ALLOWED_USERS.split(",").map((n) => n.trim()).filter(Boolean)
   : [];
+// Owner-ID automatisch in Whitelist aufnehmen
+const OWNER_CHAT_ID = process.env.TELEGRAM_OWNER_CHAT_ID?.trim();
+if (OWNER_CHAT_ID && !ALLOWED_USERS.includes(OWNER_CHAT_ID)) {
+  ALLOWED_USERS.push(OWNER_CHAT_ID);
+}
 
 // --- Verzeichnisse sicherstellen ---
 
