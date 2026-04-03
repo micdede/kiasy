@@ -1612,6 +1612,12 @@ const SETTINGS_GROUPS = [
     ]
   },
   {
+    title: "SearXNG",
+    fields: [
+      { key: "SEARXNG_URL", label: "SearXNG URL (z.B. http://localhost:8080)", type: "text" }
+    ]
+  },
+  {
     title: "Wissensbasis",
     fields: [
       { key: "GITHUB_NOTES_REPO", label: "GitHub Repo URL", type: "text" }
