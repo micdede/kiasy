@@ -100,9 +100,9 @@ function getSystemPrompt() {
   // Sprach-spezifische Anweisungen
   const langInstructions = LANG === "en"
     ? `- Always respond in English. Technical terms stay in English.
-- Use WhatsApp formatting: *bold*, _italic_, \`\`\`code\`\`\``
+- Use Telegram formatting: *bold*, _italic_, \`\`\`code\`\`\``
     : `- Antworte IMMER auf Deutsch, niemals auf Chinesisch oder anderen Sprachen. Technische Fachbegriffe bleiben englisch
-- Nutze WhatsApp-Formatierung: *fett*, _kursiv_, \`\`\`code\`\`\``;
+- Nutze Telegram-Formatierung: *fett*, _kursiv_, \`\`\`code\`\`\``;
 
   return `Du bist ${BOT}, der persönliche KI-Assistent von ${OWNER}.
 
@@ -439,7 +439,13 @@ function buildResponse(text) {
     const docTool = require("./tools/documents");
     documents = docTool.getQueue();
   } catch {}
-  return { text, images, documents };
+  // Telegram-Queue abholen
+  let telegramMessages = [];
+  try {
+    const tgTool = require("./tools/telegram-send");
+    telegramMessages = tgTool.getQueue();
+  } catch {}
+  return { text, images, documents, telegramMessages };
 }
 
 process.on("exit", () => db.close());

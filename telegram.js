@@ -326,7 +326,7 @@ bot.on("message", async (msg) => {
 
   // Agent verarbeiten lassen
   try {
-    const { text, images, documents } = await agent.handleMessage(chatId, body);
+    const { text, images, documents, telegramMessages } = await agent.handleMessage(chatId, body);
 
     clearInterval(typingInterval);
 
@@ -394,6 +394,21 @@ bot.on("message", async (msg) => {
         } catch (docErr) {
           console.error(`  Dokument-Fehler (${doc.path}):`, docErr.message);
           await bot.sendMessage(chatId, `Dokument konnte nicht gesendet werden: ${path.basename(doc.path)}`);
+        }
+      }
+    }
+
+    // Telegram-Nachrichten senden (z.B. aus Monitor-Chat oder Workflows)
+    if (telegramMessages && telegramMessages.length) {
+      const tgChatId = lastKnownChatId || chatId;
+      for (const msg of telegramMessages) {
+        try {
+          await bot.sendMessage(tgChatId, msg, { parse_mode: "Markdown" }).catch(() =>
+            bot.sendMessage(tgChatId, msg)
+          );
+          console.log(`  Telegram-Nachricht gesendet: ${msg.substring(0, 50)}`);
+        } catch (e) {
+          console.error(`  Telegram-Sende-Fehler:`, e.message);
         }
       }
     }
