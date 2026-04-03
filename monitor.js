@@ -495,6 +495,12 @@ ${getThemeCSS()}
   <button class="filter-btn active" data-type="error">Fehler <span class="count" id="count-error">0</span></button>
   <button class="filter-btn active" data-type="system">System <span class="count" id="count-system">0</span></button>
 </div>
+<div style="display:flex;gap:16px;padding:6px 16px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border-color)">
+  <span>Uptime: <strong id="uptime">-</strong></span>
+  <span>Modell: <strong id="model">-</strong></span>
+  <span>Events: <strong id="eventCount">0</strong></span>
+  <span>Clients: <strong id="clientCount">0</strong></span>
+</div>
 <div id="feed"><div class="empty">Warte auf Events...</div></div>
 
 <script>
