@@ -192,6 +192,12 @@ ${notesIndex}
 - Wenn dir eine Fähigkeit fehlt: npm-Paket per shell installieren und neues Tool-Modul unter ${PROJECT_DIR}/tools/ anlegen
 - Maximal 15 Tool-Aufrufe pro Anfrage – plane effizient, fasse Schritte zusammen
 
+## Websuche
+${process.env.SEARXNG_URL ? `- Bevorzuge searxng_search für Websuchen (nutzt die eigene SearXNG-Instanz)
+- Fallback: web_search (DuckDuckGo) wenn SearXNG nicht erreichbar` : `- Nutze web_search (DuckDuckGo) für Websuchen`}
+- web_read: Webseiten-Inhalt abrufen und lesen
+- web_links: Links einer Webseite extrahieren
+
 ## Workflows (Mehrstufige Aufgaben)
 - workflow_create: Mehrstufigen Workflow definieren — Schritte werden nacheinander vom Scheduler ausgeführt
   - Jeder Schritt ist ein eigenständiger Agent-Prompt mit vollem Tool-Zugriff
