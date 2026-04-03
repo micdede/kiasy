@@ -400,7 +400,7 @@ bot.on("message", async (msg) => {
 
     // Telegram-Nachrichten senden (z.B. aus Monitor-Chat oder Workflows)
     if (telegramMessages && telegramMessages.length) {
-      const tgChatId = lastKnownChatId || chatId;
+      const tgChatId = process.env.TELEGRAM_OWNER_CHAT_ID || lastKnownChatId || chatId;
       for (const msg of telegramMessages) {
         try {
           await bot.sendMessage(tgChatId, msg, { parse_mode: "Markdown" }).catch(() =>
@@ -523,7 +523,7 @@ async function checkDelegationFollowups() {
     const due = db.delegations.getDueFollowups();
     if (due.length === 0) return;
 
-    const chatId = lastKnownChatId || (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).find(Boolean);
+    const chatId = process.env.TELEGRAM_OWNER_CHAT_ID || lastKnownChatId || (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").map(s => s.trim()).find(Boolean);
     if (!chatId) return;
 
     for (const d of due) {

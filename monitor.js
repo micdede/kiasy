@@ -1507,7 +1507,8 @@ const SETTINGS_GROUPS = [
     title: "Telegram",
     fields: [
       { key: "TELEGRAM_TOKEN", label: "Bot Token", type: "password" },
-      { key: "TELEGRAM_ALLOWED_USERS", label: "Erlaubte User-IDs", type: "text" }
+      { key: "TELEGRAM_ALLOWED_USERS", label: "Erlaubte User-IDs", type: "text" },
+      { key: "TELEGRAM_OWNER_CHAT_ID", label: "Deine Chat-ID (für Benachrichtigungen)", type: "text" }
     ]
   },
   {
