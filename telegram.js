@@ -16,8 +16,8 @@ if (!TELEGRAM_TOKEN) {
   process.exit(1);
 }
 
-const ALLOWED_USERS = process.env.TELEGRAM_ALLOWED_USERS
-  ? process.env.TELEGRAM_ALLOWED_USERS.split(",").map((n) => n.trim())
+let ALLOWED_USERS = process.env.TELEGRAM_ALLOWED_USERS
+  ? process.env.TELEGRAM_ALLOWED_USERS.split(",").map((n) => n.trim()).filter(Boolean)
   : [];
 
 // --- Verzeichnisse sicherstellen ---
@@ -201,6 +201,41 @@ bot.on("message", async (msg) => {
   const userId = String(msg.from.id);
   lastKnownChatId = chatId;
   try { fs.writeFileSync(LAST_CHAT_FILE, chatId); } catch {}
+
+  // Auto-Register: Wenn Whitelist leer und /start → User automatisch eintragen
+  if (ALLOWED_USERS.length === 0 && msg.text?.trim() === "/start") {
+    ALLOWED_USERS.push(userId);
+    // In .env speichern
+    try {
+      const envPath = path.join(__dirname, ".env");
+      let env = fs.readFileSync(envPath, "utf-8");
+      if (env.match(/^TELEGRAM_ALLOWED_USERS=\s*$/m)) {
+        env = env.replace(/^TELEGRAM_ALLOWED_USERS=\s*$/m, "TELEGRAM_ALLOWED_USERS=" + userId);
+      } else if (!env.includes("TELEGRAM_ALLOWED_USERS=")) {
+        env += "\nTELEGRAM_ALLOWED_USERS=" + userId;
+      }
+      // Owner-Chat-ID auch setzen wenn leer
+      if (!process.env.TELEGRAM_OWNER_CHAT_ID) {
+        if (env.match(/^TELEGRAM_OWNER_CHAT_ID=\s*$/m)) {
+          env = env.replace(/^TELEGRAM_OWNER_CHAT_ID=\s*$/m, "TELEGRAM_OWNER_CHAT_ID=" + chatId);
+        } else if (!env.includes("TELEGRAM_OWNER_CHAT_ID=")) {
+          env += "\nTELEGRAM_OWNER_CHAT_ID=" + chatId;
+        }
+        process.env.TELEGRAM_OWNER_CHAT_ID = chatId;
+      }
+      fs.writeFileSync(envPath, env);
+      console.log(`Auto-Register: User ${userId} (Chat ${chatId}) als Owner eingetragen`);
+
+      // User-Info in DB speichern
+      try {
+        const username = msg.from.username ? "@" + msg.from.username : msg.from.first_name || "";
+        const users = [{ id: userId, username, info: "Owner (auto-registriert)" }];
+        db.db.prepare("INSERT OR REPLACE INTO terminal_state (key, value) VALUES (?, ?)").run("telegram_users", JSON.stringify(users));
+      } catch {}
+    } catch (e) {
+      console.error("Auto-Register Fehler:", e.message);
+    }
+  }
 
   // Whitelist
   if (ALLOWED_USERS.length > 0 && !ALLOWED_USERS.includes(userId)) {
