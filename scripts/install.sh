@@ -158,7 +158,6 @@ case "$llm_choice" in
         else
             echo -e "  Ollama ist ${BOLD}nicht installiert${NC} auf diesem System."
             echo "  Ollama ist kostenlos und wird als eigener Service installiert."
-            echo "  Cloud-Modelle brauchen keinen API-Key und keine GPU."
             echo ""
             read -p "  Ollama jetzt installieren? [J/n]: " install_ollama
             install_ollama="${install_ollama:-j}"
@@ -168,6 +167,12 @@ case "$llm_choice" in
         ollama_url="${ollama_url:-http://localhost:11434/v1}"
         read -p "  Modell [minimax-m2.7:cloud]: " ollama_model
         ollama_model="${ollama_model:-minimax-m2.7:cloud}"
+        echo ""
+        echo -e "  ${CYAN}Cloud-Modelle brauchen ab Ollama 0.20+ einen API-Key:${NC}"
+        echo -e "  ${CYAN}→ Account: https://ollama.com/signup${NC}"
+        echo -e "  ${CYAN}→ Dann: ollama login${NC}"
+        echo ""
+        read -p "  Ollama API-Key (optional, leer für lokale Modelle): " ollama_api_key
         ;;
     3)
         llm_provider="groq"
@@ -581,6 +586,7 @@ $(env_line "CLAUDE_MODEL" "$claude_model")
 # --- Ollama ---
 $(env_line "OLLAMA_BASE_URL" "$ollama_url")
 $(env_line "OLLAMA_MODEL" "$ollama_model")
+$(env_line "OLLAMA_API_KEY" "$ollama_api_key")
 
 # --- Groq ---
 $(env_line "GROQ_API_KEY" "$groq_key")

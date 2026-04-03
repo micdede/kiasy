@@ -1503,6 +1503,7 @@ const SETTINGS_GROUPS = [
         ]
       },
       { key: "OLLAMA_BASE_URL", label: "Ollama URL", type: "text", provider: "ollama" },
+      { key: "OLLAMA_API_KEY", label: "Ollama API-Key (Cloud-Modelle, optional)", type: "password", provider: "ollama" },
       { key: "OLLAMA_MODEL", label: "Aktives Modell", type: "text", provider: "ollama", hidden: true },
       { key: "ANTHROPIC_API_KEY", label: "Anthropic API Key", type: "password", provider: "anthropic" },
       { key: "CLAUDE_MODEL", label: "Claude Modell", type: "text", provider: "anthropic" },
@@ -5791,7 +5792,7 @@ Antworte NUR mit dem JavaScript-Code, keine Erklärungen davor oder danach.`;
       const providerConfig = require("./agent").getProviderConfig ? require("./agent").getProviderConfig() : (() => {
         const p = (process.env.LLM_PROVIDER || "anthropic").toLowerCase();
         switch (p) {
-          case "ollama": return { provider: p, baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1", model: process.env.OLLAMA_MODEL || "llama3.1", maxTokens: 4096 };
+          case "ollama": return { provider: p, baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1", apiKey: process.env.OLLAMA_API_KEY || "ollama", model: process.env.OLLAMA_MODEL || "llama3.1", maxTokens: 4096 };
           case "groq": return { provider: p, apiKey: process.env.GROQ_API_KEY, model: process.env.GROQ_MODEL || "llama-3.1-70b-versatile", maxTokens: 4096 };
           case "openai": return { provider: p, apiKey: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL || "gpt-4o", maxTokens: 4096 };
           default: return { provider: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY, model: process.env.CLAUDE_MODEL || "claude-sonnet-4-20250514", maxTokens: 4096 };
