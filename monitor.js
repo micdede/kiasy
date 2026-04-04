@@ -31,19 +31,25 @@ try {
 }
 
 function getNav() {
-  const community = process.env.COMMUNITY_USER_ENABLED === "true" ? '\n  <a href="/community">Community</a>' : '';
-  return `<a href="/">Monitor</a>
-  <a href="/chat">Chat</a>
-  <a href="/system">System</a>
-  <a href="/ha-editor">Smart Home</a>
-  <a href="/notes">Wissensbasis</a>
-  <a href="/reminders">Erinnerungen</a>
-  <a href="/delegations">Delegationen</a>
-  <a href="/terminal">Terminal</a>
-  <a href="/settings">Einstellungen</a>${community}
-  <a href="/roadmap">Roadmap</a>
-  <a href="/tools">Tools</a>
-  <a href="/workflows">Workflows</a>`;
+  const community = process.env.COMMUNITY_USER_ENABLED === "true" ? '\n    <a href="/community">Community</a>' : '';
+  return `<nav class="nav-links">
+    <a href="/">Monitor</a>
+    <a href="/chat">Chat</a>
+    <a href="/system">System</a>
+    <a href="/ha-editor">Smart Home</a>
+    <a href="/notes">Wissensbasis</a>
+    <a href="/reminders">Erinnerungen</a>
+    <a href="/delegations">Delegationen</a>
+    <a href="/terminal">Terminal</a>
+    <a href="/settings">Einstellungen</a>${community}
+    <a href="/roadmap">Roadmap</a>
+    <a href="/tools">Tools</a>
+    <a href="/workflows">Workflows</a>
+  </nav>
+  <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open');event.stopPropagation();" aria-label="Menü">
+    <span></span><span></span><span></span>
+  </button>
+  <script>document.addEventListener('click',function(e){const n=document.querySelector('.nav-links');if(n&&!n.contains(e.target))n.classList.remove('open');});</script>`;
 }
 
 fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -316,6 +322,14 @@ function isGlowTheme(themeName) {
   return vars["glow-shadow"] && vars["glow-shadow"] !== "none";
 }
 
+function getPWAMeta() {
+  const bgColor = getActiveTheme() === "tron" ? "#05070A" : "#0d1117";
+  return `<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="${bgColor}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">`;
+}
+
 function getGoogleFontsLink(theme) {
   const vars = getThemeVars(theme);
   const fonts = [];
@@ -372,14 +386,43 @@ function getThemeCSS() {
   header {
     background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);
     padding: 12px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    position: relative;
   }
-  header h1 { font-size: 16px; color: var(--accent); font-weight: 600; font-family: var(--font-heading); }
-  header a {
+  header h1 { font-size: 16px; color: var(--accent); font-weight: 600; font-family: var(--font-heading); white-space: nowrap; }
+  .nav-links { display: contents; }
+  .nav-links a, header > a {
     color: var(--text-muted); text-decoration: none; font-size: 12px;
     padding: 4px 10px; border: 1px solid var(--border-color); border-radius: 6px;
     transition: all 0.15s;
   }
-  header a:hover { color: var(--text-primary); border-color: var(--accent); }
+  .nav-links a:hover, header > a:hover { color: var(--text-primary); border-color: var(--accent); }
+  .hamburger {
+    display: none; background: none; border: 1px solid var(--border-color); border-radius: 6px;
+    padding: 6px 8px; cursor: pointer; flex-direction: column; gap: 4px; margin-left: auto;
+  }
+  .hamburger span {
+    display: block; width: 20px; height: 2px; background: var(--text-muted); border-radius: 1px;
+    transition: all 0.3s;
+  }
+  .hamburger:hover span { background: var(--accent); }
+  @media (max-width: 768px) {
+    .hamburger { display: flex; }
+    .nav-links {
+      display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000;
+      background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);
+      padding: 12px 16px; flex-direction: column; gap: 4px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .nav-links.open { display: flex; }
+    .nav-links a {
+      padding: 10px 14px; font-size: 14px; border: none; border-radius: 8px;
+      background: var(--bg-tertiary);
+    }
+    .nav-links a:hover { background: color-mix(in srgb, var(--accent) 15%, var(--bg-tertiary)); }
+    header { flex-wrap: nowrap; }
+    /* iOS: Prevent auto-zoom on input focus */
+    input, select, textarea { font-size: 16px; }
+  }
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
@@ -405,7 +448,8 @@ function getThemeCSS() {
   .save-status.show { opacity: 1; }
   .save-status.error { color: var(--color-error); }
   ${tronExtras}
-</style>`;
+</style>
+${getPWAMeta()}`;
 }
 
 // --- Dashboard HTML ---
@@ -475,10 +519,14 @@ ${getThemeCSS()}
     height: 100%; color: var(--text-dim); font-size: 14px;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     header { padding: 8px 10px; }
     .event { padding: 3px 10px; gap: 6px; }
     .event .time { min-width: 55px; font-size: 11px; }
+    .event .tag { min-width: 50px; font-size: 9px; }
+    .filters { gap: 4px; padding: 8px 10px; }
+    .filter-btn { padding: 4px 8px; font-size: 10px; }
+    .info-bar { flex-wrap: wrap; padding: 6px 10px !important; }
   }
 </style>
 </head>
@@ -495,7 +543,7 @@ ${getThemeCSS()}
   <button class="filter-btn active" data-type="error">Fehler <span class="count" id="count-error">0</span></button>
   <button class="filter-btn active" data-type="system">System <span class="count" id="count-system">0</span></button>
 </div>
-<div style="display:flex;gap:16px;padding:6px 16px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border-color)">
+<div class="info-bar" style="display:flex;gap:16px;padding:6px 16px;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border-color)">
   <span>Uptime: <strong id="uptime">-</strong></span>
   <span>Modell: <strong id="model">-</strong></span>
   <span>Events: <strong id="eventCount">0</strong></span>
@@ -678,8 +726,11 @@ ${getThemeCSS()}
   .cleanup-btn.disabled:hover { background: none; color: var(--text-dim); }
   .cleanup-btn:disabled { opacity: 0.7; cursor: not-allowed; }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .sys-grid { grid-template-columns: 1fr; }
+    .content { padding: 10px; }
+    .cleanup-section { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { font-size: 11px; }
   }
 
 </style>
@@ -1395,9 +1446,16 @@ ${getThemeCSS()}
   .avatar-status { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
   #avatarFileInput { display: none; }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .field-row { flex-direction: column; align-items: flex-start; gap: 4px; }
     .field-label { min-width: unset; }
+    .settings-container { padding: 10px; }
+    .section { padding: 14px; }
+    .avatar-section { flex-direction: column; align-items: center; }
+    .avatar-actions { flex-wrap: wrap; justify-content: center; }
+    input[type="text"], input[type="password"], input[type="number"], select, textarea {
+      width: 100% !important; max-width: 100%; font-size: 16px;
+    }
   }
 
   /* scrollbar */
@@ -2837,10 +2895,6 @@ function getChatHTML() {
 <title>${BOT_NAME} Chat</title>
 ${getGoogleFontsLink(getActiveTheme())}
 ${getThemeCSS()}
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="${getActiveTheme() === 'tron' ? '#05070A' : '#0d1117'}">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
   body { font-size: 14px; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
   header { padding: 10px 16px; gap: 12px; flex-shrink: 0; }
@@ -3323,11 +3377,6 @@ async function loadHistory() {
   } catch {}
 }
 loadHistory();
-
-// --- Service Worker ---
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
-}
 </script>
 </body>
 </html>`;
@@ -4370,9 +4419,14 @@ ${getThemeCSS()}
 
   .empty-state { text-align: center; padding: 40px; color: var(--text-dim); font-size: 14px; }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .wf-header { flex-wrap: wrap; }
-    .progress-bar { width: 60px; }
+    .progress-bar { display: none; }
+    .container { padding: 10px; margin: 10px auto; }
+    .wf-card { margin-bottom: 10px; }
+    .wf-actions { flex-wrap: wrap; }
+    .step-row { flex-wrap: wrap; }
+    .step-status { text-align: left; width: 100%; }
   }
 </style>
 </head>
@@ -4602,7 +4656,12 @@ ${getThemeCSS()}
     border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; width: 100%;
   }
   .register-status { font-size: 12px; margin-top: 8px; min-height: 18px; }
-  @media (max-width: 768px) { .chat-sidebar { display: none; } }
+  @media (max-width: 768px) {
+    .chat-sidebar { display: none; }
+    .chat-input { padding: 10px 12px; }
+    .chat-input textarea { font-size: 16px; }
+    .msg-bubble { max-width: 90%; }
+  }
 </style>
 </head>
 <body>
@@ -4817,6 +4876,18 @@ ${getThemeCSS()}
   .del-actions button:hover { border-color: var(--accent); color: var(--accent); }
   .del-actions .cancel-btn:hover { border-color: var(--color-error); color: var(--color-error); }
   .empty { text-align: center; padding: 40px; color: var(--text-dim); font-size: 14px; }
+  @media (max-width: 768px) {
+    .content { padding: 0 10px; margin: 10px auto; }
+    .stats { gap: 8px; }
+    .stat-card { min-width: 70px; padding: 8px 12px; flex: 1; }
+    .stat-card .num { font-size: 18px; }
+    .del-header { padding: 10px 12px; flex-wrap: wrap; }
+    .del-meta { text-align: left; width: 100%; margin-top: 4px; }
+    .del-body { padding: 0 12px 10px; }
+    .del-actions { padding: 8px 12px; flex-wrap: wrap; }
+    .filter-bar { gap: 4px; }
+    .filter-btn { padding: 5px 10px; font-size: 11px; }
+  }
 </style>
 </head>
 <body>
@@ -5070,9 +5141,12 @@ ${getThemeCSS()}
     text-align: center; padding: 40px; color: var(--text-dim); font-size: 14px;
   }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .card { flex-direction: column; }
-    .card-actions { align-self: flex-end; }
+    .card-actions { align-self: stretch; }
+    .card-actions select, .card-actions button { flex: 1; text-align: center; }
+    .container { padding: 10px; margin: 10px auto; }
+    .add-form input, .add-form textarea, .add-form select { width: 100%; font-size: 16px; }
   }
 
 </style>
@@ -5412,7 +5486,11 @@ ${getThemeCSS()}
 
   @media (max-width: 800px) {
     .main { flex-direction: column; }
-    .sidebar { width: 100%; max-height: 220px; border-right: none; border-bottom: 1px solid var(--border-color); }
+    .sidebar { width: 100%; max-height: 180px; border-right: none; border-bottom: 1px solid var(--border-color); }
+    .sidebar .quick-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+    .terminal-input-wrap { padding: 8px 10px; }
+    #terminal-input { font-size: 16px; }
+    #terminal-output { padding: 8px 10px; font-size: 11px; }
   }
 </style>
 </head>
@@ -6438,9 +6516,14 @@ ${getThemeCSS()}
   }
   .edit-row input:focus { border-color: var(--accent); }
 
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .reminder-card { flex-direction: column; gap: 8px; }
     .reminder-actions { align-self: flex-end; }
+    .container { padding: 10px; margin: 10px auto; }
+    .add-form { flex-direction: column; }
+    .add-form input, .add-form select { width: 100%; font-size: 16px; }
+    .edit-row { flex-direction: column; }
+    .edit-row input { width: 100%; font-size: 16px; }
   }
 </style>
 </head>
@@ -6919,18 +7002,819 @@ function handleRestart(req, res) {
   setTimeout(() => { try { db.close(); } catch {} process.exit(0); }, 500);
 }
 
+// --- Mobile UI ---
+
+function getMobileHTML() {
+  const theme = getActiveTheme();
+  const themeVars = getThemeVars(theme);
+  const vars = Object.entries(themeVars).map(([k, v]) => `--${k}: ${v};`).join("\n    ");
+  const bgColor = theme === "tron" ? "#05070A" : "#0d1117";
+  const community = process.env.COMMUNITY_USER_ENABLED === "true";
+
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="${bgColor}">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+<title>${BOT_NAME}</title>
+${getGoogleFontsLink(theme)}
+<style>
+  :root { ${vars} }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg-gradient); color: var(--text-primary);
+    font-family: var(--font-body); font-size: 15px;
+    display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* --- Top Bar --- */
+  .top-bar {
+    background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);
+    padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0; z-index: 10;
+  }
+  .top-bar h1 {
+    font-size: 18px; color: var(--accent); font-weight: 700;
+    font-family: var(--font-heading); flex: 1;
+  }
+  .top-bar .status-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--color-success);
+    flex-shrink: 0;
+  }
+  .top-bar .desktop-link {
+    color: var(--text-dim); font-size: 12px; text-decoration: none;
+    padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 6px;
+  }
+
+  /* --- Tab Content --- */
+  .tab-content {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-panel { display: none; min-height: 100%; }
+  .tab-panel.active { display: block; }
+
+  /* --- Bottom Nav --- */
+  .bottom-nav {
+    background: var(--bg-secondary); border-top: 1px solid var(--border-color);
+    display: flex; flex-shrink: 0; z-index: 10;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .nav-tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    padding: 8px 4px 6px; gap: 3px; cursor: pointer;
+    color: var(--text-dim); text-decoration: none; font-size: 10px;
+    transition: color 0.2s; border: none; background: none; font-family: inherit;
+    -webkit-user-select: none; user-select: none;
+  }
+  .nav-tab svg { width: 24px; height: 24px; }
+  .nav-tab.active { color: var(--accent); }
+  .nav-tab:active { opacity: 0.7; }
+
+  /* --- Cards --- */
+  .m-card {
+    background: var(--bg-secondary); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 16px; margin: 8px 12px;
+  }
+  .m-card-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    color: var(--text-dim); letter-spacing: 0.5px; margin-bottom: 10px;
+  }
+  .m-card-value { font-size: 28px; font-weight: 700; color: var(--text-bright); }
+  .m-card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  /* --- Progress Bars --- */
+  .m-bar { height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .m-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+  .m-bar-fill.green { background: var(--color-success); }
+  .m-bar-fill.yellow { background: var(--color-warning); }
+  .m-bar-fill.red { background: var(--color-error); }
+
+  /* --- Grid --- */
+  .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .m-grid .m-card { margin: 4px 6px; }
+  .m-grid .m-card:first-child { margin-left: 12px; }
+  .m-grid .m-card:nth-child(2) { margin-right: 12px; }
+  .m-grid .m-card:nth-child(odd) { margin-left: 12px; margin-right: 6px; }
+  .m-grid .m-card:nth-child(even) { margin-left: 6px; margin-right: 12px; }
+
+  /* --- Event Feed --- */
+  .m-event {
+    padding: 12px 16px; border-bottom: 1px solid var(--border-color);
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .m-event:active { background: var(--bg-secondary); }
+  .m-event-dot {
+    width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex-shrink: 0;
+  }
+  .m-event-dot.telegram { background: var(--accent); }
+  .m-event-dot.mail { background: var(--color-success); }
+  .m-event-dot.tool { background: var(--color-warning); }
+  .m-event-dot.error { background: var(--color-error); }
+  .m-event-dot.system { background: var(--text-dim); }
+  .m-event-body { flex: 1; min-width: 0; }
+  .m-event-msg { font-size: 13px; color: var(--text-primary); word-break: break-word; line-height: 1.4; }
+  .m-event-time { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  /* --- Section Header --- */
+  .m-section {
+    padding: 16px 16px 8px; font-size: 13px; font-weight: 600;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  /* --- Reminder Items --- */
+  .m-reminder {
+    padding: 14px 16px; border-bottom: 1px solid var(--border-color);
+    display: flex; gap: 12px; align-items: center;
+  }
+  .m-reminder:active { background: var(--bg-secondary); }
+  .m-reminder-check {
+    width: 28px; height: 28px; border: 2px solid var(--border-color); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    cursor: pointer; transition: all 0.2s; font-size: 14px; color: transparent;
+    background: none;
+  }
+  .m-reminder-check.done { background: var(--color-success); border-color: var(--color-success); color: #fff; }
+  .m-reminder-body { flex: 1; min-width: 0; }
+  .m-reminder-text { font-size: 14px; color: var(--text-primary); line-height: 1.4; }
+  .m-reminder-text.done { text-decoration: line-through; color: var(--text-dim); }
+  .m-reminder-due { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .m-reminder-due.overdue { color: var(--color-error); font-weight: 600; }
+  .m-reminder-due.soon { color: var(--color-warning); }
+  .m-reminder-del {
+    background: none; border: none; color: var(--text-dim); font-size: 20px;
+    padding: 4px 8px; cursor: pointer; flex-shrink: 0;
+  }
+  .m-reminder-del:active { color: var(--color-error); }
+
+  /* Add Reminder FAB */
+  .m-fab {
+    position: fixed; bottom: 80px; right: 16px; width: 56px; height: 56px;
+    border-radius: 50%; background: var(--accent); color: #fff; border: none;
+    font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 20;
+    transition: transform 0.2s;
+  }
+  .m-fab:active { transform: scale(0.9); }
+
+  /* Add Reminder Modal */
+  .m-modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 100; align-items: flex-end; justify-content: center;
+  }
+  .m-modal-overlay.open { display: flex; }
+  .m-modal {
+    background: var(--bg-secondary); border-radius: 16px 16px 0 0;
+    width: 100%; max-width: 500px; padding: 20px 16px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .m-modal h3 { font-size: 16px; color: var(--text-bright); margin-bottom: 16px; font-family: var(--font-heading); }
+  .m-modal input, .m-modal select {
+    width: 100%; background: var(--bg-primary); border: 1px solid var(--border-color);
+    color: var(--text-primary); padding: 12px 14px; border-radius: 10px;
+    font-family: inherit; font-size: 16px; margin-bottom: 10px; outline: none;
+  }
+  .m-modal input:focus, .m-modal select:focus { border-color: var(--accent); }
+  .m-modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .m-modal-actions button {
+    flex: 1; padding: 12px; border-radius: 10px; font-family: inherit;
+    font-size: 15px; font-weight: 600; cursor: pointer; border: none;
+  }
+  .m-modal .btn-cancel { background: var(--bg-tertiary); color: var(--text-muted); }
+  .m-modal .btn-save { background: var(--accent); color: #fff; }
+
+  /* --- Smart Home --- */
+  .m-room {
+    padding: 12px 16px 4px; font-size: 13px; font-weight: 600; color: var(--accent);
+    font-family: var(--font-heading);
+  }
+  .m-device {
+    padding: 14px 16px; border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .m-device-icon { font-size: 22px; width: 36px; text-align: center; flex-shrink: 0; }
+  .m-device-info { flex: 1; min-width: 0; }
+  .m-device-name { font-size: 14px; color: var(--text-primary); }
+  .m-device-state { font-size: 12px; color: var(--text-muted); }
+  .m-toggle {
+    width: 52px; height: 30px; border-radius: 15px; border: none;
+    background: var(--bg-tertiary); position: relative; cursor: pointer;
+    transition: background 0.3s; flex-shrink: 0;
+  }
+  .m-toggle::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 24px; height: 24px; border-radius: 50%; background: var(--text-dim);
+    transition: all 0.3s;
+  }
+  .m-toggle.on { background: var(--color-success); }
+  .m-toggle.on::after { left: 25px; background: #fff; }
+
+  /* --- Mehr-Menü --- */
+  .m-menu-item {
+    padding: 16px; border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center; gap: 14px;
+    color: var(--text-primary); text-decoration: none; cursor: pointer;
+  }
+  .m-menu-item:active { background: var(--bg-secondary); }
+  .m-menu-item-icon { font-size: 22px; width: 36px; text-align: center; }
+  .m-menu-item-label { font-size: 15px; flex: 1; }
+  .m-menu-item-arrow { color: var(--text-dim); font-size: 18px; }
+  .m-menu-group {
+    padding: 14px 16px 6px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; color: var(--text-dim); letter-spacing: 0.5px;
+  }
+
+  /* --- Pull to refresh --- */
+  .ptr-indicator {
+    text-align: center; padding: 0; height: 0; overflow: hidden;
+    color: var(--text-dim); font-size: 12px; transition: height 0.2s;
+  }
+
+  /* --- Empty states --- */
+  .m-empty {
+    text-align: center; padding: 40px 20px; color: var(--text-dim); font-size: 14px;
+  }
+
+  /* --- Scrollbar --- */
+  .tab-content::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="top-bar">
+  <div class="status-dot" id="mStatusDot"></div>
+  <h1>${BOT_NAME}</h1>
+  <a href="/" class="desktop-link">Desktop</a>
+</div>
+
+<!-- Tab Content -->
+<div class="tab-content" id="tabContent">
+
+  <!-- Dashboard Tab -->
+  <div class="tab-panel active" id="panelDashboard">
+    <div class="ptr-indicator" id="ptrIndicator">Aktualisieren...</div>
+    <div class="m-grid">
+      <div class="m-card">
+        <div class="m-card-title">Uptime</div>
+        <div class="m-card-value" id="mUptime">-</div>
+        <div class="m-card-sub" id="mUptimeSys">System: -</div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Modell</div>
+        <div class="m-card-value" id="mModel" style="font-size:14px;margin-top:8px;">-</div>
+        <div class="m-card-sub" id="mProvider">-</div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Events</div>
+        <div class="m-card-value" id="mEventCount">0</div>
+        <div class="m-card-sub">Heute</div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Clients</div>
+        <div class="m-card-value" id="mClients">0</div>
+        <div class="m-card-sub">Verbunden</div>
+      </div>
+    </div>
+    <div class="m-section">Letzte Events</div>
+    <div id="mEventFeed"></div>
+  </div>
+
+  <!-- System Tab -->
+  <div class="tab-panel" id="panelSystem">
+    <div class="m-grid">
+      <div class="m-card">
+        <div class="m-card-title">CPU</div>
+        <div class="m-card-value" id="mCpuLoad">-</div>
+        <div class="m-card-sub" id="mCpuModel">-</div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">RAM</div>
+        <div class="m-card-value" id="mMemPercent">-</div>
+        <div class="m-bar"><div class="m-bar-fill green" id="mMemBar" style="width:0%"></div></div>
+        <div class="m-card-sub" id="mMemDetail">-</div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Disk</div>
+        <div class="m-card-value" id="mDiskPercent">-</div>
+        <div class="m-bar"><div class="m-bar-fill green" id="mDiskBar" style="width:0%"></div></div>
+        <div class="m-card-sub" id="mDiskDetail">-</div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Node.js</div>
+        <div class="m-card-value" id="mNodeHeap" style="font-size:20px;">-</div>
+        <div class="m-card-sub" id="mNodeRss">-</div>
+      </div>
+    </div>
+    <div id="mSensors"></div>
+  </div>
+
+  <!-- Reminders Tab -->
+  <div class="tab-panel" id="panelReminders">
+    <div class="m-section" id="mReminderTitle">Erinnerungen</div>
+    <div id="mReminderList"></div>
+    <button class="m-fab" id="fabAddReminder" onclick="openAddReminder()">+</button>
+  </div>
+
+  <!-- Smart Home Tab -->
+  <div class="tab-panel" id="panelHome">
+    <div id="mDeviceList"></div>
+  </div>
+
+  <!-- Mehr Tab -->
+  <div class="tab-panel" id="panelMore">
+    <div class="m-menu-group">Verwaltung</div>
+    <a href="/delegations" class="m-menu-item"><span class="m-menu-item-icon">&#x1F4CB;</span><span class="m-menu-item-label">Delegationen</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+    <a href="/roadmap" class="m-menu-item"><span class="m-menu-item-icon">&#x1F5FA;</span><span class="m-menu-item-label">Roadmap</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+    <a href="/workflows" class="m-menu-item"><span class="m-menu-item-icon">&#x26A1;</span><span class="m-menu-item-label">Workflows</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+
+    <div class="m-menu-group">Inhalte</div>
+    <a href="/notes" class="m-menu-item"><span class="m-menu-item-icon">&#x1F4DA;</span><span class="m-menu-item-label">Wissensbasis</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+    <a href="/chat" class="m-menu-item"><span class="m-menu-item-icon">&#x1F4AC;</span><span class="m-menu-item-label">Chat</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+    ${community ? '<a href="/community" class="m-menu-item"><span class="m-menu-item-icon">&#x1F30D;</span><span class="m-menu-item-label">Community</span><span class="m-menu-item-arrow">&#x203A;</span></a>' : ''}
+
+    <div class="m-menu-group">System</div>
+    <a href="/tools" class="m-menu-item"><span class="m-menu-item-icon">&#x1F527;</span><span class="m-menu-item-label">Tools</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+    <a href="/terminal" class="m-menu-item"><span class="m-menu-item-icon">&#x1F4BB;</span><span class="m-menu-item-label">Terminal</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+    <a href="/settings" class="m-menu-item"><span class="m-menu-item-icon">&#x2699;</span><span class="m-menu-item-label">Einstellungen</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+    <a href="/" class="m-menu-item"><span class="m-menu-item-icon">&#x1F5A5;</span><span class="m-menu-item-label">Desktop-Version</span><span class="m-menu-item-arrow">&#x203A;</span></a>
+  </div>
+</div>
+
+<!-- Add Reminder Modal -->
+<div class="m-modal-overlay" id="addReminderModal">
+  <div class="m-modal">
+    <h3>Neue Erinnerung</h3>
+    <input type="text" id="mNewReminderText" placeholder="Woran soll ich erinnern?">
+    <input type="datetime-local" id="mNewReminderDue">
+    <div class="m-modal-actions">
+      <button class="btn-cancel" onclick="closeAddReminder()">Abbrechen</button>
+      <button class="btn-save" onclick="saveReminder()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Navigation -->
+<div class="bottom-nav">
+  <button class="nav-tab active" data-tab="Dashboard" onclick="switchTab('Dashboard')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <span>Dashboard</span>
+  </button>
+  <button class="nav-tab" data-tab="System" onclick="switchTab('System')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    <span>System</span>
+  </button>
+  <button class="nav-tab" data-tab="Reminders" onclick="switchTab('Reminders')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    <span>Erinnern</span>
+  </button>
+  <button class="nav-tab" data-tab="Home" onclick="switchTab('Home')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>Home</span>
+  </button>
+  <button class="nav-tab" data-tab="More" onclick="switchTab('More')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+    <span>Mehr</span>
+  </button>
+</div>
+
+<script>
+// --- Tab Switching ---
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel' + name).classList.add('active');
+  document.querySelector('[data-tab="' + name + '"]').classList.add('active');
+  document.getElementById('tabContent').scrollTop = 0;
+
+  // Show/hide FAB
+  const fab = document.getElementById('fabAddReminder');
+  if (fab) fab.style.display = name === 'Reminders' ? 'flex' : 'none';
+
+  // Load data on tab switch
+  if (name === 'System') loadSystem();
+  if (name === 'Reminders') loadReminders();
+  if (name === 'Home') loadDevices();
+}
+
+// --- Dashboard: SSE Event Feed ---
+let eventCount = 0;
+const eventFeed = document.getElementById('mEventFeed');
+const evtSource = new EventSource('/events');
+
+evtSource.onmessage = function(e) {
+  try {
+    const data = JSON.parse(e.data);
+    if (data.type === 'clients') {
+      document.getElementById('mClients').textContent = data.count;
+      return;
+    }
+    eventCount++;
+    document.getElementById('mEventCount').textContent = eventCount;
+
+    const type = detectType(data.msg || '');
+    const div = document.createElement('div');
+    div.className = 'm-event';
+    div.innerHTML = '<div class="m-event-dot ' + type + '"></div>' +
+      '<div class="m-event-body"><div class="m-event-msg">' + escHtml(data.msg || '') + '</div>' +
+      '<div class="m-event-time">' + new Date(data.ts).toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'}) + '</div></div>';
+
+    eventFeed.insertBefore(div, eventFeed.firstChild);
+    // Keep max 50 events
+    while (eventFeed.children.length > 50) eventFeed.removeChild(eventFeed.lastChild);
+  } catch {}
+};
+
+evtSource.onerror = function() {
+  document.getElementById('mStatusDot').style.background = 'var(--color-error)';
+};
+evtSource.onopen = function() {
+  document.getElementById('mStatusDot').style.background = 'var(--color-success)';
+};
+
+function detectType(msg) {
+  if (/^\\[\\d{2}:\\d{2}:\\d{2}\\]\\s+\\S+:/.test(msg) || /\\[Monitor\\]/i.test(msg)) return 'telegram';
+  if (/mail|imap|smtp/i.test(msg)) return 'mail';
+  if (/fehler|error|err:|exception|timeout|ECONNREFUSED/i.test(msg)) return 'error';
+  if (/tool[_\\s]|execute|function|search|memory/i.test(msg)) return 'tool';
+  return 'system';
+}
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// --- Dashboard: Status Info ---
+async function loadDashboardInfo() {
+  try {
+    const r = await fetch('/api/system');
+    const d = await r.json();
+    document.getElementById('mUptime').textContent = d.uptime.process;
+    document.getElementById('mUptimeSys').textContent = 'System: ' + d.uptime.system;
+    document.getElementById('mModel').textContent = '${process.env.OLLAMA_MODEL || process.env.CLAUDE_MODEL || '-'}'.split(':')[0];
+    document.getElementById('mProvider').textContent = '${(process.env.OLLAMA_URL || '').includes('ollama') || process.env.OLLAMA_URL ? 'Ollama' : process.env.ANTHROPIC_API_KEY ? 'Anthropic' : '-'}';
+  } catch {}
+}
+
+// Load event history
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/history');
+    const events = await r.json();
+    eventCount = events.length;
+    document.getElementById('mEventCount').textContent = eventCount;
+    const recent = events.slice(0, 30);
+    recent.forEach(ev => {
+      const type = detectType(ev.msg || '');
+      const div = document.createElement('div');
+      div.className = 'm-event';
+      div.innerHTML = '<div class="m-event-dot ' + type + '"></div>' +
+        '<div class="m-event-body"><div class="m-event-msg">' + escHtml(ev.msg || '') + '</div>' +
+        '<div class="m-event-time">' + new Date(ev.ts).toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'}) + '</div></div>';
+      eventFeed.appendChild(div);
+    });
+  } catch {}
+}
+
+// --- System Tab ---
+async function loadSystem() {
+  try {
+    const r = await fetch('/api/system');
+    const d = await r.json();
+    document.getElementById('mCpuLoad').textContent = d.cpu.loadAvg[0].toFixed(1);
+    document.getElementById('mCpuModel').textContent = d.cpu.cores + ' Cores';
+    document.getElementById('mMemPercent').textContent = d.memory.percent + '%';
+    document.getElementById('mMemBar').style.width = d.memory.percent + '%';
+    document.getElementById('mMemBar').className = 'm-bar-fill ' + (d.memory.percent > 85 ? 'red' : d.memory.percent > 60 ? 'yellow' : 'green');
+    document.getElementById('mMemDetail').textContent = d.memory.used + ' / ' + d.memory.total;
+    document.getElementById('mDiskPercent').textContent = d.disk.percent + '%';
+    document.getElementById('mDiskBar').style.width = d.disk.percent + '%';
+    document.getElementById('mDiskBar').className = 'm-bar-fill ' + (d.disk.percent > 85 ? 'red' : d.disk.percent > 60 ? 'yellow' : 'green');
+    document.getElementById('mDiskDetail').textContent = d.disk.used + ' / ' + d.disk.total;
+    document.getElementById('mNodeHeap').textContent = d.node.heapUsed;
+    document.getElementById('mNodeRss').textContent = 'RSS: ' + d.node.rss;
+
+    // Sensors
+    const sensorsEl = document.getElementById('mSensors');
+    sensorsEl.innerHTML = '';
+    if (d.sensors.temps.length > 0) {
+      let html = '<div class="m-section">Temperaturen</div><div class="m-grid">';
+      d.sensors.temps.forEach(t => {
+        const color = t.value > (t.crit || 100) ? 'var(--color-error)' : t.value > (t.max || 80) ? 'var(--color-warning)' : 'var(--color-success)';
+        html += '<div class="m-card"><div class="m-card-title">' + escHtml(t.label) + '</div>' +
+          '<div class="m-card-value" style="color:' + color + '">' + Math.round(t.value) + '°</div>' +
+          '<div class="m-card-sub">' + escHtml(t.chip) + '</div></div>';
+      });
+      html += '</div>';
+      sensorsEl.innerHTML = html;
+    }
+    if (d.sensors.fans.length > 0) {
+      let html = '<div class="m-section">Lüfter</div>';
+      d.sensors.fans.forEach(f => {
+        html += '<div class="m-card"><div class="m-card-title">' + escHtml(f.label) + '</div>' +
+          '<div class="m-card-value">' + Math.round(f.value) + '</div><div class="m-card-sub">RPM</div></div>';
+      });
+      sensorsEl.innerHTML += html;
+    }
+  } catch(e) {
+    console.error('System load error:', e);
+  }
+}
+
+// --- Reminders Tab ---
+async function loadReminders() {
+  try {
+    const r = await fetch('/api/reminders');
+    const list = await r.json();
+    const container = document.getElementById('mReminderList');
+    const now = new Date();
+
+    if (!list.length) {
+      container.innerHTML = '<div class="m-empty">Keine Erinnerungen</div>';
+      document.getElementById('mReminderTitle').textContent = 'Erinnerungen';
+      return;
+    }
+
+    // Sort: active first, then by due date
+    const active = list.filter(r => r.status !== 'done').sort((a,b) => new Date(a.due_at) - new Date(b.due_at));
+    const done = list.filter(r => r.status === 'done').sort((a,b) => new Date(b.due_at) - new Date(a.due_at));
+    const sorted = [...active, ...done];
+
+    document.getElementById('mReminderTitle').textContent = 'Erinnerungen (' + active.length + ' aktiv)';
+
+    container.innerHTML = sorted.map(rem => {
+      const isDone = rem.status === 'done';
+      const due = new Date(rem.due_at);
+      const isOverdue = !isDone && due < now;
+      const isSoon = !isDone && !isOverdue && (due - now) < 3600000;
+      const dueStr = due.toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit'}) + ' ' +
+        due.toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'});
+      const recurStr = rem.recurring ? ' &#x1F504; ' + rem.recurring : '';
+
+      return '<div class="m-reminder">' +
+        '<button class="m-reminder-check' + (isDone ? ' done' : '') + '" onclick="toggleReminder(' + rem.id + ',' + (isDone ? 'false' : 'true') + ')">' +
+        (isDone ? '&#x2713;' : '') + '</button>' +
+        '<div class="m-reminder-body"><div class="m-reminder-text' + (isDone ? ' done' : '') + '">' + escHtml(rem.message) + '</div>' +
+        '<div class="m-reminder-due' + (isOverdue ? ' overdue' : isSoon ? ' soon' : '') + '">' +
+        (isOverdue ? '&#x26A0; Überfällig - ' : '') + dueStr + recurStr + '</div></div>' +
+        '<button class="m-reminder-del" onclick="deleteReminder(' + rem.id + ')">&#x2715;</button></div>';
+    }).join('');
+  } catch(e) {
+    console.error('Reminders load error:', e);
+  }
+}
+
+async function toggleReminder(id, done) {
+  try {
+    await fetch('/api/reminders/' + id, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ status: done ? 'done' : 'pending' })
+    });
+    loadReminders();
+  } catch {}
+}
+
+async function deleteReminder(id) {
+  if (!confirm('Erinnerung löschen?')) return;
+  try {
+    await fetch('/api/reminders/' + id, { method: 'DELETE' });
+    loadReminders();
+  } catch {}
+}
+
+function openAddReminder() {
+  document.getElementById('addReminderModal').classList.add('open');
+  // Default: 1 hour from now
+  const d = new Date(Date.now() + 3600000);
+  document.getElementById('mNewReminderDue').value = d.toISOString().slice(0, 16);
+  document.getElementById('mNewReminderText').value = '';
+  setTimeout(() => document.getElementById('mNewReminderText').focus(), 100);
+}
+
+function closeAddReminder() {
+  document.getElementById('addReminderModal').classList.remove('open');
+}
+
+async function saveReminder() {
+  const text = document.getElementById('mNewReminderText').value.trim();
+  const due = document.getElementById('mNewReminderDue').value;
+  if (!text || !due) return;
+  try {
+    await fetch('/api/reminders', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: text, due_at: new Date(due).toISOString() })
+    });
+    closeAddReminder();
+    loadReminders();
+  } catch {}
+}
+
+// --- Smart Home Tab ---
+let haDevices = null;
+
+async function loadDevices() {
+  const container = document.getElementById('mDeviceList');
+  if (!haDevices) {
+    try {
+      const r = await fetch('/api/ha-files/ha-devices-compact.md');
+      const data = await r.json();
+      haDevices = parseHADevices(data.content || '');
+    } catch {
+      container.innerHTML = '<div class="m-empty">Smart Home nicht konfiguriert</div>';
+      return;
+    }
+  }
+  renderDevices(container, haDevices);
+}
+
+function parseHADevices(md) {
+  const rooms = [];
+  let currentRoom = null;
+  md.split('\\n').forEach(line => {
+    const roomMatch = line.match(/^##\\s+(.+)/);
+    if (roomMatch) {
+      currentRoom = { name: roomMatch[1], devices: [] };
+      rooms.push(currentRoom);
+      return;
+    }
+    if (!currentRoom) return;
+    // Format: - Name: \`entity_id\` or - Name: \`entity_id\` (extra info)
+    const m = line.match(/^-\\s+(.+?):\\s*\`([\\w.]+)\`/);
+    if (m) {
+      const name = m[1].trim();
+      const entity = m[2].trim();
+      currentRoom.devices.push({ entity, name, toggleable: isToggleable(entity) });
+    }
+  });
+  return rooms;
+}
+
+function isToggleable(entity) {
+  return entity.startsWith('light.') || entity.startsWith('switch.') ||
+    entity.startsWith('fan.') || entity.startsWith('input_boolean.') ||
+    entity.startsWith('automation.');
+}
+
+function getDeviceIcon(entity) {
+  if (entity.startsWith('light.')) return '&#x1F4A1;';
+  if (entity.startsWith('switch.')) return '&#x1F50C;';
+  if (entity.startsWith('climate.')) return '&#x1F321;';
+  if (entity.startsWith('sensor.')) return '&#x1F4CA;';
+  if (entity.startsWith('binary_sensor.')) return '&#x1F534;';
+  if (entity.startsWith('media_player.')) return '&#x1F3B5;';
+  if (entity.startsWith('cover.')) return '&#x1FA9F;';
+  if (entity.startsWith('fan.')) return '&#x1F4A8;';
+  if (entity.startsWith('camera.')) return '&#x1F4F7;';
+  if (entity.startsWith('lock.')) return '&#x1F512;';
+  if (entity.startsWith('automation.')) return '&#x26A1;';
+  return '&#x2699;';
+}
+
+function renderDevices(container, rooms) {
+  if (!rooms || !rooms.length) {
+    container.innerHTML = '<div class="m-empty">Keine Geräte gefunden</div>';
+    return;
+  }
+  container.innerHTML = rooms.map(room => {
+    if (!room.devices.length) return '';
+    return '<div class="m-room">' + escHtml(room.name) + '</div>' +
+      room.devices.map(dev =>
+        '<div class="m-device" data-entity="' + dev.entity + '">' +
+        '<div class="m-device-icon">' + getDeviceIcon(dev.entity) + '</div>' +
+        '<div class="m-device-info"><div class="m-device-name">' + escHtml(dev.name) + '</div>' +
+        '<div class="m-device-state" id="state_' + dev.entity.replace(/\\./g, '_') + '">...</div></div>' +
+        (dev.toggleable ? '<button class="m-toggle" id="toggle_' + dev.entity.replace(/\\./g, '_') + '" onclick="toggleDevice(\\'' + dev.entity + '\\')"></button>' : '') +
+        '</div>'
+      ).join('');
+  }).join('');
+
+  // Load states
+  loadDeviceStates(rooms);
+}
+
+async function loadDeviceStates(rooms) {
+  try {
+    const r = await fetch('/api/ha/states');
+    const states = await r.json();
+    if (!Array.isArray(states)) return;
+    const stateMap = {};
+    states.forEach(s => stateMap[s.entity_id] = s);
+
+    rooms.forEach(room => room.devices.forEach(dev => {
+      const s = stateMap[dev.entity];
+      if (!s) return;
+      const stateEl = document.getElementById('state_' + dev.entity.replace(/\\./g, '_'));
+      if (stateEl) {
+        let display = s.state;
+        if (s.attributes && s.attributes.unit_of_measurement) display += ' ' + s.attributes.unit_of_measurement;
+        if (s.state === 'on') display = 'An';
+        if (s.state === 'off') display = 'Aus';
+        if (s.state === 'unavailable') display = 'Nicht erreichbar';
+        stateEl.textContent = display;
+      }
+      const toggleEl = document.getElementById('toggle_' + dev.entity.replace(/\\./g, '_'));
+      if (toggleEl) {
+        toggleEl.classList.toggle('on', s.state === 'on');
+      }
+    }));
+  } catch(e) {
+    console.error('HA states error:', e);
+  }
+}
+
+async function toggleDevice(entity) {
+  try {
+    const toggleEl = document.getElementById('toggle_' + entity.replace(/\\./g, '_'));
+    if (toggleEl) toggleEl.classList.toggle('on');
+
+    await fetch('/api/ha/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entity_id: entity })
+    });
+
+    // Refresh states after toggle
+    setTimeout(() => { if (haDevices) loadDeviceStates(haDevices); }, 1000);
+  } catch(e) {
+    console.error('Toggle error:', e);
+  }
+}
+
+// --- Pull to Refresh ---
+let pullStart = 0;
+const tabContent = document.getElementById('tabContent');
+tabContent.addEventListener('touchstart', e => {
+  if (tabContent.scrollTop === 0) pullStart = e.touches[0].clientY;
+});
+tabContent.addEventListener('touchmove', e => {
+  if (pullStart && tabContent.scrollTop === 0) {
+    const diff = e.touches[0].clientY - pullStart;
+    if (diff > 0 && diff < 120) {
+      document.getElementById('ptrIndicator').style.height = Math.min(diff / 2, 40) + 'px';
+    }
+  }
+});
+tabContent.addEventListener('touchend', e => {
+  if (pullStart) {
+    const indicator = document.getElementById('ptrIndicator');
+    if (parseInt(indicator.style.height) > 30) {
+      loadDashboardInfo();
+      loadHistory().then(() => { indicator.style.height = '0'; });
+    } else {
+      indicator.style.height = '0';
+    }
+    pullStart = 0;
+  }
+});
+
+// --- Init ---
+loadDashboardInfo();
+loadHistory();
+
+// Auto-refresh system tab every 10s
+setInterval(() => {
+  if (document.getElementById('panelSystem').classList.contains('active')) loadSystem();
+}, 10000);
+
+// Auto-refresh dashboard info every 30s
+setInterval(loadDashboardInfo, 30000);
+
+// Unregister any service workers - mobile UI doesn't need offline cache
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+}
+</script>
+</body>
+</html>`;
+}
+
 // --- PWA Manifest + Service Worker ---
 
 function getManifestJSON() {
   const theme = getActiveTheme();
   const bgColor = theme === "tron" ? "#05070A" : "#0d1117";
   return JSON.stringify({
-    name: "${BOT_NAME} Chat",
-    short_name: "${BOT_NAME}",
-    start_url: "/chat",
+    name: BOT_NAME + " Monitor",
+    short_name: BOT_NAME,
+    start_url: "/",
+    scope: "/",
     display: "standalone",
+    orientation: "any",
     background_color: bgColor,
     theme_color: bgColor,
+    categories: ["utilities", "productivity"],
     icons: [
       {
         src: "/favicon/web-app-manifest-192x192.png",
@@ -6945,15 +7829,18 @@ function getManifestJSON() {
         purpose: "maskable",
       },
     ],
+    shortcuts: [
+      { name: "Chat", url: "/chat", icons: [{ src: "/favicon/favicon-96x96.png", sizes: "96x96" }] },
+      { name: "System", url: "/system" },
+      { name: "Einstellungen", url: "/settings" },
+    ],
   });
 }
 
 function getServiceWorkerJS() {
-  return `const CACHE = "jarvis-chat-v1";
-const SHELL = ["/chat"];
+  return `const CACHE = "${BOT_NAME.toLowerCase()}-pwa-v3";
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
   self.skipWaiting();
 });
 
@@ -6967,9 +7854,18 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-  if (e.request.url.includes("/api/")) return;
+  if (e.request.method !== "GET") return;
+  if (e.request.url.includes("/api/") || e.request.url.includes("/events")) return;
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request).then((res) => {
+      if (res.ok) {
+        const clone = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() =>
+      caches.match(e.request).then((cached) => cached || new Response("Offline", { status: 503 }))
+    )
   );
 });`;
 }
@@ -7305,8 +8201,18 @@ function startMonitor(port) {
     if (!checkAuth(req, res)) return;
 
     if (req.url === "/" || req.url === "/index.html") {
+      // Auto-redirect mobile browsers to /m
+      const ua = req.headers['user-agent'] || '';
+      if (/Mobile|Android|iPhone|iPad/i.test(ua) && !req.headers['x-no-redirect']) {
+        res.writeHead(302, { "Location": "/m" });
+        res.end();
+        return;
+      }
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(getDashboardHTML());
+    } else if (req.url === "/m") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getMobileHTML());
     } else if (req.url === "/events") {
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -7340,6 +8246,53 @@ function startMonitor(port) {
       res.end(JSON.stringify(getCleanupInfo()));
     } else if (req.url === "/api/cleanup" && req.method === "POST") {
       handleCleanup(req, res);
+
+    // --- HA API Proxy (for mobile UI) ---
+    } else if (req.url === "/api/ha/states" && req.method === "GET") {
+      const haUrl = process.env.HOMEASSISTANT_URL || "";
+      const haToken = process.env.HOMEASSISTANT_TOKEN || "";
+      if (!haUrl || !haToken) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end("[]");
+        return;
+      }
+      fetch(haUrl + "/api/states", { headers: { "Authorization": "Bearer " + haToken } })
+        .then(r => r.json())
+        .then(data => {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(data));
+        })
+        .catch(e => {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        });
+    } else if (req.url === "/api/ha/toggle" && req.method === "POST") {
+      const haUrl = process.env.HOMEASSISTANT_URL || "";
+      const haToken = process.env.HOMEASSISTANT_TOKEN || "";
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString());
+          const domain = body.entity_id.split(".")[0];
+          fetch(haUrl + "/api/services/" + domain + "/toggle", {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + haToken, "Content-Type": "application/json" },
+            body: JSON.stringify({ entity_id: body.entity_id })
+          })
+          .then(() => {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ ok: true }));
+          })
+          .catch(e => {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: e.message }));
+          });
+        } catch(e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
 
     // --- HA Editor ---
     } else if (req.url === "/system") {
