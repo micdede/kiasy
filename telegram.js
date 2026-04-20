@@ -40,6 +40,23 @@ const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
 bot.on("polling_error", (error) => {
   console.error("Polling-Fehler:", error.code || error.message);
+  // EFATAL = Polling gestoppt → automatisch neu starten
+  if (error.code === "EFATAL") {
+    console.log("Polling-Recovery: Neustart in 5 Sekunden...");
+    setTimeout(() => {
+      try {
+        bot.stopPolling().then(() => {
+          bot.startPolling();
+          console.log("Polling-Recovery: Erfolgreich neu gestartet");
+        }).catch(() => {
+          bot.startPolling();
+          console.log("Polling-Recovery: Gestartet (nach Stop-Fehler)");
+        });
+      } catch (e) {
+        console.error("Polling-Recovery fehlgeschlagen:", e.message);
+      }
+    }, 5000);
+  }
 });
 
 const BOT = process.env.BOT_NAME || "JARVIS";
@@ -773,3 +790,15 @@ function shutdown(signal) {
 
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+// Unbehandelte Fehler abfangen statt crashen
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason?.message || reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error.message);
+  // Bei kritischen Fehlern trotzdem beenden (systemd startet neu)
+  if (error.message?.includes("ENOMEM") || error.message?.includes("Cannot allocate")) {
+    shutdown("UNCAUGHT_CRITICAL");
+  }
+});
