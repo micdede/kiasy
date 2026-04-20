@@ -30,9 +30,11 @@ try {
   } catch {}
 }
 
-function getNav() {
+function getNav(pageTitle = "") {
   const community = process.env.COMMUNITY_USER_ENABLED === "true" ? '\n    <a href="/community">Community</a>' : '';
-  return `<nav class="nav-links">
+  const titleSuffix = pageTitle ? ` <span class="nav-page-title">/ ${pageTitle}</span>` : '';
+  return `<h1 class="nav-logo"><span class="dot"></span> ${BOT_NAME}${titleSuffix}</h1>
+  <nav class="nav-links">
     <a href="/">Monitor</a>
     <a href="/chat">Chat</a>
     <a href="/system">System</a>
@@ -390,12 +392,14 @@ function getThemeCSS() {
     padding: 12px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
     position: relative;
   }
-  header h1 { font-size: 16px; color: var(--accent); font-weight: 600; font-family: var(--font-heading); white-space: nowrap; }
-  .nav-links { display: contents; }
+  header h1, .nav-logo { font-size: 16px; color: var(--accent); font-weight: 600; font-family: var(--font-heading); white-space: nowrap; margin: 0; }
+  .nav-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); display: inline-block; }
+  .nav-page-title { color: var(--text-muted); font-weight: 400; font-size: 14px; }
+  .nav-links { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .nav-links a, header > a {
-    color: var(--text-muted); text-decoration: none; font-size: 12px;
-    padding: 4px 10px; border: 1px solid var(--border-color); border-radius: 6px;
-    transition: all 0.15s;
+    color: var(--text-muted); text-decoration: none; font-size: 11px;
+    padding: 3px 8px; border: 1px solid var(--border-color); border-radius: 6px;
+    transition: all 0.15s; white-space: nowrap;
   }
   .nav-links a:hover, header > a:hover { color: var(--text-primary); border-color: var(--accent); }
   .hamburger {
@@ -534,8 +538,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1><span class="dot"></span> ${BOT_NAME} Monitor</h1>
-  ${getNav()}
+  ${getNav("Monitor")}
 </header>
 <div class="filters">
   <button class="filter-btn active" data-type="all">Alle <span class="count" id="count-all">0</span></button>
@@ -739,8 +742,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>${BOT_NAME} System</h1>
-  ${getNav()}
+  ${getNav("System")}
 </header>
 
 <div class="content">
@@ -1039,8 +1041,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Smart Home Editor</h1>
-  ${getNav()}
+  ${getNav("Smart Home")}
 </header>
 
 <div class="toolbar">
@@ -1465,8 +1466,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Einstellungen</h1>
-  ${getNav()}
+  ${getNav("Einstellungen")}
 </header>
 
 <div class="banner" id="banner">
@@ -2366,8 +2366,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Wissensbasis</h1>
-  ${getNav()}
+  ${getNav("Wissensbasis")}
 </header>
 
 <div class="toolbar">
@@ -2927,7 +2926,7 @@ ${getThemeCSS()}
     word-wrap: break-word; overflow-wrap: break-word;
   }
   .msg.user .bubble {
-    background: var(--accent); color: #fff; border-bottom-right-radius: 4px;
+    background: var(--accent); color: var(--accent-contrast, #fff); border-bottom-right-radius: 4px;
   }
   .msg.assistant .bubble {
     background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary);
@@ -3378,6 +3377,18 @@ async function loadHistory() {
     }
   } catch {}
 }
+// Accent-Kontrast berechnen: helle Accent-Farbe → dunkle Schrift, dunkle → weiß
+(function() {
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  if (!accent) return;
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.fillStyle = accent;
+  ctx.fillRect(0,0,1,1);
+  const [r,g,b] = ctx.getImageData(0,0,1,1).data;
+  // Relative Luminanz (WCAG)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  document.documentElement.style.setProperty('--accent-contrast', luminance > 0.5 ? '#1a1a1a' : '#ffffff');
+})();
 loadHistory();
 </script>
 </body>
@@ -3519,8 +3530,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Theme Editor</h1>
-  ${getNav()}
+  ${getNav("Theme Editor")}
 </header>
 
 <div class="container">
@@ -3889,8 +3899,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Tool Manager</h1>
-  ${getNav()}
+  ${getNav("Tools")}
 </header>
 
 <div class="toolbar">
@@ -4434,8 +4443,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Workflows</h1>
-  ${getNav()}
+  ${getNav("Workflows")}
 </header>
 
 <div class="container">
@@ -4668,8 +4676,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>${BOT_NAME} Community</h1>
-  ${getNav()}
+  ${getNav("Community")}
 </header>
 
 <div class="chat-container">
@@ -4894,8 +4901,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>${BOT_NAME} Delegationen</h1>
-  ${getNav()}
+  ${getNav("Delegationen")}
 </header>
 
 <div class="content">
@@ -5155,8 +5161,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Roadmap</h1>
-  ${getNav()}
+  ${getNav("Roadmap")}
 </header>
 
 <div class="container">
@@ -5498,8 +5503,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Terminal</h1>
-  ${getNav()}
+  ${getNav("Terminal")}
 </header>
 
 <div class="main">
@@ -6531,8 +6535,7 @@ ${getThemeCSS()}
 </head>
 <body>
 <header>
-  <h1>Erinnerungen</h1>
-  ${getNav()}
+  ${getNav("Erinnerungen")}
 </header>
 
 <div class="container">
@@ -7137,10 +7140,11 @@ ${getThemeCSS()}
 </style>
 </head>
 <body>
-  ${getNav()}
+<header>
+  ${getNav("Gedaechtnis")}
+</header>
 
   <div class="toolbar">
-    <h2>Gedaechtnis</h2>
     <span class="spacer"></span>
     <button class="btn" onclick="reindex()">Re-Indexieren</button>
   </div>
@@ -7446,10 +7450,11 @@ ${getThemeCSS()}
 </style>
 </head>
 <body>
-  ${getNav()}
+<header>
+  ${getNav("News Quellen")}
+</header>
 
   <div class="toolbar">
-    <h2>News Quellen</h2>
     <span class="spacer"></span>
     <button class="btn btn-primary" onclick="openModal()">+ Neue Quelle</button>
   </div>
