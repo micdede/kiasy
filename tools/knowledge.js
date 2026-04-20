@@ -162,6 +162,14 @@ async function execute(name, input) {
       db.notes.upsert(filename);
       gitSync(`Neue Notiz: ${input.title}`);
 
+      // Vektorisieren
+      try {
+        const vm = require("../lib/vector-memory");
+        vm.upsert(`kb_${filename}_0`, `${input.title}: ${input.content}`, {
+          type: "kb", source_id: filename, title: input.title, date: now,
+        }).catch(() => {});
+      } catch {}
+
       return `Notiz erstellt: ${filename}`;
     }
 

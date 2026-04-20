@@ -64,12 +64,19 @@ async function execute(name, input) {
     switch (action) {
       case "add": {
         const entry = db.memory.add(category, data);
+        // Im Hintergrund vektorisieren
+        try {
+          const vm = require("../lib/vector-memory");
+          const text = [data.key, data.value, data.task, data.topic, data.content].filter(Boolean).join(": ");
+          if (text.length > 5) vm.upsert(`memory_${entry.id}`, text, { type: "memory", category, source_id: String(entry.id), date: entry.added }).catch(() => {});
+        } catch {}
         return `Gespeichert in ${category}: ${JSON.stringify(entry)}`;
       }
 
       case "remove": {
         const removed = db.memory.remove(data.id);
         if (!removed) return `Eintrag mit ID ${data.id} nicht gefunden.`;
+        try { require("../lib/vector-memory").remove(`memory_${data.id}`).catch(() => {}); } catch {}
         return `Eintrag ${data.id} entfernt.`;
       }
 

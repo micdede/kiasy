@@ -57,7 +57,7 @@ console.log(`LLM-Provider: ${provider.name}`);
 
 // --- System-Prompt ---
 
-function getSystemPrompt() {
+function getSystemPrompt(semanticContext = "") {
   const OWNER = process.env.OWNER_NAME || "Michael";
   const BOT = process.env.BOT_NAME || "JARVIS";
   const CITY = process.env.OWNER_CITY || "";
@@ -221,7 +221,15 @@ Wenn du ein neues Tool brauchst:
 ## Sicherheit
 - Nur innerhalb ${HOME_DIR}/ operieren
 - Keine Systemdateien, keine Netzwerkkonfiguration ändern
-- Bei destruktiven Operationen (Löschen, Überschreiben) vorher nachfragen`;
+- Bei destruktiven Operationen (Löschen, Überschreiben) vorher nachfragen
+
+## Semantisches Gedächtnis
+- Du hast ein KI-Gedächtnis auf Basis von Vektor-Embeddings (Qdrant + bge-m3)
+- Bei jeder Nachricht wird automatisch nach semantisch relevantem Kontext gesucht — frühere Gespräche, Erinnerungen und Wissen
+- Der Kontext erscheint unten als "Relevanter Kontext aus dem Gedächtnis" — nutze ihn um bessere, persönlichere Antworten zu geben
+- Wenn der Kontext relevante Infos enthält (z.B. Vorlieben, frühere Diskussionen), beziehe dich darauf — aber erwähne nicht explizit "mein Gedächtnis sagt..."
+- Neue Nachrichten und Erinnerungen werden automatisch vektorisiert
+${semanticContext}`;
 }
 
 // --- Dynamisches Tool-Loading ---
@@ -348,10 +356,29 @@ async function handleMessage(chatId, userMessage, options = {}) {
   try { db.messages.save(chatId, "user", userMessage); } catch {}
   trimHistory(history);
 
+  // Semantischen Kontext aus Qdrant holen (non-blocking, Fallback = leer)
+  let semanticContext = "";
+  try {
+    const vm = require("./lib/vector-memory");
+    semanticContext = await vm.getRelevantContext(userMessage, 8);
+  } catch (e) {
+    // Qdrant nicht erreichbar → ohne Kontext weiter
+  }
+
+  // Neue Nachricht im Hintergrund vektorisieren
+  try {
+    const vm = require("./lib/vector-memory");
+    const msgId = Date.now();
+    vm.upsert(`chat_${msgId}`, `[user] ${userMessage}`, {
+      type: "chat", role: "user", chat_id: String(chatId),
+      date: new Date().toISOString(),
+    }).catch(() => {}); // Fire-and-forget
+  } catch {}
+
   for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
     let result;
     try {
-      result = await provider.chat(getSystemPrompt(), history, definitions);
+      result = await provider.chat(getSystemPrompt(semanticContext), history, definitions);
     } catch (error) {
       console.error(`  API-Fehler (Turn ${turn}):`, error.message);
       // Bei 500er: einmal retry nach 2s
@@ -359,7 +386,7 @@ async function handleMessage(chatId, userMessage, options = {}) {
         console.log("  Retry in 2s...");
         await new Promise((r) => setTimeout(r, 2000));
         try {
-          result = await provider.chat(getSystemPrompt(), history, definitions);
+          result = await provider.chat(getSystemPrompt(semanticContext), history, definitions);
         } catch (retryErr) {
           // Fehlgeschlagene User-Nachricht entfernen
           history.pop();
@@ -413,7 +440,20 @@ async function handleMessage(chatId, userMessage, options = {}) {
     // Finale Text-Antwort
     provider.pushAssistant(history, result);
     try { db.messages.save(chatId, "assistant", history[history.length - 1].content); } catch {}
-    return buildResponse(result.text || "(keine Antwort)");
+
+    // Antwort im Hintergrund vektorisieren
+    const answerText = result.text || "";
+    if (answerText.length > 30) {
+      try {
+        const vm = require("./lib/vector-memory");
+        vm.upsert(`chat_${Date.now()}`, `[assistant] ${answerText}`, {
+          type: "chat", role: "assistant", chat_id: String(chatId),
+          date: new Date().toISOString(),
+        }).catch(() => {});
+      } catch {}
+    }
+
+    return buildResponse(answerText || "(keine Antwort)");
   }
 
   // Auto-Continue prüfen: Hat der Agent workflow_continue aufgerufen?
