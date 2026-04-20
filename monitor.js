@@ -45,6 +45,8 @@ function getNav() {
     <a href="/roadmap">Roadmap</a>
     <a href="/tools">Tools</a>
     <a href="/workflows">Workflows</a>
+    <a href="/memory">Gedaechtnis</a>
+    <a href="/news">News Quellen</a>
   </nav>
   <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open');event.stopPropagation();" aria-label="Menü">
     <span></span><span></span><span></span>
@@ -7002,6 +7004,770 @@ function handleRestart(req, res) {
   setTimeout(() => { try { db.close(); } catch {} process.exit(0); }, 500);
 }
 
+// --- Vector Memory UI ---
+
+function getMemoryHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+<title>${BOT_NAME} - Gedaechtnis</title>
+${getGoogleFontsLink(getActiveTheme())}
+${getThemeCSS()}
+<style>
+  body { height: 100vh; display: flex; flex-direction: column; }
+  .toolbar {
+    background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 12px 20px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .toolbar h2 { margin: 0; font-size: 18px; color: var(--text-primary); }
+  .spacer { flex: 1; }
+  .btn {
+    padding: 6px 14px; border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 13px;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+  .btn-primary { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-danger { background: var(--color-error); border-color: var(--color-error); color: #fff; }
+
+  .content { flex: 1; overflow-y: auto; padding: 20px; }
+
+  /* Stats Cards */
+  .stats-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 16px 20px; flex: 1; min-width: 140px;
+  }
+  .stat-card .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+  .stat-card .sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  .stat-card.memory .value { color: var(--accent-color); }
+  .stat-card.chat .value { color: #60a5fa; }
+  .stat-card.kb .value { color: #34d399; }
+  .stat-card.status .value { font-size: 16px; }
+  .stat-card.status .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .stat-card.status .dot.green { background: #22c55e; }
+  .stat-card.status .dot.yellow { background: #eab308; }
+  .stat-card.status .dot.red { background: #ef4444; }
+
+  /* Search Section */
+  .search-section {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 20px; margin-bottom: 24px;
+  }
+  .search-section h3 { margin: 0 0 12px; font-size: 15px; color: var(--text-primary); }
+  .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .search-row input {
+    flex: 1; padding: 10px 14px; background: var(--bg-primary); color: var(--text-primary);
+    border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; font-family: inherit;
+  }
+  .search-row input:focus { outline: none; border-color: var(--accent-color); }
+  .filter-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 4px 12px; border: 1px solid var(--border-color); border-radius: 16px;
+    background: var(--bg-primary); color: var(--text-secondary); cursor: pointer; font-size: 12px;
+    transition: all 0.2s;
+  }
+  .filter-btn.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+  .filter-btn:hover { border-color: var(--accent-color); }
+
+  /* Results */
+  .results { min-height: 100px; }
+  .result-item {
+    display: flex; gap: 12px; padding: 12px; border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s;
+  }
+  .result-item:hover { background: var(--bg-tertiary); }
+  .result-score {
+    min-width: 48px; text-align: center; padding: 4px 0;
+  }
+  .score-bar {
+    width: 48px; height: 6px; background: var(--bg-tertiary); border-radius: 3px; margin-top: 4px; overflow: hidden;
+  }
+  .score-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .score-fill.high { background: #22c55e; }
+  .score-fill.mid { background: #eab308; }
+  .score-fill.low { background: #ef4444; }
+  .score-num { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .result-body { flex: 1; min-width: 0; }
+  .result-text { font-size: 13px; color: var(--text-primary); line-height: 1.5; word-break: break-word; }
+  .result-meta { font-size: 11px; color: var(--text-secondary); margin-top: 4px; display: flex; gap: 8px; }
+  .type-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px;
+    font-weight: 600; text-transform: uppercase;
+  }
+  .type-badge.memory { background: var(--accent-color)22; color: var(--accent-color); }
+  .type-badge.chat { background: #60a5fa22; color: #60a5fa; }
+  .type-badge.kb { background: #34d39922; color: #34d399; }
+
+  /* Recent Entries */
+  .recent-section {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 20px;
+  }
+  .recent-section h3 { margin: 0 0 12px; font-size: 15px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+  .recent-list { max-height: 400px; overflow-y: auto; }
+  .recent-item {
+    padding: 10px 0; border-bottom: 1px solid var(--border-color); display: flex; gap: 10px; align-items: flex-start;
+  }
+  .recent-item:last-child { border-bottom: none; }
+  .recent-text { font-size: 13px; color: var(--text-primary); flex: 1; line-height: 1.4; }
+  .recent-time { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-secondary); font-size: 14px; }
+
+  /* Migration Status */
+  .migrate-bar {
+    margin-top: 12px; padding: 10px; background: var(--bg-primary); border-radius: 6px; font-size: 13px;
+    display: none;
+  }
+  .migrate-bar.active { display: block; }
+  .migrate-progress {
+    height: 4px; background: var(--bg-tertiary); border-radius: 2px; margin-top: 8px; overflow: hidden;
+  }
+  .migrate-progress-fill { height: 100%; background: var(--accent-color); border-radius: 2px; transition: width 0.3s; width: 0%; }
+</style>
+</head>
+<body>
+  ${getNav()}
+
+  <div class="toolbar">
+    <h2>Gedaechtnis</h2>
+    <span class="spacer"></span>
+    <button class="btn" onclick="reindex()">Re-Indexieren</button>
+  </div>
+
+  <div class="content">
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card status" id="statusCard">
+        <div class="label">Qdrant Status</div>
+        <div class="value"><span class="dot"></span>Laden...</div>
+      </div>
+      <div class="stat-card memory">
+        <div class="label">Erinnerungen</div>
+        <div class="value" id="memCount">-</div>
+        <div class="sub">Memory-Eintraege</div>
+      </div>
+      <div class="stat-card chat">
+        <div class="label">Gespraeche</div>
+        <div class="value" id="chatCount">-</div>
+        <div class="sub">Chat-Nachrichten</div>
+      </div>
+      <div class="stat-card kb">
+        <div class="label">Wissen</div>
+        <div class="value" id="kbCount">-</div>
+        <div class="sub">KB-Chunks</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Gesamt</div>
+        <div class="value" id="totalCount">-</div>
+        <div class="sub">Vektoren (1024 dim)</div>
+      </div>
+    </div>
+
+    <div class="search-section">
+      <h3>Semantische Suche</h3>
+      <div class="search-row">
+        <input type="text" id="searchInput" placeholder="Suche nach Bedeutung, nicht nur Stichworten..." onkeydown="if(event.key==='Enter')doSearch()">
+        <button class="btn btn-primary" onclick="doSearch()">Suchen</button>
+      </div>
+      <div class="filter-row">
+        <button class="filter-btn active" data-type="" onclick="setFilter(this)">Alle</button>
+        <button class="filter-btn" data-type="memory" onclick="setFilter(this)">Erinnerungen</button>
+        <button class="filter-btn" data-type="chat" onclick="setFilter(this)">Gespraeche</button>
+        <button class="filter-btn" data-type="kb" onclick="setFilter(this)">Wissen</button>
+      </div>
+      <div class="results" id="results">
+        <div class="empty-state">Gib einen Suchbegriff ein — die Suche findet Ergebnisse nach Bedeutung, nicht nur nach Stichworten.</div>
+      </div>
+    </div>
+
+    <div class="recent-section">
+      <h3>Letzte Eintraege</h3>
+      <div class="recent-list" id="recentList">
+        <div class="empty-state">Laden...</div>
+      </div>
+    </div>
+
+    <div class="migrate-bar" id="migrateBar">
+      <span id="migrateText">Re-Indexierung laeuft...</span>
+      <div class="migrate-progress"><div class="migrate-progress-fill" id="migrateFill"></div></div>
+    </div>
+  </div>
+
+<script>
+let activeFilter = '';
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/memory/stats');
+    const data = await res.json();
+    document.getElementById('memCount').textContent = data.memory || 0;
+    document.getElementById('chatCount').textContent = data.chat || 0;
+    document.getElementById('kbCount').textContent = data.kb || 0;
+    document.getElementById('totalCount').textContent = data.total || 0;
+    const sc = document.getElementById('statusCard');
+    const dot = data.status === 'green' ? 'green' : data.status === 'yellow' ? 'yellow' : 'red';
+    sc.querySelector('.value').innerHTML = '<span class="dot ' + dot + '"></span>' + (data.available ? 'Verbunden' : 'Offline');
+  } catch (e) {
+    document.getElementById('statusCard').querySelector('.value').innerHTML = '<span class="dot red"></span>Fehler';
+  }
+}
+
+async function loadRecent() {
+  try {
+    const res = await fetch('/api/memory/recent');
+    const items = await res.json();
+    const el = document.getElementById('recentList');
+    if (items.length === 0) { el.innerHTML = '<div class="empty-state">Keine Eintraege</div>'; return; }
+    el.innerHTML = items.map(function(item) {
+      const date = item.indexed_at ? new Date(item.indexed_at).toLocaleString('de-DE') : '';
+      return '<div class="recent-item">' +
+        '<span class="type-badge ' + (item.type||'') + '">' + (item.type||'?').toUpperCase() + '</span>' +
+        '<span class="recent-text">' + esc(item.text_preview || '') + '</span>' +
+        '<span class="recent-time">' + date + '</span>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    document.getElementById('recentList').innerHTML = '<div class="empty-state">Fehler beim Laden</div>';
+  }
+}
+
+function setFilter(btn) {
+  document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  activeFilter = btn.dataset.type;
+  if (document.getElementById('searchInput').value.trim()) doSearch();
+}
+
+async function doSearch() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  const el = document.getElementById('results');
+  el.innerHTML = '<div class="empty-state">Suche...</div>';
+
+  try {
+    const url = '/api/memory/search?q=' + encodeURIComponent(query) + (activeFilter ? '&type=' + activeFilter : '') + '&limit=15';
+    const res = await fetch(url);
+    const items = await res.json();
+    if (items.length === 0) { el.innerHTML = '<div class="empty-state">Keine semantisch passenden Ergebnisse gefunden.</div>'; return; }
+    el.innerHTML = items.map(function(item) {
+      const pct = Math.round(item.score * 100);
+      const cls = pct >= 60 ? 'high' : pct >= 40 ? 'mid' : 'low';
+      const date = item.payload.date ? new Date(item.payload.date).toLocaleDateString('de-DE') : '';
+      return '<div class="result-item">' +
+        '<div class="result-score"><div class="score-num">' + pct + '%</div><div class="score-bar"><div class="score-fill ' + cls + '" style="width:' + pct + '%"></div></div></div>' +
+        '<div class="result-body">' +
+          '<div class="result-text">' + esc(item.payload.text_preview || '') + '</div>' +
+          '<div class="result-meta">' +
+            '<span class="type-badge ' + (item.payload.type||'') + '">' + (item.payload.type||'?').toUpperCase() + '</span>' +
+            (date ? '<span>' + date + '</span>' : '') +
+            (item.payload.role ? '<span>' + item.payload.role + '</span>' : '') +
+            (item.payload.title ? '<span>' + esc(item.payload.title) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    el.innerHTML = '<div class="empty-state">Fehler: ' + e.message + '</div>';
+  }
+}
+
+async function reindex() {
+  if (!confirm('Alle Daten neu vektorisieren? Das kann einige Minuten dauern.')) return;
+  const bar = document.getElementById('migrateBar');
+  bar.classList.add('active');
+  document.getElementById('migrateText').textContent = 'Re-Indexierung gestartet...';
+  document.getElementById('migrateFill').style.width = '10%';
+
+  try {
+    const res = await fetch('/api/memory/reindex', { method: 'POST' });
+    const data = await res.json();
+    document.getElementById('migrateFill').style.width = '100%';
+    document.getElementById('migrateText').textContent = 'Fertig: ' + data.total + ' Eintraege vektorisiert';
+    loadStats();
+    loadRecent();
+    setTimeout(function() { bar.classList.remove('active'); }, 5000);
+  } catch (e) {
+    document.getElementById('migrateText').textContent = 'Fehler: ' + e.message;
+  }
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+loadStats();
+loadRecent();
+</script>
+</body>
+</html>`;
+}
+
+// --- News Sources UI ---
+
+function getNewsHTML() {
+  return `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon/favicon-96x96.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png">
+<title>${BOT_NAME} - News Quellen</title>
+${getGoogleFontsLink(getActiveTheme())}
+${getThemeCSS()}
+<style>
+  body { height: 100vh; display: flex; flex-direction: column; }
+  .toolbar {
+    background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 12px 20px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  }
+  .toolbar h2 { margin: 0; font-size: 18px; color: var(--text-primary); }
+  .spacer { flex: 1; }
+  .btn {
+    padding: 6px 14px; border: 1px solid var(--border-color); border-radius: 6px;
+    background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 13px;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+  .btn-primary { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-danger { background: var(--color-error); border-color: var(--color-error); color: #fff; }
+  .btn-danger:hover { opacity: 0.85; }
+
+  .content { flex: 1; overflow-y: auto; padding: 20px; }
+
+  /* Source Cards */
+  .sources-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px;
+  }
+  .source-card {
+    background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;
+    padding: 16px; transition: border-color 0.2s;
+  }
+  .source-card:hover { border-color: var(--accent-color); }
+  .source-card.disabled { opacity: 0.5; }
+  .source-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .source-type {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px;
+    font-weight: 600; text-transform: uppercase;
+  }
+  .source-type.api { background: #2563eb33; color: #60a5fa; }
+  .source-type.rss { background: #f9731633; color: #fb923c; }
+  .source-name { font-size: 16px; font-weight: 600; color: var(--text-primary); flex: 1; }
+  .source-category {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    background: var(--bg-tertiary); color: var(--text-secondary);
+  }
+  .source-url {
+    font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .source-meta {
+    display: flex; gap: 8px; align-items: center; margin-top: 10px;
+  }
+  .source-toggle {
+    position: relative; width: 36px; height: 20px; cursor: pointer;
+  }
+  .source-toggle input { display: none; }
+  .source-toggle .slider {
+    position: absolute; inset: 0; background: var(--bg-tertiary); border-radius: 10px; transition: 0.2s;
+  }
+  .source-toggle .slider:before {
+    content: ''; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px;
+    background: var(--text-secondary); border-radius: 50%; transition: 0.2s;
+  }
+  .source-toggle input:checked + .slider { background: var(--accent-color); }
+  .source-toggle input:checked + .slider:before { transform: translateX(16px); background: #fff; }
+  .source-adapter {
+    font-size: 11px; color: var(--text-secondary); background: var(--bg-tertiary);
+    padding: 2px 6px; border-radius: 3px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 1000; justify-content: center; align-items: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg-primary); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 24px; width: 520px; max-width: 95vw;
+    max-height: 85vh; overflow-y: auto;
+  }
+  .modal h3 { margin: 0 0 16px; color: var(--text-primary); }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 8px 10px; background: var(--bg-secondary); color: var(--text-primary);
+    border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px;
+    font-family: inherit; box-sizing: border-box;
+  }
+  .form-group textarea { min-height: 60px; resize: vertical; }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+  /* Templates */
+  .templates { margin-bottom: 24px; }
+  .templates h3 { margin: 0 0 12px; font-size: 15px; color: var(--text-primary); }
+  .template-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+  .template-btn {
+    padding: 8px 14px; border: 1px solid var(--border-color); border-radius: 8px;
+    background: var(--bg-secondary); color: var(--text-primary); cursor: pointer;
+    font-size: 12px; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+  }
+  .template-btn:hover { border-color: var(--accent-color); background: var(--accent-color)15; }
+  .template-btn .icon { font-size: 16px; }
+
+  /* Test Result */
+  .test-result {
+    margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 12px;
+    max-height: 200px; overflow-y: auto; display: none;
+  }
+  .test-result.success { display: block; background: #16a34a22; border: 1px solid #16a34a55; color: var(--color-success); }
+  .test-result.error { display: block; background: #dc262622; border: 1px solid #dc262655; color: var(--color-error); }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-secondary);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { margin: 4px 0; }
+</style>
+</head>
+<body>
+  ${getNav()}
+
+  <div class="toolbar">
+    <h2>News Quellen</h2>
+    <span class="spacer"></span>
+    <button class="btn btn-primary" onclick="openModal()">+ Neue Quelle</button>
+  </div>
+
+  <div class="content">
+    <div class="templates">
+      <h3>Schnell hinzufuegen</h3>
+      <div class="template-grid">
+        <button class="template-btn" onclick="addTemplate('newsapi')"><span class="icon">&#x1F4F0;</span> NewsAPI</button>
+        <button class="template-btn" onclick="addTemplate('newsdata')"><span class="icon">&#x1F310;</span> NewsData.io</button>
+        <button class="template-btn" onclick="addTemplate('hackernews')"><span class="icon">&#x1F9E1;</span> Hacker News</button>
+        <button class="template-btn" onclick="addTemplate('tagesschau')"><span class="icon">&#x1F1E9;&#x1F1EA;</span> Tagesschau</button>
+        <button class="template-btn" onclick="addTemplate('heise')"><span class="icon">&#x1F4BB;</span> Heise</button>
+        <button class="template-btn" onclick="addTemplate('spiegel')"><span class="icon">&#x1F4F0;</span> Spiegel</button>
+        <button class="template-btn" onclick="addTemplate('golem')"><span class="icon">&#x1F5A5;</span> Golem</button>
+        <button class="template-btn" onclick="addTemplate('standard')"><span class="icon">&#x1F1E6;&#x1F1F9;</span> Der Standard</button>
+        <button class="template-btn" onclick="addTemplate('ard')"><span class="icon">&#x1F4FA;</span> ARD</button>
+        <button class="template-btn" onclick="addTemplate('netzpolitik')"><span class="icon">&#x1F310;</span> Netzpolitik</button>
+      </div>
+    </div>
+
+    <div id="sourcesList"></div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <h3 id="modalTitle">Neue Quelle</h3>
+      <input type="hidden" id="editId">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Typ</label>
+          <select id="fType" onchange="onTypeChange()">
+            <option value="rss">RSS Feed</option>
+            <option value="api">API</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Kategorie</label>
+          <select id="fCategory">
+            <option value="general">Allgemein</option>
+            <option value="technology">Technologie</option>
+            <option value="business">Wirtschaft</option>
+            <option value="science">Wissenschaft</option>
+            <option value="sports">Sport</option>
+            <option value="entertainment">Unterhaltung</option>
+            <option value="politics">Politik</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="fName" placeholder="z.B. Tagesschau RSS">
+      </div>
+
+      <div class="form-group">
+        <label>URL</label>
+        <input type="text" id="fUrl" placeholder="https://...">
+      </div>
+
+      <div class="form-group" id="apiKeyGroup">
+        <label>API Key</label>
+        <input type="text" id="fApiKey" placeholder="Optional">
+      </div>
+
+      <div class="form-group" id="adapterGroup">
+        <label>API Adapter</label>
+        <select id="fAdapter">
+          <option value="generic">Generic JSON</option>
+          <option value="newsapi">NewsAPI.org</option>
+          <option value="newsdata">NewsData.io</option>
+          <option value="hackernews">Hacker News</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="configGroup">
+        <label>Erweiterte Config (JSON)</label>
+        <textarea id="fConfig" placeholder='{"resultPath": "articles", "titleField": "title"}'></textarea>
+      </div>
+
+      <div id="testResult" class="test-result"></div>
+
+      <div class="form-actions">
+        <button class="btn" onclick="testSource()">Testen</button>
+        <button class="btn" onclick="closeModal()">Abbrechen</button>
+        <button class="btn btn-primary" onclick="saveSource()">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const TEMPLATES = {
+  newsapi: { type: 'api', name: 'NewsAPI', url: 'https://newsapi.org/v2', api_key: '', category: 'general', config: { adapter: 'newsapi' } },
+  newsdata: { type: 'api', name: 'NewsData.io', url: 'https://newsdata.io/api/1', api_key: '', category: 'general', config: { adapter: 'newsdata' } },
+  hackernews: { type: 'api', name: 'Hacker News', url: 'https://hacker-news.firebaseio.com/v0', category: 'technology', config: { adapter: 'hackernews' } },
+  tagesschau: { type: 'rss', name: 'Tagesschau', url: 'https://www.tagesschau.de/index~rss2.xml', category: 'general' },
+  heise: { type: 'rss', name: 'Heise Online', url: 'https://www.heise.de/rss/heise-atom.xml', category: 'technology' },
+  spiegel: { type: 'rss', name: 'Spiegel Online', url: 'https://www.spiegel.de/schlagzeilen/tops/index.rss', category: 'general' },
+  golem: { type: 'rss', name: 'Golem.de', url: 'https://rss.golem.de/rss.php?feed=RSS2.0', category: 'technology' },
+  standard: { type: 'rss', name: 'Der Standard', url: 'https://www.derstandard.at/rss', category: 'general' },
+  ard: { type: 'rss', name: 'ARD Tagesschau', url: 'https://www.tagesschau.de/inland/index~rss2.xml', category: 'politics' },
+  netzpolitik: { type: 'rss', name: 'Netzpolitik.org', url: 'https://netzpolitik.org/feed/', category: 'technology' },
+};
+
+let sources = [];
+
+async function loadSources() {
+  try {
+    const res = await fetch('/api/news-sources');
+    sources = await res.json();
+    render();
+  } catch (e) {
+    document.getElementById('sourcesList').innerHTML = '<div class="empty-state"><div class="icon">&#x26A0;</div><p>Fehler beim Laden</p></div>';
+  }
+}
+
+function render() {
+  const el = document.getElementById('sourcesList');
+  if (sources.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#x1F4F0;</div><p>Keine Quellen konfiguriert</p><p style="font-size:13px">Nutze die Vorlagen oben oder erstelle eine eigene Quelle</p></div>';
+    return;
+  }
+  el.innerHTML = '<div class="sources-grid">' + sources.map(s => {
+    const adapter = s.config?.adapter || (s.type === 'rss' ? 'rss' : 'generic');
+    return '<div class="source-card ' + (s.enabled ? '' : 'disabled') + '">' +
+      '<div class="source-header">' +
+        '<span class="source-type ' + s.type + '">' + s.type.toUpperCase() + '</span>' +
+        '<span class="source-name">' + esc(s.name) + '</span>' +
+        '<span class="source-category">' + esc(s.category) + '</span>' +
+      '</div>' +
+      '<div class="source-url" title="' + esc(s.url) + '">' + esc(s.url) + '</div>' +
+      '<div class="source-meta">' +
+        '<label class="source-toggle"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="toggleSource(' + s.id + ', this.checked)"><span class="slider"></span></label>' +
+        '<span class="source-adapter">' + adapter + '</span>' +
+        '<span class="spacer"></span>' +
+        '<button class="btn btn-sm" onclick="testExisting(' + s.id + ')">Testen</button>' +
+        '<button class="btn btn-sm" onclick="editSource(' + s.id + ')">Bearbeiten</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteSource(' + s.id + ')">Loeschen</button>' +
+      '</div>' +
+      '<div id="test-' + s.id + '" class="test-result"></div>' +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function onTypeChange() {
+  const isApi = document.getElementById('fType').value === 'api';
+  document.getElementById('apiKeyGroup').style.display = isApi ? '' : 'none';
+  document.getElementById('adapterGroup').style.display = isApi ? '' : 'none';
+  document.getElementById('configGroup').style.display = isApi ? '' : 'none';
+}
+
+function openModal(data) {
+  document.getElementById('editId').value = data?.id || '';
+  document.getElementById('modalTitle').textContent = data?.id ? 'Quelle bearbeiten' : 'Neue Quelle';
+  document.getElementById('fType').value = data?.type || 'rss';
+  document.getElementById('fName').value = data?.name || '';
+  document.getElementById('fUrl').value = data?.url || '';
+  document.getElementById('fApiKey').value = data?.api_key || '';
+  document.getElementById('fCategory').value = data?.category || 'general';
+  document.getElementById('fAdapter').value = data?.config?.adapter || 'generic';
+  document.getElementById('fConfig').value = data?.config ? JSON.stringify(data.config, null, 2) : '';
+  document.getElementById('testResult').className = 'test-result';
+  document.getElementById('testResult').textContent = '';
+  onTypeChange();
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function addTemplate(key) {
+  const t = TEMPLATES[key];
+  if (!t) return;
+  // API-Templates die einen Key brauchen: Modal oeffnen
+  if (t.type === 'api' && key !== 'hackernews') {
+    openModal({ ...t });
+    return;
+  }
+  // RSS oder keyless API: direkt speichern
+  saveDirectly(t);
+}
+
+async function saveDirectly(data) {
+  try {
+    const res = await fetch('/api/news-sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error('Fehler beim Speichern');
+    loadSources();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+async function saveSource() {
+  const id = document.getElementById('editId').value;
+  const type = document.getElementById('fType').value;
+  let config = {};
+  try {
+    const raw = document.getElementById('fConfig').value.trim();
+    if (raw) config = JSON.parse(raw);
+  } catch { alert('Ungueltige Config JSON'); return; }
+
+  if (type === 'api') {
+    config.adapter = document.getElementById('fAdapter').value;
+  }
+
+  const data = {
+    type,
+    name: document.getElementById('fName').value,
+    url: document.getElementById('fUrl').value,
+    api_key: document.getElementById('fApiKey').value,
+    category: document.getElementById('fCategory').value,
+    config,
+  };
+
+  if (!data.name || !data.url) { alert('Name und URL sind Pflicht'); return; }
+
+  try {
+    const url = id ? '/api/news-sources/' + id : '/api/news-sources';
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    if (!res.ok) throw new Error('Fehler beim Speichern');
+    closeModal();
+    loadSources();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function editSource(id) {
+  const s = sources.find(x => x.id === id);
+  if (s) openModal(s);
+}
+
+async function deleteSource(id) {
+  if (!confirm('Quelle wirklich loeschen?')) return;
+  await fetch('/api/news-sources/' + id, { method: 'DELETE' });
+  loadSources();
+}
+
+async function toggleSource(id, enabled) {
+  await fetch('/api/news-sources/' + id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled })
+  });
+  loadSources();
+}
+
+async function testSource() {
+  const el = document.getElementById('testResult');
+  el.className = 'test-result'; el.textContent = 'Teste...'; el.style.display = 'block';
+  const data = {
+    type: document.getElementById('fType').value,
+    url: document.getElementById('fUrl').value,
+    api_key: document.getElementById('fApiKey').value,
+    category: document.getElementById('fCategory').value,
+    config: {},
+  };
+  try {
+    const raw = document.getElementById('fConfig').value.trim();
+    if (raw) data.config = JSON.parse(raw);
+    if (data.type === 'api') data.config.adapter = document.getElementById('fAdapter').value;
+  } catch {}
+
+  try {
+    const res = await fetch('/api/news-sources/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (result.error) {
+      el.className = 'test-result error';
+      el.textContent = 'Fehler: ' + result.error;
+    } else {
+      el.className = 'test-result success';
+      el.textContent = result.count + ' Artikel gefunden. Erster: ' + (result.first || '-');
+    }
+  } catch (e) {
+    el.className = 'test-result error';
+    el.textContent = 'Netzwerk-Fehler: ' + e.message;
+  }
+}
+
+async function testExisting(id) {
+  const el = document.getElementById('test-' + id);
+  el.className = 'test-result'; el.textContent = 'Teste...'; el.style.display = 'block';
+  try {
+    const res = await fetch('/api/news-sources/' + id + '/test', { method: 'POST' });
+    const result = await res.json();
+    if (result.error) {
+      el.className = 'test-result error';
+      el.textContent = 'Fehler: ' + result.error;
+    } else {
+      el.className = 'test-result success';
+      el.textContent = result.count + ' Artikel gefunden. Erster: ' + (result.first || '-');
+    }
+  } catch (e) {
+    el.className = 'test-result error';
+    el.textContent = 'Netzwerk-Fehler: ' + e.message;
+  }
+}
+
+loadSources();
+</script>
+</body>
+</html>`;
+}
+
 // --- Mobile UI ---
 
 function getMobileHTML() {
@@ -8679,6 +9445,232 @@ function startMonitor(port) {
     } else if (req.url.startsWith("/api/roadmap/") && req.method === "DELETE") {
       const id = parseInt(req.url.replace("/api/roadmap/", ""));
       handleRoadmapDelete(req, res, id);
+
+    // --- Vector Memory ---
+    } else if (req.url === "/memory") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getMemoryHTML());
+    } else if (req.url === "/api/memory/stats" && req.method === "GET") {
+      (async () => {
+        try {
+          const vm = require("./lib/vector-memory");
+          const available = await vm.isAvailable();
+          if (!available) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ available: false, status: "red", total: 0, memory: 0, chat: 0, kb: 0 }));
+            return;
+          }
+          const QDRANT_URL = process.env.QDRANT_URL || "http://192.168.178.20:6333";
+          const COL = vm.COLLECTION;
+          const info = await fetch(`${QDRANT_URL}/collections/${COL}`).then(r => r.json());
+          const countType = async (type) => {
+            const r = await fetch(`${QDRANT_URL}/collections/${COL}/points/count`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ filter: { must: [{ key: "type", match: { value: type } }] } }),
+            }).then(r => r.json());
+            return r.result?.count || 0;
+          };
+          const [memory, chat, kb] = await Promise.all([countType("memory"), countType("chat"), countType("kb")]);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            available: true, status: info.result?.status || "unknown",
+            total: info.result?.points_count || 0, memory, chat, kb,
+          }));
+        } catch (e) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ available: false, status: "red", total: 0, memory: 0, chat: 0, kb: 0, error: e.message }));
+        }
+      })();
+    } else if (req.url === "/api/memory/recent" && req.method === "GET") {
+      (async () => {
+        try {
+          const QDRANT_URL = process.env.QDRANT_URL || "http://192.168.178.20:6333";
+          const vm = require("./lib/vector-memory");
+          const r = await fetch(`${QDRANT_URL}/collections/${vm.COLLECTION}/points/scroll`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ limit: 30, with_payload: true, order_by: { key: "indexed_at", direction: "desc" } }),
+          }).then(r => r.json());
+          const items = (r.result?.points || []).map(p => p.payload);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(items));
+        } catch (e) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify([]));
+        }
+      })();
+    } else if (req.url.startsWith("/api/memory/search") && req.method === "GET") {
+      (async () => {
+        try {
+          const url = new URL(req.url, "http://localhost");
+          const query = url.searchParams.get("q") || "";
+          const type = url.searchParams.get("type") || null;
+          const limit = parseInt(url.searchParams.get("limit") || "15");
+          if (!query) { res.writeHead(200); res.end("[]"); return; }
+          const vm = require("./lib/vector-memory");
+          const results = await vm.search(query, { limit, type: type || null, minScore: 0.2 });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(results));
+        } catch (e) {
+          console.error("[Memory Search Error]", e.message);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify([]));
+        }
+      })();
+    } else if (req.url === "/api/memory/reindex" && req.method === "POST") {
+      (async () => {
+        try {
+          const { execSync } = require("child_process");
+          const output = execSync("node scripts/migrate-vectors.js 2>&1", { cwd: __dirname, timeout: 300000, encoding: "utf-8" });
+          const totalMatch = output.match(/Gesamt vektorisiert: (\d+)/);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: true, total: totalMatch ? parseInt(totalMatch[1]) : 0, output }));
+        } catch (e) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+      })();
+
+    // --- News Sources ---
+    } else if (req.url === "/news") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(getNewsHTML());
+    } else if (req.url === "/api/news-sources" && req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify(db.newsSources.getAll()));
+    } else if (req.url === "/api/news-sources" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          const source = db.newsSources.create(data);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(source));
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    } else if (req.url.match(/^\/api\/news-sources\/test$/) && req.method === "POST") {
+      // Test einer neuen Quelle (noch nicht gespeichert)
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", async () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          const newsTool = require("./tools/news.js");
+          // Temporäre Quelle simulieren
+          const tempSource = { id: 0, type: data.type, name: 'Test', url: data.url, api_key: data.api_key || '', category: data.category || 'general', config: data.config || {}, enabled: true };
+          const { fetchSource } = require("./tools/news.js");
+          // Fallback: fetch direkt
+          let result;
+          if (data.type === 'rss') {
+            const rRes = await fetch(data.url, { signal: AbortSignal.timeout(10000) });
+            const xml = await rRes.text();
+            const items = xml.match(/<(?:item|entry)[\s>]/gi) || [];
+            const firstTitle = (xml.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i) || [])[1] || '';
+            result = { count: items.length, first: firstTitle.substring(0, 80) };
+          } else {
+            // API test: just try fetching
+            const adapterName = data.config?.adapter || 'generic';
+            if (adapterName === 'hackernews') {
+              const hnRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json', { signal: AbortSignal.timeout(10000) });
+              const ids = await hnRes.json();
+              result = { count: ids.length, first: 'Top Story IDs loaded' };
+            } else if (adapterName === 'newsapi') {
+              const url = data.url.replace(/\/+$/, '') + '/top-headlines?country=de&pageSize=3&apiKey=' + (data.api_key || '');
+              const apiRes = await fetch(url, { signal: AbortSignal.timeout(10000) });
+              const apiData = await apiRes.json();
+              if (apiData.status === 'error') throw new Error(apiData.message);
+              result = { count: apiData.totalResults || 0, first: apiData.articles?.[0]?.title || '-' };
+            } else if (adapterName === 'newsdata') {
+              const url = data.url.replace(/\/+$/, '') + '/news?apikey=' + (data.api_key || '') + '&language=de';
+              const apiRes = await fetch(url, { signal: AbortSignal.timeout(10000) });
+              const apiData = await apiRes.json();
+              if (apiData.status === 'error') throw new Error(apiData.results?.message || 'API Error');
+              result = { count: apiData.totalResults || (apiData.results || []).length, first: apiData.results?.[0]?.title || '-' };
+            } else {
+              const apiRes = await fetch(data.url, { signal: AbortSignal.timeout(10000) });
+              const apiData = await apiRes.json();
+              result = { count: Array.isArray(apiData) ? apiData.length : 1, first: 'JSON Response OK' };
+            }
+          }
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(result));
+        } catch (e) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    } else if (req.url.match(/^\/api\/news-sources\/\d+\/test$/) && req.method === "POST") {
+      const id = parseInt(req.url.match(/\/api\/news-sources\/(\d+)\/test/)[1]);
+      const source = db.newsSources.getById(id);
+      if (!source) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Nicht gefunden" }));
+        return;
+      }
+      (async () => {
+        try {
+          let result;
+          if (source.type === 'rss') {
+            const rRes = await fetch(source.url, { signal: AbortSignal.timeout(10000) });
+            const xml = await rRes.text();
+            const items = xml.match(/<(?:item|entry)[\s>]/gi) || [];
+            const firstTitle = (xml.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i) || [])[1] || '';
+            result = { count: items.length, first: firstTitle.substring(0, 80) };
+          } else {
+            const adapterName = source.config?.adapter || 'generic';
+            if (adapterName === 'hackernews') {
+              const hnRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json', { signal: AbortSignal.timeout(10000) });
+              const ids = await hnRes.json();
+              result = { count: ids.length, first: 'Top Story IDs loaded' };
+            } else if (adapterName === 'newsapi') {
+              const url = source.url.replace(/\/+$/, '') + '/top-headlines?country=de&pageSize=3&apiKey=' + (source.api_key || '');
+              const apiRes = await fetch(url, { signal: AbortSignal.timeout(10000) });
+              const apiData = await apiRes.json();
+              if (apiData.status === 'error') throw new Error(apiData.message);
+              result = { count: apiData.totalResults || 0, first: apiData.articles?.[0]?.title || '-' };
+            } else if (adapterName === 'newsdata') {
+              const url = source.url.replace(/\/+$/, '') + '/news?apikey=' + (source.api_key || '') + '&language=de';
+              const apiRes = await fetch(url, { signal: AbortSignal.timeout(10000) });
+              const apiData = await apiRes.json();
+              if (apiData.status === 'error') throw new Error(apiData.results?.message || 'API Error');
+              result = { count: apiData.totalResults || (apiData.results || []).length, first: apiData.results?.[0]?.title || '-' };
+            } else {
+              const apiRes = await fetch(source.url, { signal: AbortSignal.timeout(10000) });
+              const apiData = await apiRes.json();
+              result = { count: Array.isArray(apiData) ? apiData.length : 1, first: 'JSON Response OK' };
+            }
+          }
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(result));
+        } catch (e) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      })();
+    } else if (req.url.match(/^\/api\/news-sources\/\d+$/) && req.method === "PUT") {
+      const id = parseInt(req.url.match(/\/api\/news-sources\/(\d+)/)[1]);
+      const chunks = [];
+      req.on("data", c => chunks.push(c));
+      req.on("end", () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          const source = db.newsSources.update(id, data);
+          if (!source) { res.writeHead(404); res.end('{"error":"Nicht gefunden"}'); return; }
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(source));
+        } catch (e) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    } else if (req.url.match(/^\/api\/news-sources\/\d+$/) && req.method === "DELETE") {
+      const id = parseInt(req.url.match(/\/api\/news-sources\/(\d+)/)[1]);
+      db.newsSources.remove(id);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
 
     // --- Terminal ---
     } else if (req.url === "/terminal") {
