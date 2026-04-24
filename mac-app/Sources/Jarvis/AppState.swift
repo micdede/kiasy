@@ -183,7 +183,7 @@ final class AppState: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self = self, self.dialogMode else { return }
                 // Kurze Pause, damit Mic nicht den TTS-Schwanz aufnimmt
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                try? await Task.sleep(nanoseconds: 150_000_000)
                 await self.dialogListenLoop()
             }
         }
@@ -221,7 +221,7 @@ final class AppState: ObservableObject {
                 await playTTS(result.text)
             } else if dialogMode {
                 // Keine Antwort zum Vorlesen — direkt nächster Cycle
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                try? await Task.sleep(nanoseconds: 150_000_000)
                 await dialogListenLoop()
             }
         } catch {

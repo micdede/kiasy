@@ -80,8 +80,8 @@ final class AudioRecorder: NSObject, ObservableObject {
     /// - Returns: Aufnahme-Daten, oder nil wenn keine Sprache erkannt / abgebrochen.
     func recordWithVAD(
         silenceThreshold: Float = -35,
-        silenceDuration: TimeInterval = 1.5,
-        minSpeechDuration: TimeInterval = 0.3,
+        silenceDuration: TimeInterval = 0.8,
+        minSpeechDuration: TimeInterval = 0.25,
         maxDuration: TimeInterval = 30,
         speechTimeout: TimeInterval = 6
     ) async -> Data? {
