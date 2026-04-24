@@ -81,11 +81,6 @@ struct ChatView: View {
         .padding(8)
     }
 
-}
-
-extension Notification.Name {
-    static let jarvisResizePopover = Notification.Name("jarvisResizePopover")
-
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -214,6 +209,10 @@ extension Notification.Name {
             await state.startRecording()
         }
     }
+}
+
+extension Notification.Name {
+    static let jarvisResizePopover = Notification.Name("jarvisResizePopover")
 }
 
 struct MessageBubble: View {
