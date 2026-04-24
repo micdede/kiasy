@@ -1,56 +1,109 @@
 import SwiftUI
+import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
+    @State private var capturing = false
+    @State private var captureMonitor: Any?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Verbindung").font(.headline)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Verbindung").font(.headline)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Server-URL").font(.caption).foregroundColor(.secondary)
-                TextField("https://192.168.178.x:3333", text: $state.serverURL)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-            }
+                field("Server-URL", text: $state.serverURL,
+                      placeholder: "https://192.168.178.x:3333")
+                field("Benutzername", text: $state.username,
+                      placeholder: "MONITOR_USER")
+                secureField("Passwort", text: $state.password,
+                            placeholder: "MONITOR_PASS")
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Benutzername").font(.caption).foregroundColor(.secondary)
-                TextField("MONITOR_USER", text: $state.username)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-            }
+                Divider()
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Passwort").font(.caption).foregroundColor(.secondary)
-                SecureField("MONITOR_PASS", text: $state.password)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            if let err = state.lastError {
-                Text(err)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-
-            HStack {
-                Button("Verbindung testen") {
-                    Task { await state.loadHistory() }
+                Text("Hotkey").font(.headline)
+                HStack {
+                    Toggle("Globaler Hotkey aktiv", isOn: $state.hotkeyEnabled)
+                    Spacer()
                 }
-                .disabled(!state.isConfigured)
-
-                Spacer()
-
-                Button("Schließen") {
-                    state.showingSettings = false
+                HStack {
+                    Text(state.hotkeyDisplay)
+                        .font(.system(.body, design: .monospaced))
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 10)
+                        .background(Color.gray.opacity(0.18))
+                        .cornerRadius(6)
+                    Spacer()
+                    Button(capturing ? "Drücke eine Taste…" : "Ändern") {
+                        capturing ? stopCapture() : startCapture()
+                    }
+                    .disabled(!state.hotkeyEnabled)
                 }
-                .disabled(!state.isConfigured)
-                .keyboardShortcut(.defaultAction)
+
+                if let err = state.lastError {
+                    Text(err)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack {
+                    Button("Verbindung testen") {
+                        Task { await state.loadHistory() }
+                    }
+                    .disabled(!state.isConfigured)
+
+                    Spacer()
+
+                    Button("Schließen") {
+                        state.showingSettings = false
+                    }
+                    .disabled(!state.isConfigured)
+                    .keyboardShortcut(.defaultAction)
+                }
+                .padding(.top, 4)
             }
+            .padding(12)
         }
-        .padding(12)
+        .onDisappear { stopCapture() }
+    }
+
+    @ViewBuilder
+    private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundColor(.secondary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+        }
+    }
+
+    @ViewBuilder
+    private func secureField(_ label: String, text: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundColor(.secondary)
+            SecureField(placeholder, text: text)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func startCapture() {
+        capturing = true
+        captureMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Esc bricht ab, ohne zu speichern
+            if event.keyCode == 53 {
+                stopCapture()
+                return nil
+            }
+            let mods = event.modifierFlags.intersection(KeyMapper.relevantModifierMask)
+            state.hotkeyKeyCode = Int(event.keyCode)
+            state.hotkeyModifiers = Int(mods.rawValue)
+            stopCapture()
+            return nil
+        }
+    }
+
+    private func stopCapture() {
+        if let m = captureMonitor { NSEvent.removeMonitor(m); captureMonitor = nil }
+        capturing = false
     }
 }

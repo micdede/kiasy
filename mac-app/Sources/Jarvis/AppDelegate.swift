@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let state = AppState()
     private var globalMonitor: Any?
     private var localMonitor: Any?
+    private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -28,13 +30,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = ChatView().environmentObject(state)
         popover.contentViewController = NSHostingController(rootView: view)
 
-        // Globaler Hotkey ⌥-Space
+        // Hotkey registrieren + bei Änderung neu binden
         registerHotkey()
+        Publishers.CombineLatest3(state.$hotkeyKeyCode, state.$hotkeyModifiers, state.$hotkeyEnabled)
+            .dropFirst()
+            .sink { [weak self] _, _, _ in
+                Task { @MainActor in self?.registerHotkey() }
+            }
+            .store(in: &cancellables)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if let m = globalMonitor { NSEvent.removeMonitor(m) }
-        if let m = localMonitor { NSEvent.removeMonitor(m) }
+        removeMonitors()
     }
 
     @objc private func togglePopover() {
@@ -47,10 +54,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func removeMonitors() {
+        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
+        if let m = localMonitor  { NSEvent.removeMonitor(m); localMonitor = nil }
+    }
+
     private func registerHotkey() {
-        // ⌥-Space: keyCode 49 = Space, Modifier .option
+        removeMonitors()
+        guard state.hotkeyEnabled else { return }
+
+        let targetKeyCode = UInt16(state.hotkeyKeyCode)
+        let targetMods = NSEvent.ModifierFlags(rawValue: UInt(state.hotkeyModifiers))
+            .intersection(KeyMapper.relevantModifierMask)
+
         let isHotkey: (NSEvent) -> Bool = { event in
-            event.keyCode == 49 && event.modifierFlags.contains(.option)
+            guard event.keyCode == targetKeyCode else { return false }
+            let mods = event.modifierFlags.intersection(KeyMapper.relevantModifierMask)
+            return mods == targetMods
         }
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in

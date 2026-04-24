@@ -11,7 +11,7 @@ Nutzt denselben Chat-Thread wie Telegram/Monitor — du siehst überall identisc
 
 ## Was funktioniert
 
-- Menübar-Icon mit Popover (Klick aufs Icon oder **⌥-Space** als globaler Hotkey)
+- Menübar-Icon mit Popover (Klick aufs Icon oder **konfigurierbarer Hotkey** — Default **F13**)
 - Text-Eingabe → Antwort vom Agent
 - **Sprachnachrichten** (Mic-Button im Eingabefeld): Aufnahme starten/stoppen → wird an Whisper geschickt
 - **TTS** (Lautsprecher-Toggle in der Kopfzeile): Antworten werden vorgelesen (Edge-TTS / Killian-Stimme). Pro Nachricht auch über das kleine Lautsprecher-Symbol abspielbar.
@@ -65,8 +65,8 @@ Du kannst `Package.swift` direkt mit Doppelklick in Xcode öffnen — Xcode vers
   Format prüfen: `https://192.168.178.42:3333` (kein Slash am Ende)
 - **Mic funktioniert nicht / kein Permission-Dialog:**
   Beim ersten Mic-Klick fragt macOS nach Erlaubnis. Falls nicht: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon → Jarvis aktivieren.
-- **Hotkey ⌥-Space tut nichts:**
-  Konflikt mit Spotlight prüfen (Standard ist ⌘-Space, sollte nicht kollidieren). Sonst Logout/Login nach erstem Start.
+- **Hotkey reagiert nicht:**
+  In den Einstellungen unter "Hotkey" → "Ändern" auf eine andere Taste legen. Vorsicht bei Konflikten mit ChatGPT (⌥-Space) oder Spotlight (⌘-Space). F13–F19 sind meist frei.
 
 ## Struktur
 

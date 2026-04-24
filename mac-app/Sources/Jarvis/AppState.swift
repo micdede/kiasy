@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 
 @MainActor
 final class AppState: ObservableObject {
@@ -15,6 +16,16 @@ final class AppState: ObservableObject {
     @Published var ttsEnabled: Bool {
         didSet { UserDefaults.standard.set(ttsEnabled, forKey: "ttsEnabled") }
     }
+    @Published var hotkeyKeyCode: Int {
+        didSet { UserDefaults.standard.set(hotkeyKeyCode, forKey: "hotkeyKeyCode") }
+    }
+    /// Rohwert von NSEvent.ModifierFlags (gemaskt auf Cmd/Opt/Ctrl/Shift)
+    @Published var hotkeyModifiers: Int {
+        didSet { UserDefaults.standard.set(hotkeyModifiers, forKey: "hotkeyModifiers") }
+    }
+    @Published var hotkeyEnabled: Bool {
+        didSet { UserDefaults.standard.set(hotkeyEnabled, forKey: "hotkeyEnabled") }
+    }
 
     @Published var messages: [ChatMessage] = []
     @Published var isSending = false
@@ -29,13 +40,25 @@ final class AppState: ObservableObject {
         let user = UserDefaults.standard.string(forKey: "username") ?? ""
         let pass = (try? Keychain.get(account: "monitor")) ?? ""
         let tts = UserDefaults.standard.object(forKey: "ttsEnabled") as? Bool ?? false
+        // Default: F13 (keyCode 105, kein Modifier)
+        let kc = UserDefaults.standard.object(forKey: "hotkeyKeyCode") as? Int ?? 105
+        let mod = UserDefaults.standard.object(forKey: "hotkeyModifiers") as? Int ?? 0
+        let hkOn = UserDefaults.standard.object(forKey: "hotkeyEnabled") as? Bool ?? true
         self.serverURL = url
         self.username = user
         self.password = pass
         self.ttsEnabled = tts
+        self.hotkeyKeyCode = kc
+        self.hotkeyModifiers = mod
+        self.hotkeyEnabled = hkOn
         if url.isEmpty || user.isEmpty || pass.isEmpty {
             self.showingSettings = true
         }
+    }
+
+    var hotkeyDisplay: String {
+        let mods = NSEvent.ModifierFlags(rawValue: UInt(hotkeyModifiers))
+        return KeyMapper.display(keyCode: hotkeyKeyCode, modifiers: mods)
     }
 
     var isConfigured: Bool {
