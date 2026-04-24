@@ -174,16 +174,22 @@ struct MessageBubble: View {
         HStack(alignment: .top) {
             if msg.role == "user" { Spacer(minLength: 40) }
             VStack(alignment: msg.role == "user" ? .trailing : .leading, spacing: 4) {
-                Text(msg.text)
-                    .padding(8)
-                    .background(msg.role == "user"
-                        ? Color.accentColor.opacity(0.85)
-                        : Color.gray.opacity(0.18))
-                    .foregroundColor(msg.role == "user" ? .white : .primary)
-                    .cornerRadius(10)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: 320, alignment: msg.role == "user" ? .trailing : .leading)
-                if msg.role == "assistant" {
+                if !msg.text.isEmpty {
+                    Text(msg.text)
+                        .padding(8)
+                        .background(msg.role == "user"
+                            ? Color.accentColor.opacity(0.85)
+                            : Color.gray.opacity(0.18))
+                        .foregroundColor(msg.role == "user" ? .white : .primary)
+                        .cornerRadius(10)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: 320, alignment: msg.role == "user" ? .trailing : .leading)
+                }
+                ForEach(msg.images) { img in
+                    RemoteImage(image: img)
+                        .frame(maxWidth: 320)
+                }
+                if msg.role == "assistant" && !msg.text.isEmpty {
                     Button {
                         Task { await state.playTTS(msg.text) }
                     } label: {
@@ -196,6 +202,61 @@ struct MessageBubble: View {
                 }
             }
             if msg.role != "user" { Spacer(minLength: 40) }
+        }
+    }
+}
+
+struct RemoteImage: View {
+    let image: ChatImage
+    @EnvironmentObject var state: AppState
+    @State private var nsImage: NSImage?
+    @State private var loading = true
+    @State private var errorText: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let img = nsImage {
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .cornerRadius(8)
+                    .onTapGesture { openExternally(img) }
+            } else if loading {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("Bild lädt…").font(.caption).foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if let errorText = errorText {
+                Text("⚠️ \(errorText)").font(.caption).foregroundColor(.red)
+            }
+            if !image.caption.isEmpty {
+                Text(image.caption)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+            }
+        }
+        .task {
+            do {
+                let data = try await state.fetchImage(image)
+                nsImage = NSImage(data: data)
+                loading = false
+            } catch {
+                errorText = error.localizedDescription
+                loading = false
+            }
+        }
+    }
+
+    private func openExternally(_ img: NSImage) {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jarvis-\(UUID().uuidString).png")
+        if let tiff = img.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:]) {
+            try? png.write(to: tmp)
+            NSWorkspace.shared.open(tmp)
         }
     }
 }

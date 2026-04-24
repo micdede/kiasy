@@ -3160,7 +3160,8 @@ function addMessage(role, text, ts, images) {
   let imgHtml = "";
   if (images && images.length > 0) {
     for (const img of images) {
-      const src = img.startsWith("http") ? img : "/api/chat/images/" + img.split("/").pop();
+      const src = typeof img === "string" ? img : (img.url || "");
+      if (!src) continue;
       imgHtml += '<img class="msg-img" src="' + src + '" alt="Bild" onclick="window.open(this.src)">';
     }
   }
@@ -8681,11 +8682,27 @@ function handleChatSend(req, res) {
       }
 
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-      res.end(JSON.stringify({ text: result.text, images: result.images || [] }));
+      res.end(JSON.stringify({ text: result.text, images: normalizeImages(result.images) }));
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));
     }
+  });
+}
+
+// Wandelt die interne Image-Queue ([{path, caption}] oder Strings) in Client-freundliche
+// URLs um ({url, caption}). Lokale Dateien werden auf /api/chat/images/<filename> gemappt.
+function normalizeImages(images) {
+  if (!Array.isArray(images)) return [];
+  return images.map((img) => {
+    if (typeof img === "string") {
+      return { url: img.startsWith("http") ? img : "/api/chat/images/" + path.basename(img), caption: "" };
+    }
+    const src = img.path || img.url || "";
+    return {
+      url: src.startsWith("http") ? src : "/api/chat/images/" + path.basename(src),
+      caption: img.caption || "",
+    };
   });
 }
 
@@ -8751,9 +8768,10 @@ function handleChatVoice(req, res) {
         return;
       }
       console.log(`[voice] Transkript: ${transcript}`);
+      // Fall-through zum Handler unten — result wird mit normalisierten Images zurückgegeben
       const result = await agent.handleMessage(monitorChatId(), `[Sprachnachricht]: ${transcript}`);
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-      res.end(JSON.stringify({ transcript, text: result.text, images: result.images || [] }));
+      res.end(JSON.stringify({ transcript, text: result.text, images: normalizeImages(result.images) }));
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err.message }));

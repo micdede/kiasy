@@ -87,10 +87,10 @@ final class AppState: ObservableObject {
         isSending = true
         defer { isSending = false }
         do {
-            let reply = try await client().send(message: text)
-            if !reply.isEmpty {
-                messages.append(ChatMessage(role: "assistant", text: reply))
-                if ttsEnabled { await playTTS(reply) }
+            let result = try await client().send(message: text)
+            if !result.text.isEmpty || !result.images.isEmpty {
+                messages.append(ChatMessage(role: "assistant", text: result.text, images: result.images))
+                if ttsEnabled, !result.text.isEmpty { await playTTS(result.text) }
             }
             lastError = nil
         } catch {
@@ -139,14 +139,18 @@ final class AppState: ObservableObject {
             if !result.transcript.isEmpty {
                 messages.append(ChatMessage(role: "user", text: result.transcript))
             }
-            if !result.text.isEmpty {
-                messages.append(ChatMessage(role: "assistant", text: result.text))
-                if ttsEnabled { await playTTS(result.text) }
+            if !result.text.isEmpty || !result.images.isEmpty {
+                messages.append(ChatMessage(role: "assistant", text: result.text, images: result.images))
+                if ttsEnabled, !result.text.isEmpty { await playTTS(result.text) }
             }
             lastError = nil
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    func fetchImage(_ image: ChatImage) async throws -> Data {
+        try await client().fetchImage(urlOrPath: image.url)
     }
 
     // MARK: - TTS
@@ -170,4 +174,11 @@ struct ChatMessage: Identifiable, Hashable {
     let id = UUID()
     let role: String
     let text: String
+    var images: [ChatImage] = []
+}
+
+struct ChatImage: Identifiable, Hashable {
+    let id = UUID()
+    let url: String     // relative ("/api/chat/images/...") oder absolute URL
+    let caption: String
 }

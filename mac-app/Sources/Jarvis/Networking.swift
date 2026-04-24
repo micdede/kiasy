@@ -68,12 +68,15 @@ struct Networking {
 
     // MARK: - Endpoints
 
-    func send(message: String) async throws -> String {
+    func send(message: String) async throws -> (text: String, images: [ChatImage]) {
         let body = try JSONSerialization.data(withJSONObject: ["message": message])
         let req = try makeRequest("api/chat/send", method: "POST", body: body)
         let data = try await perform(req)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        return (json?["text"] as? String) ?? ""
+        return (
+            text: (json?["text"] as? String) ?? "",
+            images: parseImages(json?["images"])
+        )
     }
 
     func fetchHistory() async throws -> [ChatMessage] {
@@ -94,7 +97,7 @@ struct Networking {
         _ = try await perform(req)
     }
 
-    func sendVoice(audioData: Data) async throws -> (transcript: String, text: String) {
+    func sendVoice(audioData: Data) async throws -> (transcript: String, text: String, images: [ChatImage]) {
         let req = try makeRequest("api/chat/voice",
                                   method: "POST",
                                   contentType: "audio/mp4",
@@ -103,8 +106,29 @@ struct Networking {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         return (
             transcript: (json?["transcript"] as? String) ?? "",
-            text: (json?["text"] as? String) ?? ""
+            text: (json?["text"] as? String) ?? "",
+            images: parseImages(json?["images"])
         )
+    }
+
+    func fetchImage(urlOrPath: String) async throws -> Data {
+        if urlOrPath.hasPrefix("http://") || urlOrPath.hasPrefix("https://") {
+            // Externe URL — direkter Download (ohne Auth)
+            guard let url = URL(string: urlOrPath) else { throw NetError.invalidURL }
+            let req = URLRequest(url: url)
+            return try await perform(req)
+        }
+        let cleanPath = urlOrPath.hasPrefix("/") ? String(urlOrPath.dropFirst()) : urlOrPath
+        let req = try makeRequest(cleanPath)
+        return try await perform(req)
+    }
+
+    private func parseImages(_ raw: Any?) -> [ChatImage] {
+        guard let arr = raw as? [[String: Any]] else { return [] }
+        return arr.compactMap { dict in
+            guard let url = dict["url"] as? String, !url.isEmpty else { return nil }
+            return ChatImage(url: url, caption: (dict["caption"] as? String) ?? "")
+        }
     }
 
     func tts(text: String) async throws -> Data {
