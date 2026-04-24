@@ -20,6 +20,16 @@ struct SettingsView: View {
 
                 Divider()
 
+                Text("Fenstergröße").font(.headline)
+                HStack(spacing: 8) {
+                    sizeButton("Klein",  w: 420, h: 540)
+                    sizeButton("Mittel", w: 520, h: 680)
+                    sizeButton("Groß",   w: 680, h: 820)
+                    sizeButton("Sehr groß", w: 820, h: 960)
+                }
+
+                Divider()
+
                 Text("Hotkey").font(.headline)
                 HStack {
                     Toggle("Globaler Hotkey aktiv", isOn: $state.hotkeyEnabled)
@@ -84,6 +94,23 @@ struct SettingsView: View {
             SecureField(placeholder, text: text)
                 .textFieldStyle(.roundedBorder)
         }
+    }
+
+    @ViewBuilder
+    private func sizeButton(_ label: String, w: CGFloat, h: CGFloat) -> some View {
+        let curW = UserDefaults.standard.object(forKey: "popoverWidth") as? Double ?? 520
+        let active = Int(curW) == Int(w)
+        Button(label) {
+            UserDefaults.standard.set(Double(w), forKey: "popoverWidth")
+            UserDefaults.standard.set(Double(h), forKey: "popoverHeight")
+            NotificationCenter.default.post(
+                name: .jarvisResizePopover,
+                object: nil,
+                userInfo: ["w": w, "h": h]
+            )
+        }
+        .buttonStyle(.bordered)
+        .tint(active ? .accentColor : .secondary)
     }
 
     private func startCapture() {
