@@ -38,10 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] note in
-            guard let self = self,
-                  let w = note.userInfo?["w"] as? CGFloat,
+            guard let w = note.userInfo?["w"] as? CGFloat,
                   let h = note.userInfo?["h"] as? CGFloat else { return }
-            self.popover.contentSize = NSSize(width: w, height: h)
+            Task { @MainActor [weak self] in
+                self?.popover.contentSize = NSSize(width: w, height: h)
+            }
         }
 
         // Hotkey registrieren + bei Änderung neu binden
