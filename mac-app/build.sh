@@ -19,8 +19,11 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/${APP_NAME}" "$APP_BUNDLE/Contents/MacOS/${APP_NAME}"
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 
-# Ad-hoc Code-Signatur (reicht für lokalen Gebrauch)
-codesign --force --deep --sign - "$APP_BUNDLE"
+# Ad-hoc Code-Signatur mit Entitlements (für Mic-Zugriff nötig)
+codesign --force --deep --sign - \
+    --entitlements "Resources/Jarvis.entitlements" \
+    --options runtime \
+    "$APP_BUNDLE"
 
 echo ""
 echo "✓ Fertig: $APP_BUNDLE"

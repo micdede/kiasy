@@ -47,7 +47,9 @@ final class AudioRecorder: NSObject, ObservableObject {
         ]
         let r = try AVAudioRecorder(url: url, settings: settings)
         r.delegate = self
-        r.record()
+        r.isMeteringEnabled = true
+        let ok = r.record()
+        NSLog("[Jarvis] AudioRecorder.start record()=\(ok)")
         recorder = r
         isRecording = true
     }
