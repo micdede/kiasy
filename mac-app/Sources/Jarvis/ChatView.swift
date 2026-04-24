@@ -72,18 +72,13 @@ struct ChatView: View {
                 .buttonStyle(.borderless)
                 .help("Einstellungen")
 
-            Menu {
-                Button("Klein (420 × 540)")  { resize(420, 540) }
-                Button("Mittel (520 × 680)") { resize(520, 680) }
-                Button("Groß (680 × 820)")   { resize(680, 820) }
-                Button("Sehr groß (820 × 960)") { resize(820, 960) }
+            Button {
+                cycleSize()
             } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: 22)
-            .help("Fenstergröße")
+            .buttonStyle(.borderless)
+            .help("Fenstergröße wechseln (Klein → Mittel → Groß → Sehr groß)")
 
             Button {
                 NSApplication.shared.terminate(nil)
@@ -92,6 +87,17 @@ struct ChatView: View {
                 .help("Beenden")
         }
         .padding(8)
+    }
+
+    private static let sizePresets: [(CGFloat, CGFloat)] = [
+        (420, 540), (520, 680), (680, 820), (820, 960)
+    ]
+
+    private func cycleSize() {
+        let curW = UserDefaults.standard.object(forKey: "popoverWidth") as? Double ?? 520
+        let idx = Self.sizePresets.firstIndex(where: { Double($0.0) == curW }) ?? 1
+        let next = Self.sizePresets[(idx + 1) % Self.sizePresets.count]
+        resize(next.0, next.1)
     }
 
     private func resize(_ w: CGFloat, _ h: CGFloat) {
