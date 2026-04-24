@@ -8643,6 +8643,12 @@ self.addEventListener("fetch", (e) => {
 
 // --- Chat API ---
 
+// Monitor-Chat und Telegram teilen denselben Thread, damit beide den identischen
+// Verlauf sehen. Fallback auf "web-chat" falls TELEGRAM_OWNER_CHAT_ID nicht gesetzt ist.
+function monitorChatId() {
+  return process.env.TELEGRAM_OWNER_CHAT_ID || "web-chat";
+}
+
 function handleChatSend(req, res) {
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
@@ -8655,7 +8661,7 @@ function handleChatSend(req, res) {
         res.end(JSON.stringify({ error: "Nachricht fehlt" }));
         return;
       }
-      const result = await agent.handleMessage("web-chat", msg);
+      const result = await agent.handleMessage(monitorChatId(), msg);
 
       // Telegram-Nachrichten aus der Queue senden
       if (result.telegramMessages && result.telegramMessages.length) {
@@ -8685,7 +8691,7 @@ function handleChatSend(req, res) {
 
 function handleChatHistory(req, res) {
   try {
-    const history = agent.getHistory("web-chat");
+    const history = agent.getHistory(monitorChatId());
     const messages = [];
     for (const msg of history) {
       if (msg.role === "user" && typeof msg.content === "string") {
@@ -8713,7 +8719,7 @@ function handleChatHistory(req, res) {
 
 function handleChatClear(req, res) {
   try {
-    agent.clearHistory("web-chat");
+    agent.clearHistory(monitorChatId());
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
     res.end(JSON.stringify({ ok: true }));
   } catch (err) {
@@ -8736,7 +8742,7 @@ function handleChatVoice(req, res) {
         res.end(JSON.stringify({ error: "Transkription fehlgeschlagen" }));
         return;
       }
-      const result = await agent.handleMessage("web-chat", `[Sprachnachricht]: ${transcript}`);
+      const result = await agent.handleMessage(monitorChatId(), `[Sprachnachricht]: ${transcript}`);
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify({ transcript, text: result.text, images: result.images || [] }));
     } catch (err) {
