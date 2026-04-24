@@ -8733,15 +8733,24 @@ function handleChatVoice(req, res) {
   req.on("data", (chunk) => chunks.push(chunk));
   req.on("end", async () => {
     try {
-      const audioFile = path.join(TEMP_DIR, `chat_voice_${Date.now()}.webm`);
-      fs.writeFileSync(audioFile, Buffer.concat(chunks));
+      const buffer = Buffer.concat(chunks);
+      const audioFile = path.join(TEMP_DIR, `chat_voice_${Date.now()}.audio`);
+      fs.writeFileSync(audioFile, buffer);
+      console.log(`[voice] Audio empfangen: ${buffer.length} bytes → ${audioFile}`);
+      if (buffer.length < 100) {
+        try { fs.unlinkSync(audioFile); } catch {}
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: `Audio leer oder zu klein (${buffer.length} bytes)` }));
+        return;
+      }
       const transcript = voice.transcribe(audioFile);
       try { fs.unlinkSync(audioFile); } catch {}
       if (!transcript) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Transkription fehlgeschlagen" }));
+        res.end(JSON.stringify({ error: "Transkription fehlgeschlagen — Audio konnte nicht verarbeitet werden" }));
         return;
       }
+      console.log(`[voice] Transkript: ${transcript}`);
       const result = await agent.handleMessage(monitorChatId(), `[Sprachnachricht]: ${transcript}`);
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify({ transcript, text: result.text, images: result.images || [] }));

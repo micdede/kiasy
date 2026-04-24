@@ -18,16 +18,27 @@ function transcribe(audioFilePath) {
   try {
     // Nach WAV konvertieren (16kHz mono – Whisper arbeitet zuverlässiger damit)
     const wavFile = path.join(TEMP_DIR, `whisper_${Date.now()}.wav`);
-    execSync(
-      `ffmpeg -i "${audioFilePath}" -ar 16000 -ac 1 "${wavFile}" -y`,
-      { timeout: 15000, stdio: "ignore" }
-    );
+    try {
+      execSync(
+        `ffmpeg -i "${audioFilePath}" -ar 16000 -ac 1 "${wavFile}" -y`,
+        { timeout: 15000, stdio: ["pipe", "pipe", "pipe"] }
+      );
+    } catch (ffErr) {
+      console.error("[voice] ffmpeg-Fehler:", ffErr.stderr?.toString() || ffErr.message);
+      throw ffErr;
+    }
 
     const whisperBin = path.join(__dirname, "venv", "bin", "whisper");
-    execSync(
-      `"${whisperBin}" "${wavFile}" --model ${WHISPER_MODEL} --language de --output_format txt --output_dir "${TEMP_DIR}"`,
-      { timeout: 300000, stdio: ["pipe", "pipe", "ignore"] }
-    );
+    try {
+      execSync(
+        `"${whisperBin}" "${wavFile}" --model ${WHISPER_MODEL} --language de --output_format txt --output_dir "${TEMP_DIR}"`,
+        { timeout: 300000, stdio: ["pipe", "pipe", "pipe"] }
+      );
+    } catch (wErr) {
+      console.error("[voice] whisper-Fehler:", wErr.stderr?.toString() || wErr.message);
+      try { fs.unlinkSync(wavFile); } catch {}
+      throw wErr;
+    }
 
     const txtFile = wavFile.replace(/\.[^.]+$/, ".txt");
     let text = null;

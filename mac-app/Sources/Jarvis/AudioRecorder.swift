@@ -51,11 +51,25 @@ final class AudioRecorder: NSObject, ObservableObject {
 
     /// Stoppt und gibt die aufgezeichneten Bytes zurück.
     func stop() -> Data? {
-        recorder?.stop()
+        guard let rec = recorder, let url = fileURL else {
+            isRecording = false
+            return nil
+        }
+        rec.stop()
+        // AVAudioRecorder finalisiert die Datei asynchron — kurz warten und Größe prüfen.
+        var data: Data?
+        for _ in 0..<20 {
+            if let d = try? Data(contentsOf: url), d.count > 1024 {
+                data = d
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if data == nil {
+            data = try? Data(contentsOf: url)
+        }
         recorder = nil
         isRecording = false
-        guard let url = fileURL else { return nil }
-        let data = try? Data(contentsOf: url)
         try? FileManager.default.removeItem(at: url)
         fileURL = nil
         return data
