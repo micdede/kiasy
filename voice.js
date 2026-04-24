@@ -5,6 +5,8 @@ const { execSync } = require("child_process");
 
 const WHISPER_MODEL = process.env.WHISPER_MODEL || "tiny";
 const TTS_VOICE = process.env.TTS_VOICE || "de-DE-KillianNeural";
+// edge-tts Rate: "+0%" = normal, "+15%" = etwas schneller. Werte: -100% bis +100%.
+const TTS_RATE = process.env.TTS_RATE || "+15%";
 const TEMP_DIR = path.join(__dirname, "temp");
 
 fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -92,7 +94,7 @@ function textToSpeech(text, format = "ogg") {
 
     const edgeTtsBin = path.join(__dirname, "venv", "bin", "edge-tts");
     execSync(
-      `"${edgeTtsBin}" --voice "${TTS_VOICE}" --file "${txtFile}" --write-media "${mp3File}"`,
+      `"${edgeTtsBin}" --voice "${TTS_VOICE}" --rate "${TTS_RATE}" --file "${txtFile}" --write-media "${mp3File}"`,
       { timeout: 30000 }
     );
 
