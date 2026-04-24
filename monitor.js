@@ -8663,23 +8663,7 @@ function handleChatSend(req, res) {
         return;
       }
       const result = await agent.handleMessage(monitorChatId(), msg);
-
-      // Telegram-Nachrichten aus der Queue senden
-      if (result.telegramMessages && result.telegramMessages.length) {
-        const TelegramBot = require("node-telegram-bot-api");
-        const tgToken = process.env.TELEGRAM_TOKEN;
-        const tgChatId = process.env.TELEGRAM_OWNER_CHAT_ID;
-        if (tgToken && tgChatId) {
-          const tgBot = new TelegramBot(tgToken);
-          for (const tgMsg of result.telegramMessages) {
-            try {
-              await tgBot.sendMessage(tgChatId, tgMsg, { parse_mode: "Markdown" }).catch(() =>
-                tgBot.sendMessage(tgChatId, tgMsg)
-              );
-            } catch {}
-          }
-        }
-      }
+      await flushTelegramQueue(result);
 
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify({ text: result.text, images: normalizeImages(result.images) }));
@@ -8688,6 +8672,23 @@ function handleChatSend(req, res) {
       res.end(JSON.stringify({ error: err.message }));
     }
   });
+}
+
+// Telegram-Queue an den Bot übergeben — wird sowohl von Text- als auch
+// von Voice-Chats genutzt, damit "send_telegram" überall funktioniert.
+async function flushTelegramQueue(result) {
+  if (!result?.telegramMessages?.length) return;
+  const tgToken = process.env.TELEGRAM_TOKEN;
+  const tgChatId = process.env.TELEGRAM_OWNER_CHAT_ID;
+  if (!tgToken || !tgChatId) return;
+  const TelegramBot = require("node-telegram-bot-api");
+  const tgBot = new TelegramBot(tgToken);
+  for (const tgMsg of result.telegramMessages) {
+    try {
+      await tgBot.sendMessage(tgChatId, tgMsg, { parse_mode: "Markdown" })
+        .catch(() => tgBot.sendMessage(tgChatId, tgMsg));
+    } catch {}
+  }
 }
 
 // Wandelt die interne Image-Queue ([{path, caption}] oder Strings) in Client-freundliche
@@ -8770,6 +8771,7 @@ function handleChatVoice(req, res) {
       console.log(`[voice] Transkript: ${transcript}`);
       // Fall-through zum Handler unten — result wird mit normalisierten Images zurückgegeben
       const result = await agent.handleMessage(monitorChatId(), `[Sprachnachricht]: ${transcript}`);
+      await flushTelegramQueue(result);
       res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
       res.end(JSON.stringify({ transcript, text: result.text, images: normalizeImages(result.images) }));
     } catch (err) {
