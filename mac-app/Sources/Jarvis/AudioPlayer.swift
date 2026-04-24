@@ -6,6 +6,9 @@ final class AudioPlayer: NSObject, ObservableObject {
     @Published var isPlaying = false
     private var player: AVAudioPlayer?
 
+    /// Wird gefeuert, wenn die Wiedergabe natürlich endet (nicht bei stop()).
+    var onFinish: (() -> Void)?
+
     func play(data: Data) throws {
         stop()
         let p = try AVAudioPlayer(data: data)
@@ -28,6 +31,7 @@ extension AudioPlayer: AVAudioPlayerDelegate {
         Task { @MainActor in
             self.isPlaying = false
             self.player = nil
+            self.onFinish?()
         }
     }
 }

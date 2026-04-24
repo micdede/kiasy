@@ -15,6 +15,7 @@ Nutzt denselben Chat-Thread wie Telegram/Monitor — du siehst überall identisc
 - Text-Eingabe → Antwort vom Agent
 - **Sprachnachrichten** (Mic-Button im Eingabefeld): Aufnahme starten/stoppen → wird an Whisper geschickt
 - **TTS** (Lautsprecher-Toggle in der Kopfzeile): Antworten werden vorgelesen (Edge-TTS / Killian-Stimme). Pro Nachricht auch über das kleine Lautsprecher-Symbol abspielbar.
+- **Dialog-Modus** (Ohr-Toggle in der Kopfzeile): Voice-zu-Voice Schleife — Mic an → du sprichst → 1.5s Stille stoppt automatisch → Antwort wird vorgelesen → Mic geht wieder an. Toggle nochmal drücken oder 6s schweigen beendet den Dialog.
 - Verlauf laden/löschen — derselbe Thread wie Telegram
 - Einstellungen (Server-URL, Benutzer, Passwort) — Passwort im macOS-Keychain
 - Self-Signed-Cert wird akzeptiert

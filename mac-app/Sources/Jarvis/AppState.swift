@@ -26,6 +26,12 @@ final class AppState: ObservableObject {
     @Published var hotkeyEnabled: Bool {
         didSet { UserDefaults.standard.set(hotkeyEnabled, forKey: "hotkeyEnabled") }
     }
+    @Published var dialogMode: Bool = false {
+        didSet {
+            if dialogMode == oldValue { return }
+            if dialogMode { startDialog() } else { stopDialog() }
+        }
+    }
 
     @Published var messages: [ChatMessage] = []
     @Published var isSending = false
@@ -167,6 +173,64 @@ final class AppState: ObservableObject {
 
     func stopTTS() {
         player.stop()
+    }
+
+    // MARK: - Dialog Mode
+
+    private func startDialog() {
+        // Wenn TTS endet → nächster Listen-Cycle
+        player.onFinish = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self = self, self.dialogMode else { return }
+                // Kurze Pause, damit Mic nicht den TTS-Schwanz aufnimmt
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                await self.dialogListenLoop()
+            }
+        }
+        Task { await dialogListenLoop() }
+    }
+
+    private func stopDialog() {
+        player.onFinish = nil
+        player.stop()
+        if recorder.isRecording { recorder.abort() }
+    }
+
+    private func dialogListenLoop() async {
+        guard dialogMode, isConfigured, !isSending else { return }
+        let data = await recorder.recordWithVAD()
+        guard dialogMode else { return }
+        guard let data = data, !data.isEmpty else {
+            // Keine Sprache erkannt → Dialog beenden
+            dialogMode = false
+            return
+        }
+        isSending = true
+        defer { isSending = false }
+        do {
+            let result = try await client().sendVoice(audioData: data)
+            guard dialogMode else { return }
+            if !result.transcript.isEmpty {
+                messages.append(ChatMessage(role: "user", text: result.transcript))
+            }
+            if !result.text.isEmpty || !result.images.isEmpty {
+                messages.append(ChatMessage(role: "assistant", text: result.text, images: result.images))
+            }
+            if !result.text.isEmpty {
+                // playTTS spielt ab; onFinish triggert nächsten Cycle
+                await playTTS(result.text)
+            } else if dialogMode {
+                // Keine Antwort zum Vorlesen — direkt nächster Cycle
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                await dialogListenLoop()
+            }
+        } catch {
+            lastError = error.localizedDescription
+            if dialogMode {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                await dialogListenLoop()
+            }
+        }
     }
 }
 

@@ -32,6 +32,16 @@ struct ChatView: View {
             }
             Spacer()
             Button {
+                state.dialogMode.toggle()
+            } label: {
+                Image(systemName: state.dialogMode ? "ear.fill" : "ear")
+                    .foregroundColor(state.dialogMode ? .accentColor : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(state.dialogMode ? "Dialog beenden" : "Dialog starten (Voice-zu-Voice)")
+            .disabled(!state.isConfigured)
+
+            Button {
                 state.ttsEnabled.toggle()
                 if !state.ttsEnabled { state.stopTTS() }
             } label: {
@@ -40,6 +50,7 @@ struct ChatView: View {
             }
             .buttonStyle(.borderless)
             .help(state.ttsEnabled ? "TTS aus" : "TTS an")
+            .disabled(state.dialogMode)
 
             Button {
                 Task { await state.loadHistory() }
@@ -109,6 +120,9 @@ struct ChatView: View {
 
     private var inputBar: some View {
         VStack(spacing: 6) {
+            if state.dialogMode {
+                dialogStatusBar
+            }
             if let err = state.lastError {
                 Text(err)
                     .font(.caption2)
@@ -148,6 +162,37 @@ struct ChatView: View {
             }
         }
         .padding(8)
+    }
+
+    private var dialogStatusBar: some View {
+        let label: String
+        let icon: String
+        let color: Color
+        if state.player.isPlaying {
+            label = "JARVIS spricht…"; icon = "speaker.wave.2.fill"; color = .accentColor
+        } else if state.isSending {
+            label = "Verarbeite…"; icon = "ellipsis.circle"; color = .secondary
+        } else if state.recorder.isRecording {
+            label = "Höre zu…"; icon = "mic.fill"; color = .red
+        } else {
+            label = "Dialog aktiv"; icon = "ear.fill"; color = .accentColor
+        }
+        return HStack {
+            Image(systemName: icon).foregroundColor(color)
+            Text(label).font(.caption).foregroundColor(color)
+            Spacer()
+            // Mic-Pegel-Anzeige während Aufnahme
+            if state.recorder.isRecording {
+                let lvl = max(0, min(1, (state.recorder.currentLevel + 60) / 60))
+                ProgressView(value: Double(lvl))
+                    .progressViewStyle(.linear)
+                    .frame(width: 80)
+                    .tint(color)
+            }
+        }
+        .padding(6)
+        .background(color.opacity(0.08))
+        .cornerRadius(6)
     }
 
     private func sendMessage() {
