@@ -47,6 +47,13 @@ function transcribe(audioFilePath) {
       try { fs.unlinkSync(txtFile); } catch {}
     }
 
+    if (!text) {
+      // Diagnose: WAV-Datei aufheben, damit wir sie analysieren können
+      const debugFile = path.join(TEMP_DIR, `whisper_debug_last.wav`);
+      try { fs.copyFileSync(wavFile, debugFile); } catch {}
+      console.error(`[voice] Whisper hat keinen Text geliefert. Debug-WAV: ${debugFile}`);
+    }
+
     try { fs.unlinkSync(wavFile); } catch {}
     return text || null;
   } catch (error) {

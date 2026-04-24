@@ -104,7 +104,7 @@ final class AppState: ObservableObject {
     }
 
     func stopRecordingAndSend() async {
-        guard let data = recorder.stop(), !data.isEmpty else {
+        guard let data = await recorder.stop(), !data.isEmpty else {
             lastError = AudioRecorder.RecorderError.empty.localizedDescription
             return
         }

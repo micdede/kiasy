@@ -7,6 +7,7 @@ final class AudioRecorder: NSObject, ObservableObject {
 
     private var recorder: AVAudioRecorder?
     private var fileURL: URL?
+    private var stopContinuation: CheckedContinuation<Data?, Never>?
 
     enum RecorderError: LocalizedError {
         case permissionDenied
@@ -44,34 +45,48 @@ final class AudioRecorder: NSObject, ObservableObject {
             AVNumberOfChannelsKey: 1,
             AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
         ]
-        recorder = try AVAudioRecorder(url: url, settings: settings)
-        recorder?.record()
+        let r = try AVAudioRecorder(url: url, settings: settings)
+        r.delegate = self
+        r.record()
+        recorder = r
         isRecording = true
     }
 
     /// Stoppt und gibt die aufgezeichneten Bytes zurück.
-    func stop() -> Data? {
-        guard let rec = recorder, let url = fileURL else {
+    /// Wartet via Delegate auf vollständige Datei-Finalisierung.
+    func stop() async -> Data? {
+        guard let rec = recorder else {
             isRecording = false
             return nil
         }
-        rec.stop()
-        // AVAudioRecorder finalisiert die Datei asynchron — kurz warten und Größe prüfen.
-        var data: Data?
-        for _ in 0..<20 {
-            if let d = try? Data(contentsOf: url), d.count > 1024 {
-                data = d
-                break
-            }
-            Thread.sleep(forTimeInterval: 0.05)
+        return await withCheckedContinuation { cont in
+            self.stopContinuation = cont
+            rec.stop()
+            // audioRecorderDidFinishRecording feuert, sobald die Datei geschlossen ist.
         }
-        if data == nil {
-            data = try? Data(contentsOf: url)
+    }
+}
+
+extension AudioRecorder: AVAudioRecorderDelegate {
+    nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        Task { @MainActor in
+            let data = self.fileURL.flatMap { try? Data(contentsOf: $0) }
+            if let url = self.fileURL { try? FileManager.default.removeItem(at: url) }
+            self.recorder = nil
+            self.fileURL = nil
+            self.isRecording = false
+            self.stopContinuation?.resume(returning: data)
+            self.stopContinuation = nil
         }
-        recorder = nil
-        isRecording = false
-        try? FileManager.default.removeItem(at: url)
-        fileURL = nil
-        return data
+    }
+
+    nonisolated func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        Task { @MainActor in
+            self.recorder = nil
+            self.fileURL = nil
+            self.isRecording = false
+            self.stopContinuation?.resume(returning: nil)
+            self.stopContinuation = nil
+        }
     }
 }
