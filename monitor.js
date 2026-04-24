@@ -8764,16 +8764,20 @@ function handleChatTTS(req, res) {
         res.end(JSON.stringify({ error: "Text fehlt" }));
         return;
       }
-      const oggFile = voice.textToSpeech(text);
-      if (!oggFile || !fs.existsSync(oggFile)) {
+      // Format aus Query-Param (?format=mp3) oder Body — Default OGG/Opus für Telegram
+      const urlObj = new URL(req.url, "http://x");
+      const format = (urlObj.searchParams.get("format") || body.format || "ogg").toLowerCase();
+      const audioFile = voice.textToSpeech(text, format);
+      if (!audioFile || !fs.existsSync(audioFile)) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "TTS fehlgeschlagen" }));
         return;
       }
-      const audio = fs.readFileSync(oggFile);
-      try { fs.unlinkSync(oggFile); } catch {}
+      const audio = fs.readFileSync(audioFile);
+      try { fs.unlinkSync(audioFile); } catch {}
+      const contentType = format === "mp3" ? "audio/mpeg" : "audio/ogg";
       res.writeHead(200, {
-        "Content-Type": "audio/ogg",
+        "Content-Type": contentType,
         "Content-Length": audio.length,
         "Access-Control-Allow-Origin": "*",
       });
@@ -9770,7 +9774,7 @@ function startMonitor(port) {
       handleChatClear(req, res);
     } else if (req.url === "/api/chat/voice" && req.method === "POST") {
       handleChatVoice(req, res);
-    } else if (req.url === "/api/chat/tts" && req.method === "POST") {
+    } else if (req.url.split("?")[0] === "/api/chat/tts" && req.method === "POST") {
       handleChatTTS(req, res);
     } else if (req.url.startsWith("/api/chat/images/") && req.method === "GET") {
       const filename = decodeURIComponent(req.url.replace("/api/chat/images/", ""));

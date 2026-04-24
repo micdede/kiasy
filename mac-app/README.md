@@ -9,15 +9,15 @@ Nutzt denselben Chat-Thread wie Telegram/Monitor — du siehst überall identisc
 - Xcode 15+ (oder nur Command Line Tools: `xcode-select --install`)
 - Erreichbarer JARVIS-Server (im gleichen LAN oder per VPN)
 
-## Phase 1 — was funktioniert
+## Was funktioniert
 
-- Menübar-Icon mit Popover
+- Menübar-Icon mit Popover (Klick aufs Icon oder **⌥-Space** als globaler Hotkey)
 - Text-Eingabe → Antwort vom Agent
-- Verlauf laden/löschen
+- **Sprachnachrichten** (Mic-Button im Eingabefeld): Aufnahme starten/stoppen → wird an Whisper geschickt
+- **TTS** (Lautsprecher-Toggle in der Kopfzeile): Antworten werden vorgelesen (Edge-TTS / Killian-Stimme). Pro Nachricht auch über das kleine Lautsprecher-Symbol abspielbar.
+- Verlauf laden/löschen — derselbe Thread wie Telegram
 - Einstellungen (Server-URL, Benutzer, Passwort) — Passwort im macOS-Keychain
 - Self-Signed-Cert wird akzeptiert
-
-(Voice + TTS + Hotkey kommen in Phase 2.)
 
 ## Bauen
 
@@ -63,6 +63,10 @@ Du kannst `Package.swift` direkt mit Doppelklick in Xcode öffnen — Xcode vers
   - JARVIS-Server läuft? Test im Browser: `https://<ip>:3333/`
 - **"Ungültige Server-URL":**
   Format prüfen: `https://192.168.178.42:3333` (kein Slash am Ende)
+- **Mic funktioniert nicht / kein Permission-Dialog:**
+  Beim ersten Mic-Klick fragt macOS nach Erlaubnis. Falls nicht: Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon → Jarvis aktivieren.
+- **Hotkey ⌥-Space tut nichts:**
+  Konflikt mit Spotlight prüfen (Standard ist ⌘-Space, sollte nicht kollidieren). Sonst Logout/Login nach erstem Start.
 
 ## Struktur
 
@@ -70,11 +74,14 @@ Du kannst `Package.swift` direkt mit Doppelklick in Xcode öffnen — Xcode vers
 mac-app/
 ├── Package.swift              ← Swift Package Definition
 ├── Sources/Jarvis/
-│   ├── JarvisApp.swift        ← @main + MenuBarExtra
+│   ├── JarvisApp.swift        ← @main + AppDelegate-Adaptor
+│   ├── AppDelegate.swift      ← StatusItem, Popover, Hotkey ⌥-Space
 │   ├── AppState.swift         ← Settings + Chat-Verwaltung
 │   ├── Networking.swift       ← HTTP-Client (Self-Signed-Cert ok)
 │   ├── ChatView.swift         ← Popover-UI
 │   ├── SettingsView.swift     ← Einstellungs-Sheet
+│   ├── AudioRecorder.swift    ← AVAudioRecorder-Wrapper (Mic)
+│   ├── AudioPlayer.swift      ← AVAudioPlayer-Wrapper (TTS)
 │   └── Keychain.swift         ← Passwort-Speicherung
 ├── Resources/Info.plist       ← LSUIElement, Mic-Permission, Bundle-Meta
 ├── build.sh                   ← Baut Jarvis.app

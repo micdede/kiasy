@@ -34,13 +34,22 @@ struct Networking {
         return URLSession(configuration: config, delegate: TrustingDelegate(), delegateQueue: nil)
     }
 
-    private func makeRequest(_ path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
-        guard let url = baseURL?.appendingPathComponent(path) else { throw NetError.invalidURL }
+    private func makeRequest(_ path: String,
+                             query: [URLQueryItem] = [],
+                             method: String = "GET",
+                             contentType: String = "application/json",
+                             body: Data? = nil) throws -> URLRequest {
+        guard let base = baseURL else { throw NetError.invalidURL }
+        let withPath = base.appendingPathComponent(path)
+        var components = URLComponents(url: withPath, resolvingAgainstBaseURL: false)
+        if !query.isEmpty { components?.queryItems = query }
+        guard let url = components?.url else { throw NetError.invalidURL }
+
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
         if let body = body {
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue(contentType, forHTTPHeaderField: "Content-Type")
             req.httpBody = body
         }
         return req
@@ -56,6 +65,8 @@ struct Networking {
         }
         return data
     }
+
+    // MARK: - Endpoints
 
     func send(message: String) async throws -> String {
         let body = try JSONSerialization.data(withJSONObject: ["message": message])
@@ -81,6 +92,28 @@ struct Networking {
     func clearHistory() async throws {
         let req = try makeRequest("api/chat/clear", method: "POST")
         _ = try await perform(req)
+    }
+
+    func sendVoice(audioData: Data) async throws -> (transcript: String, text: String) {
+        let req = try makeRequest("api/chat/voice",
+                                  method: "POST",
+                                  contentType: "audio/mp4",
+                                  body: audioData)
+        let data = try await perform(req)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return (
+            transcript: (json?["transcript"] as? String) ?? "",
+            text: (json?["text"] as? String) ?? ""
+        )
+    }
+
+    func tts(text: String) async throws -> Data {
+        let body = try JSONSerialization.data(withJSONObject: ["text": text])
+        let req = try makeRequest("api/chat/tts",
+                                  query: [URLQueryItem(name: "format", value: "mp3")],
+                                  method: "POST",
+                                  body: body)
+        return try await perform(req)
     }
 }
 

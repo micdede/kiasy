@@ -45,11 +45,12 @@ function transcribe(audioFilePath) {
 }
 
 /**
- * Wandelt Text in eine OGG-Sprachdatei um (edge-tts CLI + ffmpeg).
+ * Wandelt Text in eine Sprachdatei um (edge-tts CLI + ffmpeg).
  * @param {string} text – Eingabetext (darf Markdown/Emojis enthalten)
- * @returns {string|null} – Pfad zur OGG-Datei oder null
+ * @param {string} format – "ogg" (default, Opus für Telegram) oder "mp3" (für Clients ohne Opus-Support, z.B. macOS)
+ * @returns {string|null} – Pfad zur Audio-Datei oder null
  */
-function textToSpeech(text) {
+function textToSpeech(text, format = "ogg") {
   const id = Date.now();
   const txtFile = path.join(TEMP_DIR, `tts_${id}.txt`);
   const mp3File = path.join(TEMP_DIR, `tts_${id}.mp3`);
@@ -77,6 +78,11 @@ function textToSpeech(text) {
       { timeout: 30000 }
     );
 
+    if (format === "mp3") {
+      // MP3 direkt zurückgeben (edge-tts liefert bereits MP3)
+      return mp3File;
+    }
+
     execSync(
       `ffmpeg -i "${mp3File}" -c:a libopus -b:a 48k "${oggFile}" -y`,
       { timeout: 15000, stdio: "ignore" }
@@ -89,7 +95,10 @@ function textToSpeech(text) {
     return null;
   } finally {
     try { fs.unlinkSync(txtFile); } catch {}
-    try { fs.unlinkSync(mp3File); } catch {}
+    // mp3File nur löschen wenn wir OGG zurückgegeben haben
+    if (format !== "mp3") {
+      try { fs.unlinkSync(mp3File); } catch {}
+    }
   }
 }
 

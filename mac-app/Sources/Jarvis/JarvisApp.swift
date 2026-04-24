@@ -2,16 +2,10 @@ import SwiftUI
 
 @main
 struct JarvisApp: App {
-    @StateObject private var state = AppState()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            ChatView()
-                .environmentObject(state)
-                .frame(width: 420, height: 540)
-        } label: {
-            Image(systemName: "brain.head.profile")
-        }
-        .menuBarExtraStyle(.window)
+        // Unsichtbare Scene — die App lebt vom Status-Item in der Menüleiste
+        Settings { EmptyView() }
     }
 }
