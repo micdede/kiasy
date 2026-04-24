@@ -344,11 +344,20 @@ async function handleMessage(chatId, userMessage, options = {}) {
     userMessage = `[WORKFLOW: ${options.workflowName || "?"} | Schritt ${options.stepNum || "?"}]\nKontext: ${ctxStr}\n\n${userMessage}`;
   }
 
-  const { tools, definitions } = loadTools();
-  const toolNames = [...tools.keys()];
+  const { tools, definitions: allDefinitions } = loadTools();
 
+  // Semantisches Tool-Routing: nur die relevantesten Tools pro Nachricht ans LLM
+  let definitions = allDefinitions;
+  try {
+    const router = require("./lib/tool-router");
+    definitions = await router.selectTools(userMessage, allDefinitions);
+  } catch (e) {
+    console.warn("  Tool-Router-Fehler:", e.message);
+  }
+
+  const toolNames = definitions.map(d => d.name);
   if (toolNames.length > 0) {
-    console.log(`  Tools: ${toolNames.join(", ")}`);
+    console.log(`  Tools (${toolNames.length}/${allDefinitions.length}): ${toolNames.join(", ")}`);
   }
 
   const history = getHistory(chatId);
@@ -497,4 +506,4 @@ function buildResponse(text) {
 
 process.on("exit", () => db.close());
 
-module.exports = { handleMessage, clearHistory, getHistory, conversations, db };
+module.exports = { handleMessage, clearHistory, getHistory, conversations, db, loadTools };

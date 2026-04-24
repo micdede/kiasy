@@ -83,6 +83,18 @@ bot.getMe().then((me) => {
   }
 });
 
+// Tool-Router pre-warming (fire-and-forget) — embeddet alle Tools im Hintergrund
+// damit die erste echte Nachricht keine Cold-Start-Latenz hat.
+setTimeout(async () => {
+  try {
+    const router = require("./lib/tool-router");
+    const { definitions } = agent.loadTools ? agent.loadTools() : { definitions: [] };
+    if (definitions.length > 0) await router.ensureEmbeddings(definitions);
+  } catch (e) {
+    console.warn("Tool-Router warmup failed:", e.message);
+  }
+}, 3000);
+
 // Reminder- & Workflow- & Delegation-Scheduler: prüft jede Minute
 // Sofort einmal prüfen (fängt überfällige Reminders nach Neustart ab)
 setTimeout(() => { checkReminders(); checkWorkflows(); checkDelegationFollowups(); }, 5000);
