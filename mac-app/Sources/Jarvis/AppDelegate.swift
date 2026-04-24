@@ -25,10 +25,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Popover mit SwiftUI-Inhalt
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 420, height: 540)
+        let savedW = UserDefaults.standard.object(forKey: "popoverWidth") as? Double ?? 520
+        let savedH = UserDefaults.standard.object(forKey: "popoverHeight") as? Double ?? 680
+        popover.contentSize = NSSize(width: savedW, height: savedH)
         popover.behavior = .transient
         let view = ChatView().environmentObject(state)
         popover.contentViewController = NSHostingController(rootView: view)
+
+        // Resize-Notifications aus ChatView verarbeiten
+        NotificationCenter.default.addObserver(
+            forName: .jarvisResizePopover,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self = self,
+                  let w = note.userInfo?["w"] as? CGFloat,
+                  let h = note.userInfo?["h"] as? CGFloat else { return }
+            self.popover.contentSize = NSSize(width: w, height: h)
+        }
 
         // Hotkey registrieren + bei Änderung neu binden
         registerHotkey()

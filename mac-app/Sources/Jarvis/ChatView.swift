@@ -72,6 +72,19 @@ struct ChatView: View {
                 .buttonStyle(.borderless)
                 .help("Einstellungen")
 
+            Menu {
+                Button("Klein (420 × 540)")  { resize(420, 540) }
+                Button("Mittel (520 × 680)") { resize(520, 680) }
+                Button("Groß (680 × 820)")   { resize(680, 820) }
+                Button("Sehr groß (820 × 960)") { resize(820, 960) }
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 22)
+            .help("Fenstergröße")
+
             Button {
                 NSApplication.shared.terminate(nil)
             } label: { Image(systemName: "power") }
@@ -80,6 +93,20 @@ struct ChatView: View {
         }
         .padding(8)
     }
+
+    private func resize(_ w: CGFloat, _ h: CGFloat) {
+        UserDefaults.standard.set(Double(w), forKey: "popoverWidth")
+        UserDefaults.standard.set(Double(h), forKey: "popoverHeight")
+        NotificationCenter.default.post(
+            name: .jarvisResizePopover,
+            object: nil,
+            userInfo: ["w": w, "h": h]
+        )
+    }
+}
+
+extension Notification.Name {
+    static let jarvisResizePopover = Notification.Name("jarvisResizePopover")
 
     private var messageList: some View {
         ScrollViewReader { proxy in
