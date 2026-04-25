@@ -8892,7 +8892,7 @@ function handleChatVoiceStream(req, res) {
 function handleChatTTS(req, res) {
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
-  req.on("end", () => {
+  req.on("end", async () => {
     try {
       const body = JSON.parse(Buffer.concat(chunks).toString());
       const text = (body.text || "").trim();
@@ -8904,7 +8904,7 @@ function handleChatTTS(req, res) {
       // Format aus Query-Param (?format=mp3) oder Body — Default OGG/Opus für Telegram
       const urlObj = new URL(req.url, "http://x");
       const format = (urlObj.searchParams.get("format") || body.format || "ogg").toLowerCase();
-      const audioFile = voice.textToSpeech(text, format);
+      const audioFile = await voice.textToSpeech(text, format);
       if (!audioFile || !fs.existsSync(audioFile)) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "TTS fehlgeschlagen" }));

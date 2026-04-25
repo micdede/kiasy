@@ -32,13 +32,14 @@ struct SettingsView: View {
                 Divider()
 
                 Text("Sprachverarbeitung").font(.headline)
-                Toggle("Lokale Apple-STT/TTS (Dialog-Modus)", isOn: $state.useLocalSpeech)
-                Text("Spracherkennung & -ausgabe laufen on-device. Kein Whisper-/Edge-TTS-Roundtrip — schnellerer, flüssigerer Dialog. Text wird trotzdem an JARVIS gesendet.")
+                Toggle("Apple-Spracherkennung (statt Whisper-Server)", isOn: $state.useLocalSTT)
+                Toggle("Apple-Sprachausgabe (statt Server-TTS / Piper)", isOn: $state.useLocalTTS)
+                Text("STT und TTS sind unabhängig schaltbar. Apple = on-device, sofort. Server-TTS nutzt aktuell Piper (lokaler Neural-TTS auf Unraid) — natürlicher klingend als Apple, +200-500ms Latenz.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if state.useLocalSpeech {
+                if state.useLocalTTS {
                     voicePicker
                 }
 

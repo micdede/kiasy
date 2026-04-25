@@ -70,44 +70,69 @@ function transcribe(audioFilePath) {
  * @param {string} format – "ogg" (default, Opus für Telegram) oder "mp3" (für Clients ohne Opus-Support, z.B. macOS)
  * @returns {string|null} – Pfad zur Audio-Datei oder null
  */
-function textToSpeech(text, format = "ogg") {
+function cleanForTTS(text) {
+  return text
+    .replace(/\*+([^*]+)\*+/g, "$1")
+    .replace(/_+([^_]+)_+/g, "$1")
+    .replace(/`{1,3}[^`]*`{1,3}/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^#+\s*/gm, "")
+    .replace(/^[-•]\s*/gm, "")
+    .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]/gu, "")
+    .trim();
+}
+
+async function textToSpeech(text, format = "ogg") {
+  const cleanText = cleanForTTS(text);
+  if (!cleanText) return null;
+  const piper = require("./lib/piper-client");
+  if (piper.isEnabled()) {
+    const out = await textToSpeechPiper(cleanText, format);
+    if (out) return out;
+    console.warn("[tts] Piper-Fallback auf Edge-TTS");
+  }
+  return textToSpeechEdge(cleanText, format);
+}
+
+async function textToSpeechPiper(cleanText, format) {
+  const piper = require("./lib/piper-client");
+  const id = Date.now();
+  const wavFile = path.join(TEMP_DIR, `tts_piper_${id}.wav`);
+  const outFile = path.join(TEMP_DIR, `tts_piper_${id}.${format}`);
+  try {
+    const { pcm, format: fmt } = await piper.synthesizePCM(cleanText);
+    fs.writeFileSync(wavFile, piper.pcmToWav(pcm, fmt));
+    const codec = format === "mp3" ? "libmp3lame -b:a 96k" : "libopus -b:a 48k";
+    execSync(
+      `ffmpeg -i "${wavFile}" -c:a ${codec} "${outFile}" -y`,
+      { timeout: 15000, stdio: "ignore" }
+    );
+    return outFile;
+  } catch (err) {
+    console.error("[piper-tts] Fehler:", err.message);
+    return null;
+  } finally {
+    try { fs.unlinkSync(wavFile); } catch {}
+  }
+}
+
+function textToSpeechEdge(cleanText, format) {
   const id = Date.now();
   const txtFile = path.join(TEMP_DIR, `tts_${id}.txt`);
   const mp3File = path.join(TEMP_DIR, `tts_${id}.mp3`);
   const oggFile = path.join(TEMP_DIR, `tts_${id}.ogg`);
   try {
-    // Markdown-Formatierung + Emojis entfernen für natürlichere Sprache
-    const cleanText = text
-      .replace(/\*+([^*]+)\*+/g, "$1")
-      .replace(/_+([^_]+)_+/g, "$1")
-      .replace(/`{1,3}[^`]*`{1,3}/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/^#+\s*/gm, "")
-      .replace(/^[-•]\s*/gm, "")
-      .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]/gu, "")
-      .trim();
-
-    if (!cleanText) return null;
-
-    // Text in Datei schreiben (vermeidet Shell-Escaping-Probleme)
     fs.writeFileSync(txtFile, cleanText, "utf-8");
-
     const edgeTtsBin = path.join(__dirname, "venv", "bin", "edge-tts");
     execSync(
       `"${edgeTtsBin}" --voice "${TTS_VOICE}" --rate "${TTS_RATE}" --file "${txtFile}" --write-media "${mp3File}"`,
       { timeout: 30000 }
     );
-
-    if (format === "mp3") {
-      // MP3 direkt zurückgeben (edge-tts liefert bereits MP3)
-      return mp3File;
-    }
-
+    if (format === "mp3") return mp3File;
     execSync(
       `ffmpeg -i "${mp3File}" -c:a libopus -b:a 48k "${oggFile}" -y`,
       { timeout: 15000, stdio: "ignore" }
     );
-
     return oggFile;
   } catch (error) {
     console.error("TTS-Fehler:", error.message);
@@ -115,7 +140,6 @@ function textToSpeech(text, format = "ogg") {
     return null;
   } finally {
     try { fs.unlinkSync(txtFile); } catch {}
-    // mp3File nur löschen wenn wir OGG zurückgegeben haben
     if (format !== "mp3") {
       try { fs.unlinkSync(mp3File); } catch {}
     }
