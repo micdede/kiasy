@@ -482,6 +482,189 @@ async function handleMessage(chatId, userMessage, options = {}) {
   return buildResponse("⚠️ Maximale Agent-Schritte erreicht. Versuche es mit einer einfacheren Anfrage.");
 }
 
+// --- Streaming-Variante für Voice/Dialog ---
+//
+// Yieldet:
+//   { type: "delta",    text }    — Text-Token während des Streams (für UI/Live)
+//   { type: "sentence", text, seq } — abgeschlossener Satz (Trigger für TTS)
+//   { type: "tool_use", name }    — Modell ruft ein Tool auf (Status für UI)
+//   { type: "done",     text, images, documents, telegramMessages } — Endergebnis
+//
+// Sätze werden am Backend extrahiert (Punkt/Frage/Ausruf + Whitespace), damit
+// die Mac-App pro Satz parallel TTS anfragen kann statt auf den vollen Text
+// zu warten.
+async function* streamMessage(chatId, userMessage, options = {}) {
+  if (options.workflowContext) {
+    const ctxStr = JSON.stringify(options.workflowContext);
+    userMessage = `[WORKFLOW: ${options.workflowName || "?"} | Schritt ${options.stepNum || "?"}]\nKontext: ${ctxStr}\n\n${userMessage}`;
+  }
+
+  const { tools, definitions: allDefinitions } = loadTools();
+
+  let definitions = allDefinitions;
+  try {
+    const router = require("./lib/tool-router");
+    definitions = await router.selectTools(userMessage, allDefinitions);
+  } catch (e) {
+    console.warn("  Tool-Router-Fehler:", e.message);
+  }
+
+  const toolNames = definitions.map(d => d.name);
+  if (toolNames.length > 0) {
+    console.log(`  Tools (${toolNames.length}/${allDefinitions.length}): ${toolNames.join(", ")}`);
+  }
+
+  const history = getHistory(chatId);
+  history.push({ role: "user", content: userMessage });
+  try { db.messages.save(chatId, "user", userMessage); } catch {}
+  trimHistory(history);
+
+  let semanticContext = "";
+  try {
+    const vm = require("./lib/vector-memory");
+    semanticContext = await vm.getRelevantContext(userMessage, 8);
+  } catch {}
+
+  try {
+    const vm = require("./lib/vector-memory");
+    const msgId = Date.now();
+    vm.upsert(`chat_${msgId}`, `[user] ${userMessage}`, {
+      type: "chat", role: "user", chat_id: String(chatId),
+      date: new Date().toISOString(),
+    }).catch(() => {});
+  } catch {}
+
+  // Satz-Extraktion: trennt an .!? + Whitespace, gibt vollständige Sätze zurück
+  // und behält den Rest. Vermeidet Splits an gängigen Abkürzungen (z.B., u.a., ca.).
+  const ABBREVIATIONS = /\b(z\.\s?B|u\.\s?a|d\.\s?h|s\.\s?o|s\.\s?u|usw|bzw|ca|ggf|inkl|exkl|Mr|Mrs|Dr|Prof|St|Nr|Jg)\.$/i;
+  let pendingText = "";
+  let sentenceSeq = 0;
+  function extractSentences(addedText) {
+    pendingText += addedText;
+    const out = [];
+    const re = /[.!?]+(?=\s|$)/g;
+    let lastEnd = 0;
+    let m;
+    while ((m = re.exec(pendingText)) !== null) {
+      const end = m.index + m[0].length;
+      const candidate = pendingText.slice(lastEnd, end).trim();
+      // Heuristik: zu kurz (≤2 Zeichen) oder Abkürzung → nicht splitten
+      if (candidate.length > 2 && !ABBREVIATIONS.test(candidate)) {
+        out.push(candidate);
+        lastEnd = end;
+      }
+    }
+    if (lastEnd > 0) pendingText = pendingText.slice(lastEnd).replace(/^\s+/, "");
+    return out;
+  }
+  function flushPending() {
+    const rest = pendingText.trim();
+    pendingText = "";
+    return rest;
+  }
+
+  let fullText = "";
+
+  for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
+    let result = null;
+    let turnText = "";
+    let speculativeSentences = 0; // wieviele Sätze dieser Turn schon spekulativ rausgegangen sind
+    try {
+      for await (const ev of provider.chatStream(getSystemPrompt(semanticContext), history, definitions)) {
+        if (ev.delta) {
+          turnText += ev.delta;
+          yield { type: "delta", text: ev.delta };
+          // Spekulativ Sätze rausgeben — falls Tool-Turn: discard-Event nach
+          for (const s of extractSentences(ev.delta)) {
+            sentenceSeq++;
+            speculativeSentences++;
+            yield { type: "sentence", text: s, seq: sentenceSeq };
+          }
+        } else if (ev.final) {
+          result = ev.final;
+        }
+      }
+    } catch (error) {
+      console.error(`  API-Fehler (Turn ${turn}):`, error.message);
+      history.pop();
+      yield { type: "done", text: `❌ API-Fehler: ${error.message || "Unbekannter Fehler"}`, images: [], documents: [], telegramMessages: [] };
+      return;
+    }
+    if (!result) {
+      history.pop();
+      yield { type: "done", text: "❌ Stream ohne Ergebnis", images: [], documents: [], telegramMessages: [] };
+      return;
+    }
+
+    if (result.type === "tool_use") {
+      // Falls vor Tool-Use schon Sätze raus sind: Mac soll Audio-Queue verwerfen
+      if (speculativeSentences > 0) {
+        yield { type: "discard", reason: "tool_use" };
+      }
+      pendingText = "";
+
+      provider.pushAssistant(history, result);
+      try { db.messages.save(chatId, "assistant", history[history.length - 1].content); } catch {}
+
+      for (const call of result.toolCalls) {
+        yield { type: "tool_use", name: call.name };
+      }
+
+      const toolResults = [];
+      for (const call of result.toolCalls) {
+        const inputStr = JSON.stringify(call.input).substring(0, 120);
+        console.log(`  → ${call.name}(${inputStr})`);
+
+        let output;
+        try {
+          const executor = tools.get(call.name);
+          if (!executor) {
+            output = `Tool "${call.name}" nicht gefunden. Verfügbar: ${toolNames.join(", ")}`;
+          } else {
+            if (call.name === "reminder_set" && !call.input.chatId) call.input.chatId = chatId;
+            if (call.name === "workflow_create" && !call.input.chatId) call.input.chatId = chatId;
+            output = await executor(call.name, call.input);
+          }
+        } catch (error) {
+          output = `Tool-Fehler: ${error.message}`;
+        }
+        toolResults.push({ callId: call.id, content: String(output).substring(0, 10000) });
+      }
+
+      provider.pushToolResults(history, toolResults);
+      try { db.messages.save(chatId, "user", history[history.length - 1].content); } catch {}
+      continue;
+    }
+
+    // Final-Text-Turn: noch verbleibenden Rest als letzten Satz yielden
+    fullText = turnText;
+    provider.pushAssistant(history, result);
+    try { db.messages.save(chatId, "assistant", history[history.length - 1].content); } catch {}
+
+    const rest = flushPending();
+    if (rest) {
+      sentenceSeq++;
+      yield { type: "sentence", text: rest, seq: sentenceSeq };
+    }
+
+    if (fullText.length > 30) {
+      try {
+        const vm = require("./lib/vector-memory");
+        vm.upsert(`chat_${Date.now()}`, `[assistant] ${fullText}`, {
+          type: "chat", role: "assistant", chat_id: String(chatId),
+          date: new Date().toISOString(),
+        }).catch(() => {});
+      } catch {}
+    }
+
+    const response = buildResponse(fullText || "(keine Antwort)");
+    yield { type: "done", ...response };
+    return;
+  }
+
+  yield { type: "done", text: "⚠️ Maximale Agent-Schritte erreicht.", images: [], documents: [], telegramMessages: [] };
+}
+
 function buildResponse(text) {
   // Bild-Queue aus dem image-Tool abholen
   let images = [];
@@ -506,4 +689,4 @@ function buildResponse(text) {
 
 process.on("exit", () => db.close());
 
-module.exports = { handleMessage, clearHistory, getHistory, conversations, db, loadTools };
+module.exports = { handleMessage, streamMessage, clearHistory, getHistory, conversations, db, loadTools };

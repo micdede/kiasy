@@ -43,6 +43,47 @@ class AnthropicProvider {
     };
   }
 
+  // Async-Generator: yieldet { delta: text } während des Streams,
+  // am Ende { final: <chat-result> } mit derselben Struktur wie chat().
+  async *chatStream(system, messages, tools) {
+    const stream = this.client.messages.stream({
+      model: this.model,
+      max_tokens: this.maxTokens,
+      system,
+      tools: tools.length > 0 ? tools : undefined,
+      messages,
+    });
+
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+        yield { delta: event.delta.text };
+      }
+    }
+    const finalMessage = await stream.finalMessage();
+
+    const toolUses = finalMessage.content.filter((b) => b.type === "tool_use");
+    if (toolUses.length > 0) {
+      yield {
+        final: {
+          type: "tool_use",
+          toolCalls: toolUses.map((t) => ({ id: t.id, name: t.name, input: t.input })),
+          _raw: finalMessage.content,
+        },
+      };
+      return;
+    }
+    yield {
+      final: {
+        type: "text",
+        text: finalMessage.content
+          .filter((b) => b.type === "text")
+          .map((b) => b.text)
+          .join("\n"),
+        _raw: finalMessage.content,
+      },
+    };
+  }
+
   pushAssistant(history, result) {
     history.push({ role: "assistant", content: result._raw });
   }
@@ -124,6 +165,97 @@ class OpenAICompatibleProvider {
       type: "text",
       text: msg.content || "",
       _raw: msg,
+    };
+  }
+
+  async *chatStream(system, messages, tools) {
+    const oaiMessages = this._toOpenAI(system, messages);
+    const oaiTools = this._convertTools(tools);
+
+    const params = {
+      model: this.model,
+      max_tokens: this.maxTokens,
+      messages: oaiMessages,
+      stream: true,
+    };
+    if (oaiTools.length > 0) params.tools = oaiTools;
+
+    const stream = await this.client.chat.completions.create(params);
+
+    let textBuffer = "";
+    const toolCallsAcc = []; // index → { id, name, arguments }
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices?.[0]?.delta;
+      if (!delta) continue;
+
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index ?? 0;
+          if (!toolCallsAcc[idx]) {
+            toolCallsAcc[idx] = { id: tc.id || "", name: tc.function?.name || "", arguments: "" };
+          } else {
+            if (tc.id) toolCallsAcc[idx].id = tc.id;
+            if (tc.function?.name) toolCallsAcc[idx].name += tc.function.name;
+          }
+          if (tc.function?.arguments) toolCallsAcc[idx].arguments += tc.function.arguments;
+        }
+      }
+
+      if (delta.content) {
+        textBuffer += delta.content;
+        yield { delta: delta.content };
+      }
+    }
+
+    // XML-Fallback (z.B. DeepSeek): nach dem Stream prüfen
+    if (toolCallsAcc.length === 0 && textBuffer.includes("<function_calls>")) {
+      const xmlCalls = this._parseXmlToolCalls(textBuffer);
+      if (xmlCalls.length > 0) {
+        const textBefore = textBuffer.split("<function_calls>")[0].trim();
+        yield {
+          final: {
+            type: "tool_use",
+            toolCalls: xmlCalls,
+            _raw: { content: textBefore || null, role: "assistant" },
+          },
+        };
+        return;
+      }
+    }
+
+    if (toolCallsAcc.length > 0) {
+      const toolCalls = toolCallsAcc.map((tc, i) => ({
+        id: tc.id || `call_${Date.now()}_${i}`,
+        name: tc.name,
+        input: tc.arguments ? (() => {
+          try { return JSON.parse(tc.arguments); } catch { return {}; }
+        })() : {},
+      }));
+      yield {
+        final: {
+          type: "tool_use",
+          toolCalls,
+          _raw: {
+            role: "assistant",
+            content: textBuffer || null,
+            tool_calls: toolCallsAcc.map((tc, i) => ({
+              id: tc.id || `call_${Date.now()}_${i}`,
+              type: "function",
+              function: { name: tc.name, arguments: tc.arguments || "{}" },
+            })),
+          },
+        },
+      };
+      return;
+    }
+
+    yield {
+      final: {
+        type: "text",
+        text: textBuffer,
+        _raw: { role: "assistant", content: textBuffer },
+      },
     };
   }
 

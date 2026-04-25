@@ -131,6 +131,47 @@ struct Networking {
         }
     }
 
+    /// Streaming-Variante von sendVoice — yieldet SSE-Events live.
+    /// Mac kann pro Satz parallel TTS anfragen.
+    func sendVoiceStream(audioData: Data) -> AsyncThrowingStream<StreamEvent, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let req = try makeRequest("api/chat/voice/stream",
+                                              method: "POST",
+                                              contentType: "audio/mp4",
+                                              body: audioData)
+                    let session = makeSession()
+                    let (bytes, resp) = try await session.bytes(for: req)
+                    guard let http = resp as? HTTPURLResponse else {
+                        continuation.finish(throwing: NetError.http(0, "Keine HTTP-Antwort")); return
+                    }
+                    if !(200..<300).contains(http.statusCode) {
+                        var body = ""
+                        for try await line in bytes.lines { body += line; if body.count > 200 { break } }
+                        continuation.finish(throwing: NetError.http(http.statusCode, body)); return
+                    }
+
+                    var currentEvent = ""
+                    for try await line in bytes.lines {
+                        if line.hasPrefix("event: ") {
+                            currentEvent = String(line.dropFirst("event: ".count))
+                        } else if line.hasPrefix("data: ") {
+                            let payload = String(line.dropFirst("data: ".count))
+                            if let event = StreamEvent.parse(name: currentEvent, payload: payload) {
+                                continuation.yield(event)
+                            }
+                        }
+                        // leere Zeile = Event-Ende; currentEvent bleibt für default-Event "message"
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
     func tts(text: String) async throws -> Data {
         let body = try JSONSerialization.data(withJSONObject: ["text": text])
         let req = try makeRequest("api/chat/tts",
@@ -138,6 +179,39 @@ struct Networking {
                                   method: "POST",
                                   body: body)
         return try await perform(req)
+    }
+}
+
+enum StreamEvent {
+    case transcript(String)
+    case delta(String)
+    case sentence(text: String, seq: Int)
+    case toolUse(String)
+    case discard
+    case done(text: String, images: [ChatImage])
+    case streamError(String)
+
+    static func parse(name: String, payload: String) -> StreamEvent? {
+        guard let data = payload.data(using: .utf8) else { return nil }
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        switch name {
+        case "transcript": return .transcript((json["text"] as? String) ?? "")
+        case "delta":      return .delta((json["text"] as? String) ?? "")
+        case "sentence":
+            return .sentence(text: (json["text"] as? String) ?? "",
+                             seq: (json["seq"] as? Int) ?? 0)
+        case "tool_use":   return .toolUse((json["name"] as? String) ?? "")
+        case "discard":    return .discard
+        case "done":
+            let text = (json["text"] as? String) ?? ""
+            let imgs = (json["images"] as? [[String: Any]] ?? []).compactMap { dict -> ChatImage? in
+                guard let url = dict["url"] as? String, !url.isEmpty else { return nil }
+                return ChatImage(url: url, caption: (dict["caption"] as? String) ?? "")
+            }
+            return .done(text: text, images: imgs)
+        case "error":      return .streamError((json["error"] as? String) ?? "Unbekannter Fehler")
+        default: return nil
+        }
     }
 }
 

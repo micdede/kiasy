@@ -201,35 +201,76 @@ final class AppState: ObservableObject {
         let data = await recorder.recordWithVAD()
         guard dialogMode else { return }
         guard let data = data, !data.isEmpty else {
-            // Keine Sprache erkannt → Dialog beenden
             dialogMode = false
             return
         }
         isSending = true
         defer { isSending = false }
+
+        // Pipeline: SSE-Stream → TTS-Tasks (parallel zur weiteren LLM-Antwort)
+        // → Consumer awaitet in Reihenfolge → Player-Queue.
+        // (makeStream ist macOS 14+, hier kompatible Variante für macOS 13.)
+        var ttsTaskCont: AsyncStream<Task<Data, Error>>.Continuation!
+        let ttsTaskStream = AsyncStream<Task<Data, Error>> { cont in ttsTaskCont = cont }
+
+        let consumer = Task { @MainActor [weak self] in
+            for await task in ttsTaskStream {
+                guard let self = self, self.dialogMode else { task.cancel(); continue }
+                do {
+                    let audio = try await task.value
+                    if !self.dialogMode { return }
+                    self.player.enqueue(data: audio)
+                } catch {
+                    // einzelner TTS-Fehler → Satz überspringen, weitermachen
+                }
+            }
+        }
+
+        var assistantText = ""
+        var assistantImages: [ChatImage] = []
+
         do {
-            let result = try await client().sendVoice(audioData: data)
-            guard dialogMode else { return }
-            if !result.transcript.isEmpty {
-                messages.append(ChatMessage(role: "user", text: result.transcript))
+            let net = client()
+            for try await ev in net.sendVoiceStream(audioData: data) {
+                guard dialogMode else { break }
+                switch ev {
+                case .transcript(let t):
+                    if !t.isEmpty {
+                        messages.append(ChatMessage(role: "user", text: t))
+                    }
+                case .sentence(let text, _):
+                    let snippet = text
+                    let task = Task { try await net.tts(text: snippet) }
+                    ttsTaskCont.yield(task)
+                case .toolUse:
+                    break // optional: UI-Status zeigen
+                case .discard:
+                    player.stop()
+                case .done(let text, let images):
+                    assistantText = text
+                    assistantImages = images
+                case .streamError(let msg):
+                    lastError = msg
+                case .delta:
+                    break
+                }
             }
-            if !result.text.isEmpty || !result.images.isEmpty {
-                messages.append(ChatMessage(role: "assistant", text: result.text, images: result.images))
+            if !assistantText.isEmpty || !assistantImages.isEmpty {
+                messages.append(ChatMessage(role: "assistant", text: assistantText, images: assistantImages))
             }
-            if !result.text.isEmpty {
-                // playTTS spielt ab; onFinish triggert nächsten Cycle
-                await playTTS(result.text)
-            } else if dialogMode {
-                // Keine Antwort zum Vorlesen — direkt nächster Cycle
-                try? await Task.sleep(nanoseconds: 150_000_000)
-                await dialogListenLoop()
-            }
+            lastError = nil
         } catch {
             lastError = error.localizedDescription
-            if dialogMode {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                await dialogListenLoop()
-            }
+        }
+
+        ttsTaskCont.finish()
+        await consumer.value
+
+        // Falls Player nichts mehr in Queue hat: direkt nächster Cycle
+        // Sonst triggert player.onFinish den Cycle (in startDialog gesetzt)
+        if !player.isPlaying && dialogMode {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            await dialogListenLoop()
         }
     }
 }

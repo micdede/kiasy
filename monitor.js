@@ -8781,6 +8781,68 @@ function handleChatVoice(req, res) {
   });
 }
 
+// Streaming-Voice-Endpoint: nimmt Audio entgegen, transkribiert, streamt Agent-Antwort
+// als Server-Sent-Events. Mac-Client kann pro Satz parallel TTS anfragen (deutlich
+// flüssigerer Dialog als das alte handleChatVoice, das auf den vollen Text wartet).
+function handleChatVoiceStream(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", async () => {
+    const buffer = Buffer.concat(chunks);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Accel-Buffering": "no",
+    });
+    const send = (event, payload) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+    try {
+      const audioFile = path.join(TEMP_DIR, `chat_voice_${Date.now()}.audio`);
+      fs.writeFileSync(audioFile, buffer);
+      console.log(`[voice-stream] Audio empfangen: ${buffer.length} bytes`);
+      if (buffer.length < 100) {
+        try { fs.unlinkSync(audioFile); } catch {}
+        send("error", { error: `Audio leer oder zu klein (${buffer.length} bytes)` });
+        res.end(); return;
+      }
+      const transcript = voice.transcribe(audioFile);
+      try { fs.unlinkSync(audioFile); } catch {}
+      if (!transcript) {
+        send("error", { error: "Transkription fehlgeschlagen" });
+        res.end(); return;
+      }
+      console.log(`[voice-stream] Transkript: ${transcript}`);
+      send("transcript", { text: transcript });
+
+      let lastResult = null;
+      for await (const ev of agent.streamMessage(monitorChatId(), `[Sprachnachricht]: ${transcript}`)) {
+        if (ev.type === "delta") {
+          send("delta", { text: ev.text });
+        } else if (ev.type === "sentence") {
+          send("sentence", { text: ev.text, seq: ev.seq });
+        } else if (ev.type === "tool_use") {
+          send("tool_use", { name: ev.name });
+        } else if (ev.type === "discard") {
+          send("discard", { reason: ev.reason });
+        } else if (ev.type === "done") {
+          lastResult = ev;
+          send("done", { text: ev.text, images: normalizeImages(ev.images) });
+        }
+      }
+      if (lastResult) await flushTelegramQueue(lastResult);
+    } catch (err) {
+      console.error("[voice-stream] Fehler:", err);
+      try { send("error", { error: err.message }); } catch {}
+    } finally {
+      try { res.end(); } catch {}
+    }
+  });
+}
+
 function handleChatTTS(req, res) {
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
@@ -9803,6 +9865,8 @@ function startMonitor(port) {
       handleChatClear(req, res);
     } else if (req.url === "/api/chat/voice" && req.method === "POST") {
       handleChatVoice(req, res);
+    } else if (req.url === "/api/chat/voice/stream" && req.method === "POST") {
+      handleChatVoiceStream(req, res);
     } else if (req.url.split("?")[0] === "/api/chat/tts" && req.method === "POST") {
       handleChatTTS(req, res);
     } else if (req.url.startsWith("/api/chat/images/") && req.method === "GET") {

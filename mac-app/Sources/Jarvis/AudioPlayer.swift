@@ -6,11 +6,48 @@ final class AudioPlayer: NSObject, ObservableObject {
     @Published var isPlaying = false
     private var player: AVAudioPlayer?
 
-    /// Wird gefeuert, wenn die Wiedergabe natürlich endet (nicht bei stop()).
+    /// FIFO-Queue für sequentielle Wiedergabe (z.B. satzweise TTS aus Stream).
+    private var queue: [Data] = []
+
+    /// Wird gefeuert, wenn die Wiedergabe natürlich endet UND Queue leer ist.
     var onFinish: (() -> Void)?
 
+    /// Single-Shot-Wiedergabe — bricht laufende Wiedergabe und leert Queue.
     func play(data: Data) throws {
         stop()
+        try startPlayback(data: data)
+    }
+
+    /// Reiht Audio ein. Spielt sofort, wenn nichts läuft.
+    func enqueue(data: Data) {
+        queue.append(data)
+        if player == nil {
+            playNextInQueue()
+        }
+    }
+
+    func stop() {
+        player?.stop()
+        player = nil
+        queue.removeAll()
+        isPlaying = false
+    }
+
+    private func playNextInQueue() {
+        guard !queue.isEmpty else {
+            isPlaying = false
+            onFinish?()
+            return
+        }
+        let next = queue.removeFirst()
+        do {
+            try startPlayback(data: next)
+        } catch {
+            playNextInQueue()
+        }
+    }
+
+    private func startPlayback(data: Data) throws {
         let p = try AVAudioPlayer(data: data)
         p.delegate = self
         p.prepareToPlay()
@@ -18,20 +55,13 @@ final class AudioPlayer: NSObject, ObservableObject {
         player = p
         isPlaying = true
     }
-
-    func stop() {
-        player?.stop()
-        player = nil
-        isPlaying = false
-    }
 }
 
 extension AudioPlayer: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
-            self.isPlaying = false
             self.player = nil
-            self.onFinish?()
+            self.playNextInQueue()
         }
     }
 }
