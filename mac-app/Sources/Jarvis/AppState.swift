@@ -262,6 +262,15 @@ final class AppState: ObservableObject {
         player.onFinish = { nextCycle() }
         nativeSynth.onFinish = { nextCycle() }
 
+        // Bei Server-TTS Modell schon mal vorab laden, damit der erste Satz nicht hängt
+        if !useLocalTTS {
+            let voice = piperVoice
+            Task.detached { [weak self] in
+                guard let net = await self?.client() else { return }
+                await net.warmupTTS(voice: voice)
+            }
+        }
+
         if useLocalSTT {
             Task { @MainActor in
                 let ok = await NativeSpeechRecognizer.requestAuthorization()

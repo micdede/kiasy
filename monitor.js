@@ -8928,6 +8928,26 @@ function handleChatTTS(req, res) {
   });
 }
 
+async function handleTtsWarmup(req, res) {
+  try {
+    const piper = require("./lib/piper-client");
+    if (!piper.isEnabled()) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, engine: "edge-tts" }));
+      return;
+    }
+    const urlObj = new URL(req.url, "http://x");
+    const voice = urlObj.searchParams.get("voice") || undefined;
+    const t0 = Date.now();
+    await piper.warmup(voice);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, engine: "piper", ms: Date.now() - t0 }));
+  } catch (err) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+
 async function handleTtsVoices(req, res) {
   try {
     const piper = require("./lib/piper-client");
@@ -9936,6 +9956,8 @@ function startMonitor(port) {
       handleChatTTS(req, res);
     } else if (req.url === "/api/tts/voices" && req.method === "GET") {
       handleTtsVoices(req, res);
+    } else if (req.url.split("?")[0] === "/api/tts/warmup" && (req.method === "GET" || req.method === "POST")) {
+      handleTtsWarmup(req, res);
     } else if (req.url.startsWith("/api/chat/images/") && req.method === "GET") {
       const filename = decodeURIComponent(req.url.replace("/api/chat/images/", ""));
       handleChatImage(req, res, filename);

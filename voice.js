@@ -89,7 +89,7 @@ async function textToSpeech(text, format = "ogg", voice = null, speed = 1.0) {
   if (piper.isEnabled()) {
     const out = await textToSpeechPiper(cleanText, format, voice, speed);
     if (out) return out;
-    console.warn("[tts] Piper-Fallback auf Edge-TTS");
+    console.error(`[tts] ⚠️  PIPER-FALLBACK → Edge-TTS (Stimme wird gewechselt!) Text: "${cleanText.slice(0, 60)}..."`);
   }
   return textToSpeechEdge(cleanText, format, speed);
 }

@@ -190,6 +190,14 @@ struct Networking {
         return try await perform(req)
     }
 
+    /// Lädt das Piper-Modell vorab (Cold-Start vermeiden) — fire-and-forget OK.
+    func warmupTTS(voice: String = "") async {
+        var query: [URLQueryItem] = []
+        if !voice.isEmpty { query.append(URLQueryItem(name: "voice", value: voice)) }
+        guard let req = try? makeRequest("api/tts/warmup", query: query, method: "POST") else { return }
+        _ = try? await perform(req)
+    }
+
     /// Lädt verfügbare Piper-Stimmen vom Server. Liefert leere Liste wenn Piper nicht aktiv.
     func listPiperVoices() async throws -> [PiperVoice] {
         let req = try makeRequest("api/tts/voices")
