@@ -50,6 +50,12 @@ final class AppState: ObservableObject {
             nativeSynth.preferredVoiceIdentifier = nativeVoiceId.isEmpty ? nil : nativeVoiceId
         }
     }
+    /// Piper-Stimmen-Name (z.B. "de_DE-thorsten-medium"). Leer = Server-Default.
+    @Published var piperVoice: String {
+        didSet { UserDefaults.standard.set(piperVoice, forKey: "piperVoice") }
+    }
+    /// Vom Server geladene Liste der verfügbaren Piper-Stimmen.
+    @Published var piperVoices: [PiperVoice] = []
 
     @Published var messages: [ChatMessage] = []
     @Published var isSending = false
@@ -74,6 +80,7 @@ final class AppState: ObservableObject {
         let stt = UserDefaults.standard.object(forKey: "useLocalSTT") as? Bool ?? legacy ?? true
         let tts2 = UserDefaults.standard.object(forKey: "useLocalTTS") as? Bool ?? legacy ?? true
         let voiceId = UserDefaults.standard.string(forKey: "nativeVoiceId") ?? ""
+        let piperV = UserDefaults.standard.string(forKey: "piperVoice") ?? ""
         self.serverURL = url
         self.username = user
         self.password = pass
@@ -85,6 +92,7 @@ final class AppState: ObservableObject {
         self.useLocalTTS = tts2
         self.nativeVoiceId = voiceId
         self.nativeSynth.preferredVoiceIdentifier = voiceId.isEmpty ? nil : voiceId
+        self.piperVoice = piperV
         if url.isEmpty || user.isEmpty || pass.isEmpty {
             self.showingSettings = true
         }
@@ -208,6 +216,28 @@ final class AppState: ObservableObject {
         nativeSynth.stop()
     }
 
+    func loadPiperVoices() async {
+        guard isConfigured else { return }
+        do {
+            piperVoices = try await client().listPiperVoices()
+        } catch {
+            piperVoices = []
+        }
+    }
+
+    /// Spielt einen Test-Satz via Server-TTS mit der gewählten Piper-Stimme ab.
+    func previewPiperVoice(_ voiceName: String) {
+        guard isConfigured else { return }
+        Task { @MainActor in
+            do {
+                let data = try await client().tts(text: "Hallo Michael, hier ist \(voiceName.split(separator: "-").dropFirst().first.map(String.init) ?? "Piper"). Wie klinge ich?", voice: voiceName)
+                try player.play(data: data)
+            } catch {
+                lastError = "TTS-Probe: \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: - Dialog Mode
 
     private func startDialog() {
@@ -269,33 +299,18 @@ final class AppState: ObservableObject {
                 do {
                     let audio = try await task.value
                     if !self.dialogMode { return }
-                    print("[dialog] enqueue-to-player: \(audio.count) bytes")
                     self.player.enqueue(data: audio)
-                } catch {
-                    print("[dialog] consumer error: \(error)")
-                }
+                } catch {}
             }
-            print("[dialog] consumer-finished")
         }
-        // [unowned self]: speakSentence ist nur lokal in dieser Methode lebendig,
-        // self lebt garantiert mindestens so lange wie diese Methode läuft.
         let useLocal = useLocalTTS
+        let voice = piperVoice
         let speakSentence: (String) -> Void = { text in
-            print("[dialog] sentence: \"\(text.prefix(40))\" → \(useLocal ? "Apple-TTS" : "Server-TTS")")
             if useLocal {
                 self.nativeSynth.enqueue(text)
             } else {
                 let snippet = text
-                let task = Task<Data, Error> {
-                    do {
-                        let d = try await net.tts(text: snippet)
-                        print("[dialog] TTS-Bytes: \(d.count)")
-                        return d
-                    } catch {
-                        print("[dialog] TTS-Error: \(error)")
-                        throw error
-                    }
-                }
+                let task = Task<Data, Error> { try await net.tts(text: snippet, voice: voice) }
                 ttsTaskCont.yield(task)
             }
         }
@@ -374,4 +389,10 @@ struct ChatImage: Identifiable, Hashable {
     let id = UUID()
     let url: String     // relative ("/api/chat/images/...") oder absolute URL
     let caption: String
+}
+
+struct PiperVoice: Identifiable, Hashable {
+    let name: String
+    let description: String
+    var id: String { name }
 }

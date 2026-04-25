@@ -178,13 +178,27 @@ struct Networking {
         }
     }
 
-    func tts(text: String) async throws -> Data {
-        let body = try JSONSerialization.data(withJSONObject: ["text": text])
+    func tts(text: String, voice: String = "") async throws -> Data {
+        var payload: [String: Any] = ["text": text]
+        if !voice.isEmpty { payload["voice"] = voice }
+        let body = try JSONSerialization.data(withJSONObject: payload)
         let req = try makeRequest("api/chat/tts",
                                   query: [URLQueryItem(name: "format", value: "mp3")],
                                   method: "POST",
                                   body: body)
         return try await perform(req)
+    }
+
+    /// Lädt verfügbare Piper-Stimmen vom Server. Liefert leere Liste wenn Piper nicht aktiv.
+    func listPiperVoices() async throws -> [PiperVoice] {
+        let req = try makeRequest("api/tts/voices")
+        let data = try await perform(req)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let arr = (json?["voices"] as? [[String: Any]]) ?? []
+        return arr.compactMap { dict in
+            guard let name = dict["name"] as? String, !name.isEmpty else { return nil }
+            return PiperVoice(name: name, description: (dict["description"] as? String) ?? name)
+        }
     }
 }
 

@@ -41,6 +41,8 @@ struct SettingsView: View {
 
                 if state.useLocalTTS {
                     voicePicker
+                } else {
+                    piperVoicePicker
                 }
 
                 Divider()
@@ -90,6 +92,44 @@ struct SettingsView: View {
             .padding(12)
         }
         .onDisappear { stopCapture() }
+    }
+
+    private var piperVoicePicker: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Piper-Stimme").font(.caption).foregroundColor(.secondary)
+            HStack {
+                Picker("", selection: $state.piperVoice) {
+                    Text("Server-Default").tag("")
+                    ForEach(state.piperVoices) { voice in
+                        Text(voice.description).tag(voice.name)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+
+                Button {
+                    let v = state.piperVoice.isEmpty ? (state.piperVoices.first?.name ?? "") : state.piperVoice
+                    if !v.isEmpty { state.previewPiperVoice(v) }
+                } label: {
+                    Image(systemName: "play.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Stimme testen")
+                .disabled(state.piperVoices.isEmpty)
+            }
+            if state.piperVoices.isEmpty {
+                Text("Keine Piper-Stimmen geladen — prüfe ob PIPER_HOST am Server gesetzt ist.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Empfehlung: thorsten-medium (schnell, klar) oder thorsten-high (langsamer, natürlicher).")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .task { if state.piperVoices.isEmpty { await state.loadPiperVoices() } }
     }
 
     private var voicePicker: some View {

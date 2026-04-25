@@ -8904,7 +8904,8 @@ function handleChatTTS(req, res) {
       // Format aus Query-Param (?format=mp3) oder Body — Default OGG/Opus für Telegram
       const urlObj = new URL(req.url, "http://x");
       const format = (urlObj.searchParams.get("format") || body.format || "ogg").toLowerCase();
-      const audioFile = await voice.textToSpeech(text, format);
+      const voiceName = (urlObj.searchParams.get("voice") || body.voice || "").trim();
+      const audioFile = await voice.textToSpeech(text, format, voiceName || null);
       if (!audioFile || !fs.existsSync(audioFile)) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "TTS fehlgeschlagen" }));
@@ -8924,6 +8925,21 @@ function handleChatTTS(req, res) {
       res.end(JSON.stringify({ error: err.message }));
     }
   });
+}
+
+async function handleTtsVoices(req, res) {
+  try {
+    const piper = require("./lib/piper-client");
+    let voices = [];
+    if (piper.isEnabled()) {
+      voices = await piper.listVoices();
+    }
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    res.end(JSON.stringify({ voices, default: process.env.PIPER_VOICE || "" }));
+  } catch (err) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: err.message }));
+  }
 }
 
 function handleChatImage(req, res, filename) {
@@ -9917,6 +9933,8 @@ function startMonitor(port) {
       handleChatSendStream(req, res);
     } else if (req.url.split("?")[0] === "/api/chat/tts" && req.method === "POST") {
       handleChatTTS(req, res);
+    } else if (req.url === "/api/tts/voices" && req.method === "GET") {
+      handleTtsVoices(req, res);
     } else if (req.url.startsWith("/api/chat/images/") && req.method === "GET") {
       const filename = decodeURIComponent(req.url.replace("/api/chat/images/", ""));
       handleChatImage(req, res, filename);

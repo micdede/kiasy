@@ -82,25 +82,25 @@ function cleanForTTS(text) {
     .trim();
 }
 
-async function textToSpeech(text, format = "ogg") {
+async function textToSpeech(text, format = "ogg", voice = null) {
   const cleanText = cleanForTTS(text);
   if (!cleanText) return null;
   const piper = require("./lib/piper-client");
   if (piper.isEnabled()) {
-    const out = await textToSpeechPiper(cleanText, format);
+    const out = await textToSpeechPiper(cleanText, format, voice);
     if (out) return out;
     console.warn("[tts] Piper-Fallback auf Edge-TTS");
   }
   return textToSpeechEdge(cleanText, format);
 }
 
-async function textToSpeechPiper(cleanText, format) {
+async function textToSpeechPiper(cleanText, format, voice) {
   const piper = require("./lib/piper-client");
   const id = Date.now();
   const wavFile = path.join(TEMP_DIR, `tts_piper_${id}.wav`);
   const outFile = path.join(TEMP_DIR, `tts_piper_${id}.${format}`);
   try {
-    const { pcm, format: fmt } = await piper.synthesizePCM(cleanText);
+    const { pcm, format: fmt } = await piper.synthesizePCM(cleanText, voice || undefined);
     fs.writeFileSync(wavFile, piper.pcmToWav(pcm, fmt));
     const codec = format === "mp3" ? "libmp3lame -b:a 96k" : "libopus -b:a 48k";
     execSync(
