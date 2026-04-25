@@ -26,6 +26,16 @@ final class AppState: ObservableObject {
     @Published var hotkeyEnabled: Bool {
         didSet { UserDefaults.standard.set(hotkeyEnabled, forKey: "hotkeyEnabled") }
     }
+    /// Separater Hotkey für Dialog-Toggle (default: F14, kein Modifier).
+    @Published var dialogHotkeyKeyCode: Int {
+        didSet { UserDefaults.standard.set(dialogHotkeyKeyCode, forKey: "dialogHotkeyKeyCode") }
+    }
+    @Published var dialogHotkeyModifiers: Int {
+        didSet { UserDefaults.standard.set(dialogHotkeyModifiers, forKey: "dialogHotkeyModifiers") }
+    }
+    @Published var dialogHotkeyEnabled: Bool {
+        didSet { UserDefaults.standard.set(dialogHotkeyEnabled, forKey: "dialogHotkeyEnabled") }
+    }
     @Published var dialogMode: Bool = false {
         didSet {
             if dialogMode == oldValue { return }
@@ -83,6 +93,10 @@ final class AppState: ObservableObject {
         let kc = UserDefaults.standard.object(forKey: "hotkeyKeyCode") as? Int ?? 105
         let mod = UserDefaults.standard.object(forKey: "hotkeyModifiers") as? Int ?? 0
         let hkOn = UserDefaults.standard.object(forKey: "hotkeyEnabled") as? Bool ?? true
+        // Default: F14 (keyCode 107), kein Modifier
+        let dlgKc = UserDefaults.standard.object(forKey: "dialogHotkeyKeyCode") as? Int ?? 107
+        let dlgMod = UserDefaults.standard.object(forKey: "dialogHotkeyModifiers") as? Int ?? 0
+        let dlgOn = UserDefaults.standard.object(forKey: "dialogHotkeyEnabled") as? Bool ?? true
         // Migration vom alten "useLocalSpeech" Bundle-Toggle
         let legacy = UserDefaults.standard.object(forKey: "useLocalSpeech") as? Bool
         let stt = UserDefaults.standard.object(forKey: "useLocalSTT") as? Bool ?? legacy ?? true
@@ -97,6 +111,9 @@ final class AppState: ObservableObject {
         self.hotkeyKeyCode = kc
         self.hotkeyModifiers = mod
         self.hotkeyEnabled = hkOn
+        self.dialogHotkeyKeyCode = dlgKc
+        self.dialogHotkeyModifiers = dlgMod
+        self.dialogHotkeyEnabled = dlgOn
         self.useLocalSTT = stt
         self.useLocalTTS = tts2
         self.nativeVoiceId = voiceId
@@ -112,6 +129,11 @@ final class AppState: ObservableObject {
     var hotkeyDisplay: String {
         let mods = NSEvent.ModifierFlags(rawValue: UInt(hotkeyModifiers))
         return KeyMapper.display(keyCode: hotkeyKeyCode, modifiers: mods)
+    }
+
+    var dialogHotkeyDisplay: String {
+        let mods = NSEvent.ModifierFlags(rawValue: UInt(dialogHotkeyModifiers))
+        return KeyMapper.display(keyCode: dialogHotkeyKeyCode, modifiers: mods)
     }
 
     var isConfigured: Bool {

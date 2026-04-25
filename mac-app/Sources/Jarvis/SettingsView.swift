@@ -6,6 +6,8 @@ struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var capturing = false
     @State private var captureMonitor: Any?
+    @State private var capturingDialog = false
+    @State private var captureDialogMonitor: Any?
 
     var body: some View {
         ScrollView {
@@ -49,12 +51,11 @@ struct SettingsView: View {
 
                 Divider()
 
-                Text("Hotkey").font(.headline)
+                Text("Hotkeys").font(.headline)
+
+                Text("Fenster öffnen/schließen").font(.caption).foregroundColor(.secondary)
                 HStack {
-                    Toggle("Globaler Hotkey aktiv", isOn: $state.hotkeyEnabled)
-                    Spacer()
-                }
-                HStack {
+                    Toggle("aktiv", isOn: $state.hotkeyEnabled).labelsHidden()
                     Text(state.hotkeyDisplay)
                         .font(.system(.body, design: .monospaced))
                         .padding(.vertical, 4)
@@ -66,6 +67,22 @@ struct SettingsView: View {
                         capturing ? stopCapture() : startCapture()
                     }
                     .disabled(!state.hotkeyEnabled)
+                }
+
+                Text("Dialog starten/stoppen").font(.caption).foregroundColor(.secondary)
+                HStack {
+                    Toggle("aktiv", isOn: $state.dialogHotkeyEnabled).labelsHidden()
+                    Text(state.dialogHotkeyDisplay)
+                        .font(.system(.body, design: .monospaced))
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 10)
+                        .background(Color.gray.opacity(0.18))
+                        .cornerRadius(6)
+                    Spacer()
+                    Button(capturingDialog ? "Drücke eine Taste…" : "Ändern") {
+                        capturingDialog ? stopDialogCapture() : startDialogCapture()
+                    }
+                    .disabled(!state.dialogHotkeyEnabled)
                 }
 
                 if let err = state.lastError {
@@ -93,7 +110,7 @@ struct SettingsView: View {
             }
             .padding(12)
         }
-        .onDisappear { stopCapture() }
+        .onDisappear { stopCapture(); stopDialogCapture() }
     }
 
     private var speedSlider: some View {
@@ -250,5 +267,25 @@ struct SettingsView: View {
     private func stopCapture() {
         if let m = captureMonitor { NSEvent.removeMonitor(m); captureMonitor = nil }
         capturing = false
+    }
+
+    private func startDialogCapture() {
+        capturingDialog = true
+        captureDialogMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 { // Esc bricht ab
+                stopDialogCapture()
+                return nil
+            }
+            let mods = event.modifierFlags.intersection(KeyMapper.relevantModifierMask)
+            state.dialogHotkeyKeyCode = Int(event.keyCode)
+            state.dialogHotkeyModifiers = Int(mods.rawValue)
+            stopDialogCapture()
+            return nil
+        }
+    }
+
+    private func stopDialogCapture() {
+        if let m = captureDialogMonitor { NSEvent.removeMonitor(m); captureDialogMonitor = nil }
+        capturingDialog = false
     }
 }
