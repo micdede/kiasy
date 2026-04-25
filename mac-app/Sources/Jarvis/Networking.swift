@@ -215,11 +215,28 @@ enum StreamEvent {
     }
 }
 
-final class TrustingDelegate: NSObject, URLSessionDelegate {
+final class TrustingDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handle(challenge, completionHandler)
+    }
+
+    // bytes(for:) eskaliert Server-Trust-Challenges auf Task-Ebene — separat behandeln.
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        handle(challenge, completionHandler)
+    }
+
+    private func handle(
+        _ challenge: URLAuthenticationChallenge,
+        _ completionHandler: (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
            let trust = challenge.protectionSpace.serverTrust {
