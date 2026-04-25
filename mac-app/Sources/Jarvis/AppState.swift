@@ -38,6 +38,13 @@ final class AppState: ObservableObject {
     @Published var useLocalSpeech: Bool {
         didSet { UserDefaults.standard.set(useLocalSpeech, forKey: "useLocalSpeech") }
     }
+    /// AVSpeechSynthesisVoice.identifier — leerer String = automatische Auswahl
+    @Published var nativeVoiceId: String {
+        didSet {
+            UserDefaults.standard.set(nativeVoiceId, forKey: "nativeVoiceId")
+            nativeSynth.preferredVoiceIdentifier = nativeVoiceId.isEmpty ? nil : nativeVoiceId
+        }
+    }
 
     @Published var messages: [ChatMessage] = []
     @Published var isSending = false
@@ -58,6 +65,7 @@ final class AppState: ObservableObject {
         let mod = UserDefaults.standard.object(forKey: "hotkeyModifiers") as? Int ?? 0
         let hkOn = UserDefaults.standard.object(forKey: "hotkeyEnabled") as? Bool ?? true
         let local = UserDefaults.standard.object(forKey: "useLocalSpeech") as? Bool ?? true
+        let voiceId = UserDefaults.standard.string(forKey: "nativeVoiceId") ?? ""
         self.serverURL = url
         self.username = user
         self.password = pass
@@ -66,6 +74,8 @@ final class AppState: ObservableObject {
         self.hotkeyModifiers = mod
         self.hotkeyEnabled = hkOn
         self.useLocalSpeech = local
+        self.nativeVoiceId = voiceId
+        self.nativeSynth.preferredVoiceIdentifier = voiceId.isEmpty ? nil : voiceId
         if url.isEmpty || user.isEmpty || pass.isEmpty {
             self.showingSettings = true
         }

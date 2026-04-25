@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
@@ -36,6 +37,10 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if state.useLocalSpeech {
+                    voicePicker
+                }
 
                 Divider()
 
@@ -84,6 +89,42 @@ struct SettingsView: View {
             .padding(12)
         }
         .onDisappear { stopCapture() }
+    }
+
+    private var voicePicker: some View {
+        let voices = NativeSpeechSynth.germanVoices()
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Stimme").font(.caption).foregroundColor(.secondary)
+            HStack {
+                Picker("", selection: $state.nativeVoiceId) {
+                    Text("Automatisch (beste verfügbare)").tag("")
+                    ForEach(voices, id: \.identifier) { voice in
+                        Text("\(voice.name) — \(voice.quality.label)").tag(voice.identifier)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+
+                Button {
+                    state.nativeSynth.preview()
+                } label: {
+                    Image(systemName: "play.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Stimme testen")
+            }
+            if voices.isEmpty {
+                Text("Keine deutschen Stimmen installiert. Mehr unter Systemeinstellungen → Bedienungshilfen → Vorlesen → Systemstimmen.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Premium-/Siri-Stimmen sind die natürlichsten — runterladbar via Systemeinstellungen → Bedienungshilfen → Vorlesen.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     @ViewBuilder

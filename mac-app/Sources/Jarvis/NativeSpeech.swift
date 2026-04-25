@@ -70,6 +70,10 @@ final class NativeSpeechSynth: NSObject, ObservableObject {
     /// 1.05 ≈ leicht schneller als Default, harmoniert mit Edge-TTS-Vergleich.
     var rateMultiplier: Float = 1.05
 
+    /// Bevorzugte Stimme per identifier — wird via AppState aus UserDefaults gesetzt.
+    /// Wenn nil oder nicht installiert, fällt preferredVoice() auf Premium/Enhanced/Default zurück.
+    var preferredVoiceIdentifier: String? = nil
+
     override init() {
         super.init()
         synth.delegate = self
@@ -80,7 +84,7 @@ final class NativeSpeechSynth: NSObject, ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let utt = AVSpeechUtterance(string: trimmed)
-        utt.voice = preferredVoice()
+        utt.voice = resolvedVoice()
         utt.rate = AVSpeechUtteranceDefaultSpeechRate * rateMultiplier
         utt.preUtteranceDelay = 0.0
         utt.postUtteranceDelay = 0.05
@@ -95,13 +99,59 @@ final class NativeSpeechSynth: NSObject, ObservableObject {
         isSpeaking = false
     }
 
-    /// Ermittelt die beste verfügbare deutsche Stimme.
-    /// Priorität: Premium (Neural) > Enhanced > Default.
-    private func preferredVoice() -> AVSpeechSynthesisVoice? {
+    private func resolvedVoice() -> AVSpeechSynthesisVoice? {
+        if let id = preferredVoiceIdentifier,
+           let v = AVSpeechSynthesisVoice(identifier: id) {
+            return v
+        }
+        return Self.bestGermanVoice()
+    }
+
+    /// Best-effort-Default: Siri/Premium > Enhanced > Default.
+    static func bestGermanVoice() -> AVSpeechSynthesisVoice? {
         let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("de") }
         if let v = voices.first(where: { $0.quality == .premium }) { return v }
         if let v = voices.first(where: { $0.quality == .enhanced }) { return v }
         return AVSpeechSynthesisVoice(language: "de-DE")
+    }
+
+    /// Alle deutschen installierten Stimmen, sortiert: Premium → Enhanced → Default,
+    /// innerhalb der Stufe alphabetisch.
+    static func germanVoices() -> [AVSpeechSynthesisVoice] {
+        let all = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("de") }
+        func rank(_ q: AVSpeechSynthesisVoiceQuality) -> Int {
+            switch q {
+            case .premium: return 0
+            case .enhanced: return 1
+            default: return 2
+            }
+        }
+        return all.sorted { (a, b) in
+            let ra = rank(a.quality), rb = rank(b.quality)
+            if ra != rb { return ra < rb }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
+    /// Spielt einen kurzen Test-Satz ab — für den Probe-Button im Settings.
+    func preview(text: String = "Hallo Michael, ich bin JARVIS.") {
+        stop()
+        let utt = AVSpeechUtterance(string: text)
+        utt.voice = resolvedVoice()
+        utt.rate = AVSpeechUtteranceDefaultSpeechRate * rateMultiplier
+        pending += 1
+        isSpeaking = true
+        synth.speak(utt)
+    }
+}
+
+extension AVSpeechSynthesisVoiceQuality {
+    var label: String {
+        switch self {
+        case .premium: return "Premium"
+        case .enhanced: return "Enhanced"
+        default: return "Default"
+        }
     }
 }
 
