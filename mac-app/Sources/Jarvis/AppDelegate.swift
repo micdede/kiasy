@@ -101,11 +101,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerDialogHotkey() {
         removeDialogMonitors()
-        guard state.dialogHotkeyEnabled else { return }
+        guard state.dialogHotkeyEnabled else {
+            print("[hotkey-dialog] disabled, skipping registration")
+            return
+        }
 
         let targetKeyCode = UInt16(state.dialogHotkeyKeyCode)
         let targetMods = NSEvent.ModifierFlags(rawValue: UInt(state.dialogHotkeyModifiers))
             .intersection(KeyMapper.relevantModifierMask)
+        print("[hotkey-dialog] register keyCode=\(targetKeyCode) mods=\(targetMods.rawValue)")
 
         let isHotkey: (NSEvent) -> Bool = { event in
             guard event.keyCode == targetKeyCode else { return false }
@@ -114,13 +118,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         dialogGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            print("[hotkey-dialog] GLOBAL keyCode=\(event.keyCode) mods=\(event.modifierFlags.rawValue) match=\(isHotkey(event))")
             guard isHotkey(event) else { return }
             Task { @MainActor [weak self] in self?.toggleDialog() }
         }
         dialogLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard isHotkey(event) else { return event }
+            print("[hotkey-dialog] LOCAL match → toggle")
             Task { @MainActor [weak self] in self?.toggleDialog() }
             return nil
+        }
+        if dialogGlobalMonitor == nil {
+            print("[hotkey-dialog] ⚠️  addGlobalMonitorForEvents returned nil — Input-Monitoring-Permission fehlt für diese Build-Signatur!")
         }
     }
 
