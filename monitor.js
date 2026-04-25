@@ -8905,7 +8905,8 @@ function handleChatTTS(req, res) {
       const urlObj = new URL(req.url, "http://x");
       const format = (urlObj.searchParams.get("format") || body.format || "ogg").toLowerCase();
       const voiceName = (urlObj.searchParams.get("voice") || body.voice || "").trim();
-      const audioFile = await voice.textToSpeech(text, format, voiceName || null);
+      const speed = parseFloat(urlObj.searchParams.get("speed") || body.speed || "1.0") || 1.0;
+      const audioFile = await voice.textToSpeech(text, format, voiceName || null, speed);
       if (!audioFile || !fs.existsSync(audioFile)) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "TTS fehlgeschlagen" }));

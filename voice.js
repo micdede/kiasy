@@ -82,19 +82,27 @@ function cleanForTTS(text) {
     .trim();
 }
 
-async function textToSpeech(text, format = "ogg", voice = null) {
+async function textToSpeech(text, format = "ogg", voice = null, speed = 1.0) {
   const cleanText = cleanForTTS(text);
   if (!cleanText) return null;
   const piper = require("./lib/piper-client");
   if (piper.isEnabled()) {
-    const out = await textToSpeechPiper(cleanText, format, voice);
+    const out = await textToSpeechPiper(cleanText, format, voice, speed);
     if (out) return out;
     console.warn("[tts] Piper-Fallback auf Edge-TTS");
   }
-  return textToSpeechEdge(cleanText, format);
+  return textToSpeechEdge(cleanText, format, speed);
 }
 
-async function textToSpeechPiper(cleanText, format, voice) {
+// ffmpeg atempo unterstützt 0.5-100 pro Filter; für Werte außerhalb [0.5, 2.0]
+// chained man mehrere atempos. Bei 0.7-1.5 reicht ein einzelner Filter.
+function atempoFilter(speed) {
+  if (Math.abs(speed - 1.0) < 0.01) return "";
+  const s = Math.max(0.5, Math.min(2.0, speed));
+  return `-filter:a "atempo=${s.toFixed(2)}"`;
+}
+
+async function textToSpeechPiper(cleanText, format, voice, speed = 1.0) {
   const piper = require("./lib/piper-client");
   const id = Date.now();
   const wavFile = path.join(TEMP_DIR, `tts_piper_${id}.wav`);
@@ -103,8 +111,9 @@ async function textToSpeechPiper(cleanText, format, voice) {
     const { pcm, format: fmt } = await piper.synthesizePCM(cleanText, voice || undefined);
     fs.writeFileSync(wavFile, piper.pcmToWav(pcm, fmt));
     const codec = format === "mp3" ? "libmp3lame -b:a 96k" : "libopus -b:a 48k";
+    const tempo = atempoFilter(speed);
     execSync(
-      `ffmpeg -i "${wavFile}" -c:a ${codec} "${outFile}" -y`,
+      `ffmpeg -i "${wavFile}" ${tempo} -c:a ${codec} "${outFile}" -y`,
       { timeout: 15000, stdio: "ignore" }
     );
     return outFile;
@@ -116,7 +125,7 @@ async function textToSpeechPiper(cleanText, format, voice) {
   }
 }
 
-function textToSpeechEdge(cleanText, format) {
+function textToSpeechEdge(cleanText, format, speed = 1.0) {
   const id = Date.now();
   const txtFile = path.join(TEMP_DIR, `tts_${id}.txt`);
   const mp3File = path.join(TEMP_DIR, `tts_${id}.mp3`);
@@ -124,8 +133,12 @@ function textToSpeechEdge(cleanText, format) {
   try {
     fs.writeFileSync(txtFile, cleanText, "utf-8");
     const edgeTtsBin = path.join(__dirname, "venv", "bin", "edge-tts");
+    // Edge-TTS rate aus speed berechnen wenn explizit gesetzt, sonst Default TTS_RATE
+    const rate = Math.abs(speed - 1.0) > 0.01
+      ? `${speed >= 1 ? "+" : "-"}${Math.round(Math.abs(speed - 1.0) * 100)}%`
+      : TTS_RATE;
     execSync(
-      `"${edgeTtsBin}" --voice "${TTS_VOICE}" --rate "${TTS_RATE}" --file "${txtFile}" --write-media "${mp3File}"`,
+      `"${edgeTtsBin}" --voice "${TTS_VOICE}" --rate "${rate}" --file "${txtFile}" --write-media "${mp3File}"`,
       { timeout: 30000 }
     );
     if (format === "mp3") return mp3File;

@@ -178,9 +178,10 @@ struct Networking {
         }
     }
 
-    func tts(text: String, voice: String = "") async throws -> Data {
+    func tts(text: String, voice: String = "", speed: Double = 1.0) async throws -> Data {
         var payload: [String: Any] = ["text": text]
         if !voice.isEmpty { payload["voice"] = voice }
+        if abs(speed - 1.0) > 0.01 { payload["speed"] = speed }
         let body = try JSONSerialization.data(withJSONObject: payload)
         let req = try makeRequest("api/chat/tts",
                                   query: [URLQueryItem(name: "format", value: "mp3")],

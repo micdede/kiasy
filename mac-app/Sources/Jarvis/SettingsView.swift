@@ -45,6 +45,8 @@ struct SettingsView: View {
                     piperVoicePicker
                 }
 
+                speedSlider
+
                 Divider()
 
                 Text("Hotkey").font(.headline)
@@ -92,6 +94,31 @@ struct SettingsView: View {
             .padding(12)
         }
         .onDisappear { stopCapture() }
+    }
+
+    private var speedSlider: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Sprechtempo").font(.caption).foregroundColor(.secondary)
+                Spacer()
+                Text(String(format: "%.2f×", state.ttsSpeed))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+            HStack {
+                Text("0.7×").font(.caption2).foregroundColor(.secondary)
+                Slider(value: $state.ttsSpeed, in: 0.7...1.5, step: 0.05)
+                Text("1.5×").font(.caption2).foregroundColor(.secondary)
+                Button {
+                    state.ttsSpeed = 1.0
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Auf 1.0× zurücksetzen")
+            }
+        }
     }
 
     private var piperVoicePicker: some View {

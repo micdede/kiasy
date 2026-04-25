@@ -54,6 +54,14 @@ final class AppState: ObservableObject {
     @Published var piperVoice: String {
         didSet { UserDefaults.standard.set(piperVoice, forKey: "piperVoice") }
     }
+    /// Sprechtempo: 0.7 (langsam) bis 1.5 (schnell). 1.0 = normal.
+    /// Wirkt auf beide TTS-Pfade: Apple via AVSpeechUtterance.rate, Piper via ffmpeg atempo.
+    @Published var ttsSpeed: Double {
+        didSet {
+            UserDefaults.standard.set(ttsSpeed, forKey: "ttsSpeed")
+            nativeSynth.rateMultiplier = Float(ttsSpeed)
+        }
+    }
     /// Vom Server geladene Liste der verfügbaren Piper-Stimmen.
     @Published var piperVoices: [PiperVoice] = []
 
@@ -81,6 +89,7 @@ final class AppState: ObservableObject {
         let tts2 = UserDefaults.standard.object(forKey: "useLocalTTS") as? Bool ?? legacy ?? true
         let voiceId = UserDefaults.standard.string(forKey: "nativeVoiceId") ?? ""
         let piperV = UserDefaults.standard.string(forKey: "piperVoice") ?? ""
+        let speed = UserDefaults.standard.object(forKey: "ttsSpeed") as? Double ?? 1.0
         self.serverURL = url
         self.username = user
         self.password = pass
@@ -92,7 +101,9 @@ final class AppState: ObservableObject {
         self.useLocalTTS = tts2
         self.nativeVoiceId = voiceId
         self.piperVoice = piperV
+        self.ttsSpeed = speed
         self.nativeSynth.preferredVoiceIdentifier = voiceId.isEmpty ? nil : voiceId
+        self.nativeSynth.rateMultiplier = Float(speed)
         if url.isEmpty || user.isEmpty || pass.isEmpty {
             self.showingSettings = true
         }
@@ -204,7 +215,7 @@ final class AppState: ObservableObject {
         }
         guard isConfigured else { return }
         do {
-            let data = try await client().tts(text: text)
+            let data = try await client().tts(text: text, voice: piperVoice, speed: ttsSpeed)
             try player.play(data: data)
         } catch {
             lastError = "TTS: \(error.localizedDescription)"
@@ -230,7 +241,7 @@ final class AppState: ObservableObject {
         guard isConfigured else { return }
         Task { @MainActor in
             do {
-                let data = try await client().tts(text: "Hallo Michael, hier ist \(voiceName.split(separator: "-").dropFirst().first.map(String.init) ?? "Piper"). Wie klinge ich?", voice: voiceName)
+                let data = try await client().tts(text: "Hallo Michael, hier ist \(voiceName.split(separator: "-").dropFirst().first.map(String.init) ?? "Piper"). Wie klinge ich?", voice: voiceName, speed: ttsSpeed)
                 try player.play(data: data)
             } catch {
                 lastError = "TTS-Probe: \(error.localizedDescription)"
@@ -305,12 +316,13 @@ final class AppState: ObservableObject {
         }
         let useLocal = useLocalTTS
         let voice = piperVoice
+        let speed = ttsSpeed
         let speakSentence: (String) -> Void = { text in
             if useLocal {
                 self.nativeSynth.enqueue(text)
             } else {
                 let snippet = text
-                let task = Task<Data, Error> { try await net.tts(text: snippet, voice: voice) }
+                let task = Task<Data, Error> { try await net.tts(text: snippet, voice: voice, speed: speed) }
                 ttsTaskCont.yield(task)
             }
         }
