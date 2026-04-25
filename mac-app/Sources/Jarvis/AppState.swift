@@ -269,17 +269,33 @@ final class AppState: ObservableObject {
                 do {
                     let audio = try await task.value
                     if !self.dialogMode { return }
+                    print("[dialog] enqueue-to-player: \(audio.count) bytes")
                     self.player.enqueue(data: audio)
-                } catch {}
+                } catch {
+                    print("[dialog] consumer error: \(error)")
+                }
             }
+            print("[dialog] consumer-finished")
         }
-        let speakSentence: (String) -> Void = { [weak self] text in
-            guard let self = self else { return }
-            if self.useLocalTTS {
+        // [unowned self]: speakSentence ist nur lokal in dieser Methode lebendig,
+        // self lebt garantiert mindestens so lange wie diese Methode läuft.
+        let useLocal = useLocalTTS
+        let speakSentence: (String) -> Void = { text in
+            print("[dialog] sentence: \"\(text.prefix(40))\" → \(useLocal ? "Apple-TTS" : "Server-TTS")")
+            if useLocal {
                 self.nativeSynth.enqueue(text)
             } else {
                 let snippet = text
-                let task = Task { try await net.tts(text: snippet) }
+                let task = Task<Data, Error> {
+                    do {
+                        let d = try await net.tts(text: snippet)
+                        print("[dialog] TTS-Bytes: \(d.count)")
+                        return d
+                    } catch {
+                        print("[dialog] TTS-Error: \(error)")
+                        throw error
+                    }
+                }
                 ttsTaskCont.yield(task)
             }
         }
