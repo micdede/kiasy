@@ -28,5 +28,5 @@ codesign --force --deep --sign - \
 echo ""
 echo "✓ Fertig: $APP_BUNDLE"
 echo ""
-echo "Starten:        open $APP_BUNDLE"
+echo "Starten:        killall ${APP_NAME} 2>/dev/null; open $APP_BUNDLE"
 echo "Installieren:   cp -r $APP_BUNDLE /Applications/"

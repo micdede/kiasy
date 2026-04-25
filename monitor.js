@@ -8781,6 +8781,52 @@ function handleChatVoice(req, res) {
   });
 }
 
+// Streaming-Text-Endpoint: nimmt Text entgegen (z.B. von lokaler Apple-STT auf
+// dem Mac), streamt Agent-Antwort als SSE — Sätze werden satzweise emittiert
+// für client-seitige TTS (z.B. AVSpeechSynthesizer).
+function handleChatSendStream(req, res) {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", async () => {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Accel-Buffering": "no",
+    });
+    const send = (event, payload) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      const msg = (body.message || "").trim();
+      if (!msg) {
+        send("error", { error: "Nachricht fehlt" });
+        res.end(); return;
+      }
+      let lastResult = null;
+      for await (const ev of agent.streamMessage(monitorChatId(), msg)) {
+        if (ev.type === "delta") send("delta", { text: ev.text });
+        else if (ev.type === "sentence") send("sentence", { text: ev.text, seq: ev.seq });
+        else if (ev.type === "tool_use") send("tool_use", { name: ev.name });
+        else if (ev.type === "discard") send("discard", { reason: ev.reason });
+        else if (ev.type === "done") {
+          lastResult = ev;
+          send("done", { text: ev.text, images: normalizeImages(ev.images) });
+        }
+      }
+      if (lastResult) await flushTelegramQueue(lastResult);
+    } catch (err) {
+      console.error("[send-stream] Fehler:", err);
+      try { send("error", { error: err.message }); } catch {}
+    } finally {
+      try { res.end(); } catch {}
+    }
+  });
+}
+
 // Streaming-Voice-Endpoint: nimmt Audio entgegen, transkribiert, streamt Agent-Antwort
 // als Server-Sent-Events. Mac-Client kann pro Satz parallel TTS anfragen (deutlich
 // flüssigerer Dialog als das alte handleChatVoice, das auf den vollen Text wartet).
@@ -9867,6 +9913,8 @@ function startMonitor(port) {
       handleChatVoice(req, res);
     } else if (req.url === "/api/chat/voice/stream" && req.method === "POST") {
       handleChatVoiceStream(req, res);
+    } else if (req.url === "/api/chat/send/stream" && req.method === "POST") {
+      handleChatSendStream(req, res);
     } else if (req.url.split("?")[0] === "/api/chat/tts" && req.method === "POST") {
       handleChatTTS(req, res);
     } else if (req.url.startsWith("/api/chat/images/") && req.method === "GET") {

@@ -32,6 +32,12 @@ final class AppState: ObservableObject {
             if dialogMode { startDialog() } else { stopDialog() }
         }
     }
+    /// Wenn true: lokale Apple-STT (SFSpeechRecognizer) + Apple-TTS (AVSpeechSynthesizer)
+    /// statt Whisper-/Edge-TTS-Roundtrip zum Server. Spart 1-2s pro Cycle.
+    /// Text wird trotzdem an JARVIS geschickt — landet normal in der DB/History.
+    @Published var useLocalSpeech: Bool {
+        didSet { UserDefaults.standard.set(useLocalSpeech, forKey: "useLocalSpeech") }
+    }
 
     @Published var messages: [ChatMessage] = []
     @Published var isSending = false
@@ -40,6 +46,7 @@ final class AppState: ObservableObject {
 
     @Published var recorder = AudioRecorder()
     @Published var player = AudioPlayer()
+    @Published var nativeSynth = NativeSpeechSynth()
 
     init() {
         let url = UserDefaults.standard.string(forKey: "serverURL") ?? ""
@@ -50,6 +57,7 @@ final class AppState: ObservableObject {
         let kc = UserDefaults.standard.object(forKey: "hotkeyKeyCode") as? Int ?? 105
         let mod = UserDefaults.standard.object(forKey: "hotkeyModifiers") as? Int ?? 0
         let hkOn = UserDefaults.standard.object(forKey: "hotkeyEnabled") as? Bool ?? true
+        let local = UserDefaults.standard.object(forKey: "useLocalSpeech") as? Bool ?? true
         self.serverURL = url
         self.username = user
         self.password = pass
@@ -57,6 +65,7 @@ final class AppState: ObservableObject {
         self.hotkeyKeyCode = kc
         self.hotkeyModifiers = mod
         self.hotkeyEnabled = hkOn
+        self.useLocalSpeech = local
         if url.isEmpty || user.isEmpty || pass.isEmpty {
             self.showingSettings = true
         }
@@ -162,6 +171,11 @@ final class AppState: ObservableObject {
     // MARK: - TTS
 
     func playTTS(_ text: String) async {
+        if useLocalSpeech {
+            // Lokal: sofort, ohne Netz
+            nativeSynth.enqueue(text)
+            return
+        }
         guard isConfigured else { return }
         do {
             let data = try await client().tts(text: text)
@@ -173,27 +187,122 @@ final class AppState: ObservableObject {
 
     func stopTTS() {
         player.stop()
+        nativeSynth.stop()
     }
 
     // MARK: - Dialog Mode
 
     private func startDialog() {
-        // Wenn TTS endet → nächster Listen-Cycle
-        player.onFinish = { [weak self] in
+        let nextCycle: @MainActor () -> Void = { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self = self, self.dialogMode else { return }
-                // Kurze Pause, damit Mic nicht den TTS-Schwanz aufnimmt
                 try? await Task.sleep(nanoseconds: 150_000_000)
-                await self.dialogListenLoop()
+                if self.useLocalSpeech {
+                    await self.dialogListenLoopNative()
+                } else {
+                    await self.dialogListenLoop()
+                }
             }
         }
-        Task { await dialogListenLoop() }
+        // Beide Player-Pfade triggern den nächsten Cycle, je nachdem welcher genutzt wird
+        player.onFinish = { nextCycle() }
+        nativeSynth.onFinish = { nextCycle() }
+
+        // Bei lokaler Variante einmalig Speech-Authorization einholen
+        if useLocalSpeech {
+            Task { @MainActor in
+                let ok = await NativeSpeechRecognizer.requestAuthorization()
+                if !ok {
+                    lastError = NativeSpeechRecognizer.SpeechError.unauthorized.localizedDescription
+                    dialogMode = false
+                    return
+                }
+                await dialogListenLoopNative()
+            }
+        } else {
+            Task { await dialogListenLoop() }
+        }
     }
 
     private func stopDialog() {
         player.onFinish = nil
+        nativeSynth.onFinish = nil
         player.stop()
+        nativeSynth.stop()
         if recorder.isRecording { recorder.abort() }
+    }
+
+    /// Lokale Pipeline: Mic → SFSpeechRecognizer → SSE-Stream → AVSpeechSynthesizer pro Satz.
+    /// Spart Whisper-Roundtrip + Edge-TTS-Roundtrips, läuft offline-fähig.
+    private func dialogListenLoopNative() async {
+        guard dialogMode, isConfigured, !isSending else { return }
+        let data = await recorder.recordWithVAD()
+        guard dialogMode else { return }
+        guard let data = data, !data.isEmpty else {
+            dialogMode = false
+            return
+        }
+        isSending = true
+        defer { isSending = false }
+
+        // Audio temp-Datei für SFSpeechURLRecognitionRequest
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("jarvis-stt-\(UUID().uuidString).m4a")
+        do {
+            try data.write(to: tmpURL)
+        } catch {
+            lastError = "Audio-Schreibfehler: \(error.localizedDescription)"
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: tmpURL) }
+
+        let transcript: String
+        do {
+            transcript = try await NativeSpeechRecognizer.transcribe(fileURL: tmpURL)
+        } catch {
+            lastError = error.localizedDescription
+            if dialogMode {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                await dialogListenLoopNative()
+            }
+            return
+        }
+        guard dialogMode else { return }
+        messages.append(ChatMessage(role: "user", text: transcript))
+
+        var assistantText = ""
+        var assistantImages: [ChatImage] = []
+        do {
+            let net = client()
+            for try await ev in net.sendMessageStream(message: "[Sprachnachricht]: \(transcript)") {
+                guard dialogMode else { break }
+                switch ev {
+                case .sentence(let text, _):
+                    nativeSynth.enqueue(text)
+                case .discard:
+                    nativeSynth.stop()
+                case .done(let text, let images):
+                    assistantText = text
+                    assistantImages = images
+                case .streamError(let msg):
+                    lastError = msg
+                case .transcript, .delta, .toolUse:
+                    break
+                }
+            }
+            if !assistantText.isEmpty || !assistantImages.isEmpty {
+                messages.append(ChatMessage(role: "assistant", text: assistantText, images: assistantImages))
+            }
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+
+        if !nativeSynth.isSpeaking && dialogMode {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            await dialogListenLoopNative()
+        }
+        // Sonst triggert nativeSynth.onFinish → nextCycle
     }
 
     private func dialogListenLoop() async {

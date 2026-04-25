@@ -30,6 +30,15 @@ struct SettingsView: View {
 
                 Divider()
 
+                Text("Sprachverarbeitung").font(.headline)
+                Toggle("Lokale Apple-STT/TTS (Dialog-Modus)", isOn: $state.useLocalSpeech)
+                Text("Spracherkennung & -ausgabe laufen on-device. Kein Whisper-/Edge-TTS-Roundtrip — schnellerer, flüssigerer Dialog. Text wird trotzdem an JARVIS gesendet.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
                 Text("Hotkey").font(.headline)
                 HStack {
                     Toggle("Globaler Hotkey aktiv", isOn: $state.hotkeyEnabled)

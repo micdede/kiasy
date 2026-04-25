@@ -24,5 +24,7 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>JARVIS nutzt das Mikrofon, um deine Sprachnachrichten an den Server zu senden.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>JARVIS nutzt die lokale Spracherkennung, um deinen Dialog ohne Server-Roundtrip zu transkribieren.</string>
 </dict>
 </plist>

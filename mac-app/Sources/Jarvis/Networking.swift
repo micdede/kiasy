@@ -134,22 +134,29 @@ struct Networking {
     /// Streaming-Variante von sendVoice — yieldet SSE-Events live.
     /// Mac kann pro Satz parallel TTS anfragen.
     func sendVoiceStream(audioData: Data) -> AsyncThrowingStream<StreamEvent, Error> {
+        sseStream(path: "api/chat/voice/stream", contentType: "audio/mp4", body: audioData)
+    }
+
+    /// Streaming für reine Text-Eingabe — z.B. wenn STT lokal auf dem Mac läuft (SFSpeechRecognizer).
+    func sendMessageStream(message: String) -> AsyncThrowingStream<StreamEvent, Error> {
+        let body = (try? JSONSerialization.data(withJSONObject: ["message": message])) ?? Data()
+        return sseStream(path: "api/chat/send/stream", contentType: "application/json", body: body)
+    }
+
+    private func sseStream(path: String, contentType: String, body: Data) -> AsyncThrowingStream<StreamEvent, Error> {
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let req = try makeRequest("api/chat/voice/stream",
-                                              method: "POST",
-                                              contentType: "audio/mp4",
-                                              body: audioData)
+                    let req = try makeRequest(path, method: "POST", contentType: contentType, body: body)
                     let session = makeSession()
                     let (bytes, resp) = try await session.bytes(for: req)
                     guard let http = resp as? HTTPURLResponse else {
                         continuation.finish(throwing: NetError.http(0, "Keine HTTP-Antwort")); return
                     }
                     if !(200..<300).contains(http.statusCode) {
-                        var body = ""
-                        for try await line in bytes.lines { body += line; if body.count > 200 { break } }
-                        continuation.finish(throwing: NetError.http(http.statusCode, body)); return
+                        var bodyStr = ""
+                        for try await line in bytes.lines { bodyStr += line; if bodyStr.count > 200 { break } }
+                        continuation.finish(throwing: NetError.http(http.statusCode, bodyStr)); return
                     }
 
                     var currentEvent = ""
@@ -162,7 +169,6 @@ struct Networking {
                                 continuation.yield(event)
                             }
                         }
-                        // leere Zeile = Event-Ende; currentEvent bleibt für default-Event "message"
                     }
                     continuation.finish()
                 } catch {
