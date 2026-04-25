@@ -91,8 +91,8 @@ final class AppState: ObservableObject {
         self.useLocalSTT = stt
         self.useLocalTTS = tts2
         self.nativeVoiceId = voiceId
-        self.nativeSynth.preferredVoiceIdentifier = voiceId.isEmpty ? nil : voiceId
         self.piperVoice = piperV
+        self.nativeSynth.preferredVoiceIdentifier = voiceId.isEmpty ? nil : voiceId
         if url.isEmpty || user.isEmpty || pass.isEmpty {
             self.showingSettings = true
         }
