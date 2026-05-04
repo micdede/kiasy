@@ -1,6 +1,8 @@
 // memory.js — persistentes Gedächtnis (facts/todos/notes in DB)
+// Schreibt zusätzlich Embeddings nach Qdrant (fire-and-forget) für semantischen Recall.
 
 import * as db from "../lib/db.js";
+import * as vectors from "../lib/vectors.js";
 
 export const definitions = [
   {
@@ -76,7 +78,11 @@ export async function execute(name, input) {
     const info = conn.prepare(`
       INSERT INTO memory(category, key, value, added) VALUES (?, ?, ?, date('now','localtime'))
     `).run(input.category, input.key || null, input.value);
-    return { id: Number(info.lastInsertRowid), saved: true };
+    const id = Number(info.lastInsertRowid);
+    // Vektorisieren mit Key+Value für besseren Match
+    const text = input.key ? `${input.key}: ${input.value}` : input.value;
+    vectors.upsertMemory(id, text, { category: input.category, key: input.key }).catch(() => {});
+    return { id, saved: true, vectorized: process.env.VECTOR_MEMORY_ENABLED === "true" };
   }
 
   if (name === "memory_delete") {

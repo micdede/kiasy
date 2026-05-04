@@ -13,6 +13,19 @@ import { getProvider } from "./providers.js";
 const HISTORY_LIMIT = Number(process.env.AGENT_HISTORY_LIMIT) || 30;
 const MAX_TURNS     = Number(process.env.AGENT_MAX_TURNS) || 10;
 const RECALL_K      = Number(process.env.AGENT_RECALL_K) || 5;
+const AUTO_ROUTE    = process.env.AGENT_AUTO_ROUTE === "true";
+
+// Heuristik: kurze, einfache Messages → cheap. Trigger-Words → chat (für Tools).
+const TOOL_TRIGGERS = /\b(such(e|en|t)?|find(e|en|et)?|wann|wo|wer|wieviel|tool|remind|erinner|merk|speicher|schick|sende|mail|email|kalender|termin|wetter|news|workflow|delegier|hass|home assistant|status|liste|zeig|öffne|aktivier|deaktivier|files?|read|write)\b/i;
+
+function pickRole(message, explicitRole) {
+  if (explicitRole) return explicitRole;
+  if (!AUTO_ROUTE) return "chat";
+  const text = (message || "").trim();
+  // Kurz + kein "?" + kein Trigger → cheap
+  if (text.length < 80 && !text.endsWith("?") && !TOOL_TRIGGERS.test(text)) return "cheap";
+  return "chat";
+}
 
 export async function handle({ chatId, message, provider, role }) {
   if (!chatId || !message) throw new Error("chatId+message erforderlich");
@@ -25,7 +38,10 @@ export async function handle({ chatId, message, provider, role }) {
   const history = loadHistory(chatId);
   const toolDefs = await tools.getDefinitions();
   const recall = await semanticRecall(chatId, message);
-  const llm = getProvider(role || provider || "chat");
+  const chosenRole = pickRole(message, role || provider);
+  const llm = getProvider(chosenRole);
+  // Cheap-Modell ohne Tools — reduziert Context, vermeidet Hänger bei kleinen Modellen
+  const effectiveTools = chosenRole === "cheap" ? [] : toolDefs;
 
   // 3. Loop bis kein tool_use mehr ODER MAX_TURNS
   const messages = [...history];
@@ -36,7 +52,7 @@ export async function handle({ chatId, message, provider, role }) {
 
   while (turn < MAX_TURNS) {
     turn++;
-    const res = await llm.chat({ messages, tools: toolDefs, system: systemSuffix });
+    const res = await llm.chat({ messages, tools: effectiveTools, system: systemSuffix });
     lastText = res.text;
     lastUsage = res.usage;
 
@@ -89,11 +105,11 @@ export async function handle({ chatId, message, provider, role }) {
 
   db.logEvent({
     type: "message",
-    message: `chat:${chatId} ${turn} turn(s) ${lastText.length} chars`,
-    meta: { usage: lastUsage, turns: turn }
+    message: `chat:${chatId} role=${chosenRole} ${turn} turn(s) ${lastText.length} chars`,
+    meta: { usage: lastUsage, turns: turn, role: chosenRole }
   });
 
-  return { text: lastText, turns: turn, messageId, usage: lastUsage };
+  return { text: lastText, turns: turn, messageId, usage: lastUsage, role: chosenRole };
 }
 
 export async function* streamHandle({ chatId, message, provider, role }) {
@@ -105,7 +121,9 @@ export async function* streamHandle({ chatId, message, provider, role }) {
   const history = loadHistory(chatId);
   const toolDefs = await tools.getDefinitions();
   const recall = await semanticRecall(chatId, message);
-  const llm = getProvider(role || provider || "chat");
+  const chosenRole = pickRole(message, role || provider);
+  const llm = getProvider(chosenRole);
+  const effectiveTools = chosenRole === "cheap" ? [] : toolDefs;
   const systemSuffix = recall.length ? buildRecallSystem(recall) : null;
 
   const messages = [...history];
@@ -118,7 +136,7 @@ export async function* streamHandle({ chatId, message, provider, role }) {
     let streamedText = "";
     let toolCallsInTurn = null;
 
-    for await (const ev of llm.chatStream({ messages, tools: toolDefs, system: systemSuffix })) {
+    for await (const ev of llm.chatStream({ messages, tools: effectiveTools, system: systemSuffix })) {
       if (ev.delta) {
         streamedText += ev.delta;
         yield { delta: ev.delta };

@@ -438,7 +438,8 @@ function settingsBody() {
           ['SCHEDULER_ENABLED', 'Reminder-Scheduler', 'bool'],
           ['MAIL_WATCHER_ENABLED', 'Mail-Watcher', 'bool'],
           ['TELEGRAM_VOICE_REPLY', 'Telegram antwortet per Voice', 'bool'],
-          ['VECTOR_MEMORY_ENABLED', 'Vector-Memory (Auto-Embed + Recall)', 'bool']
+          ['VECTOR_MEMORY_ENABLED', 'Vector-Memory (Auto-Embed + Recall)', 'bool'],
+          ['AGENT_AUTO_ROUTE', 'Auto-Route kurze Messages → Cheap-Modell', 'bool']
         ],
         'Telegram': [
           ['TELEGRAM_ALLOWED_USERS', 'Whitelist (comma-separated IDs)', 'text']
@@ -455,6 +456,7 @@ function settingsBody() {
           TELEGRAM_ENABLED: s.flags.telegram_enabled, SCHEDULER_ENABLED: s.flags.scheduler_enabled,
           MAIL_WATCHER_ENABLED: s.flags.mail_watcher_enabled, TELEGRAM_VOICE_REPLY: s.flags.telegram_voice_reply,
           VECTOR_MEMORY_ENABLED: s.flags.vector_memory_enabled,
+          AGENT_AUTO_ROUTE: s.flags.agent_auto_route,
           TELEGRAM_ALLOWED_USERS: s.whitelist.join(','), MAX_TOKENS: s.max_tokens
         };
         document.getElementById('settings-form').innerHTML = Object.entries(FIELDS).map(([sec, fields]) =>

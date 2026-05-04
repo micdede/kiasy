@@ -368,6 +368,11 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "PUT") {
           const body = await readJson(req);
           fs.writeFileSync(filepath, body.content || "");
+          // Note vektorisieren (filename als Schlüssel für Idempotenz)
+          const noteId = filename.replace(/[^\w]/g, "_");
+          const noteText = `${filename}\n\n${(body.content || "").substring(0, 2000)}`;
+          // upsertMemory mit prefix=note für Filter-Möglichkeit
+          import("./lib/vectors.js").then(v => v.upsertMemory(0, noteText, { type: "note", filename }).catch(() => {}));
           return sendJson(200, { filename, saved: true, size: Buffer.byteLength(body.content || "") });
         }
         if (req.method === "DELETE") {
@@ -600,7 +605,8 @@ function currentSettings() {
       scheduler_enabled:     process.env.SCHEDULER_ENABLED === "true",
       mail_watcher_enabled:  process.env.MAIL_WATCHER_ENABLED === "true",
       telegram_voice_reply:  process.env.TELEGRAM_VOICE_REPLY === "true",
-      vector_memory_enabled: process.env.VECTOR_MEMORY_ENABLED === "true"
+      vector_memory_enabled: process.env.VECTOR_MEMORY_ENABLED === "true",
+      agent_auto_route:      process.env.AGENT_AUTO_ROUTE === "true"
     },
     tts: { piper_voice: process.env.PIPER_VOICE },
     stt: { whisper_model: process.env.WHISPER_MODEL },
