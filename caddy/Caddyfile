@@ -22,8 +22,9 @@
     }
 }
 
-# Catch-all auf 443: jeder Hostname bekommt internes Cert
-:443 {
+# Hostnames die Caddy bedient — Cert wird für jeden ausgestellt.
+# 192.168.178.50 = JARVIS LAN-IP, jarvis.local = mDNS, localhost für Tests vom Host.
+192.168.178.50, localhost, jarvis, jarvis.local {
     tls internal
 
     # ─── API + SSE ───────────────────────────────
