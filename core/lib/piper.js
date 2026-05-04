@@ -1,3 +1,29 @@
+// Kuratierte Voice-Liste pro Sprache (Wyoming-Piper lädt on-demand)
+export const VOICES = [
+  // Deutsch
+  { lang: "de", code: "de-DE", flag: "🇩🇪", name: "Thorsten (medium)",  voice: "de_DE-thorsten-medium",  gender: "m", quality: "medium" },
+  { lang: "de", code: "de-DE", flag: "🇩🇪", name: "Thorsten (high)",    voice: "de_DE-thorsten-high",    gender: "m", quality: "high" },
+  { lang: "de", code: "de-DE", flag: "🇩🇪", name: "Eva (low)",          voice: "de_DE-eva_k-x_low",      gender: "f", quality: "low" },
+  // Englisch (US)
+  { lang: "en", code: "en-US", flag: "🇺🇸", name: "Amy (medium)",       voice: "en_US-amy-medium",       gender: "f", quality: "medium" },
+  { lang: "en", code: "en-US", flag: "🇺🇸", name: "Ryan (high)",        voice: "en_US-ryan-high",        gender: "m", quality: "high" },
+  { lang: "en", code: "en-US", flag: "🇺🇸", name: "Lessac (high)",      voice: "en_US-lessac-high",      gender: "f", quality: "high" },
+  // Englisch (GB)
+  { lang: "en", code: "en-GB", flag: "🇬🇧", name: "Alan (medium)",      voice: "en_GB-alan-medium",      gender: "m", quality: "medium" },
+  { lang: "en", code: "en-GB", flag: "🇬🇧", name: "Alba (medium)",      voice: "en_GB-alba-medium",      gender: "f", quality: "medium" },
+  // Französisch
+  { lang: "fr", code: "fr-FR", flag: "🇫🇷", name: "Siwis (medium)",     voice: "fr_FR-siwis-medium",     gender: "f", quality: "medium" },
+  { lang: "fr", code: "fr-FR", flag: "🇫🇷", name: "Tom (medium)",       voice: "fr_FR-tom-medium",       gender: "m", quality: "medium" },
+  { lang: "fr", code: "fr-FR", flag: "🇫🇷", name: "Upmc (medium)",      voice: "fr_FR-upmc-medium",      gender: "f", quality: "medium" },
+  // Spanisch
+  { lang: "es", code: "es-ES", flag: "🇪🇸", name: "DaveFX (medium)",    voice: "es_ES-davefx-medium",    gender: "m", quality: "medium" },
+  { lang: "es", code: "es-ES", flag: "🇪🇸", name: "Carlfm (x_low)",     voice: "es_ES-carlfm-x_low",     gender: "m", quality: "low" },
+  { lang: "es", code: "es-MX", flag: "🇲🇽", name: "Ald (medium)",       voice: "es_MX-ald-medium",       gender: "m", quality: "medium" },
+  // Italienisch
+  { lang: "it", code: "it-IT", flag: "🇮🇹", name: "Paola (medium)",     voice: "it_IT-paola-medium",     gender: "f", quality: "medium" },
+  { lang: "it", code: "it-IT", flag: "🇮🇹", name: "Riccardo (x_low)",   voice: "it_IT-riccardo-x_low",   gender: "m", quality: "low" }
+];
+
 // piper.js — TTS via Wyoming-Protocol (rhasspy/wyoming-piper Container)
 //
 // Wyoming = JSONL-Header über TCP, dann optional binärer Payload.

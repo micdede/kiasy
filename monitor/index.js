@@ -752,49 +752,123 @@ function haEditorBody() {
     </script>`;
 }
 
-// ─── Voice-Test Page ──────────────────────────────────────
+// ─── Voice-Test + Sprachtrainer Page ─────────────────────
 function voiceBody() {
   return `
-    <div class="page-head"><h2>Voice-Test</h2></div>
+    <div class="page-head"><h2>Voice & Sprachtrainer</h2></div>
+
     <div class="sec">
-      <h3>TTS — Text → Audio (Piper)</h3>
-      <textarea id="tts-text" class="input" rows="3" placeholder="Text…">Hallo, das ist ein Voice-Test mit Piper.</textarea>
-      <input id="tts-voice" class="input" placeholder="Piper-Voice (optional, default aus ENV)">
-      <button class="btn primary" onclick="synth()">🔊 Synthesize</button>
-      <audio id="tts-audio" controls style="display:block;margin-top:12px;width:100%;"></audio>
+      <h3>🎙 Sprachtrainer — Deutsch → Zielsprache (gesprochen)</h3>
+      <p class="dim">Tipp einen deutschen Satz, wähle Zielsprache + Stimme, hör die Übersetzung. Wiederhol's bis es sitzt.</p>
+      <div class="row-controls">
+        <select id="tr-lang" class="input" onchange="loadVoices()">
+          <option value="en">🇺🇸 Englisch</option>
+          <option value="fr">🇫🇷 Französisch</option>
+          <option value="es">🇪🇸 Spanisch</option>
+          <option value="it">🇮🇹 Italienisch</option>
+          <option value="de">🇩🇪 Deutsch (nur TTS)</option>
+        </select>
+        <select id="tr-voice" class="input"></select>
+      </div>
+      <textarea id="tr-text" class="input" rows="3" placeholder="Deutscher Satz, z.B. 'Wo ist der Bahnhof?'">Wo finde ich hier den nächsten Supermarkt?</textarea>
+      <button class="btn primary" onclick="trainerGo()">🔊 Übersetzen + Sprechen</button>
+      <div id="tr-result" style="margin-top:12px;"></div>
+      <audio id="tr-audio" controls style="display:block;margin-top:8px;width:100%;"></audio>
     </div>
+
     <div class="sec">
-      <h3>STT — Audio → Text (Whisper)</h3>
+      <h3>🔊 TTS direkt (kein Translate)</h3>
+      <textarea id="tts-text" class="input" rows="2" placeholder="Text in beliebiger Sprache…">Hello, how are you today?</textarea>
+      <select id="tts-voice" class="input"></select>
+      <button class="btn primary" onclick="synth()">▶ Synthesize</button>
+      <audio id="tts-audio" controls style="display:block;margin-top:8px;width:100%;"></audio>
+    </div>
+
+    <div class="sec">
+      <h3>📝 STT — Audio → Text (Whisper)</h3>
       <input type="file" id="stt-file" accept="audio/*" class="input">
+      <select id="stt-lang" class="input">
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="en">🇺🇸 Englisch</option>
+        <option value="fr">🇫🇷 Französisch</option>
+        <option value="es">🇪🇸 Spanisch</option>
+        <option value="it">🇮🇹 Italienisch</option>
+      </select>
       <button class="btn primary" onclick="transcribe()">📝 Transkribieren</button>
       <pre id="stt-result" class="result"></pre>
     </div>
+
     <style>
       .sec { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:16px; }
-      .sec h3 { margin-bottom:12px; }
-      .sec .input, .sec textarea { width:100%; margin-bottom:8px; padding:8px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
+      .sec h3 { margin-bottom:8px; }
+      .sec p { margin-bottom:12px; }
+      .sec .input, .sec textarea, .sec select { width:100%; margin-bottom:8px; padding:8px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
+      .row-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+      .row-controls .input { margin-bottom:0; }
       .result { background:var(--bg-elevated); padding:12px 16px; border-radius:6px; font-family:var(--mono); font-size:13px; min-height:40px; margin-top:8px; }
+      .tr-orig { color:var(--text-dim); font-size:13px; }
+      .tr-trans { color:var(--accent); font-size:18px; font-weight:600; padding:8px 12px; background:var(--accent-soft); border-radius:6px; margin-top:6px; }
     </style>
+
     <script>
+      let allVoices = [];
+      async function loadVoices(){
+        if (!allVoices.length) {
+          const r = await (await fetch('/api/voice/voices')).json();
+          allVoices = r.voices;
+        }
+        // Sprachtrainer: nur ausgewählte Sprache
+        const lang = document.getElementById('tr-lang').value;
+        const filtered = allVoices.filter(v => v.lang === lang);
+        document.getElementById('tr-voice').innerHTML = filtered.map(v =>
+          \`<option value="\${v.voice}">\${v.flag} \${v.name} (\${v.gender}, \${v.quality})</option>\`).join('');
+        // Direkt-TTS: alle Stimmen alphabetisch
+        document.getElementById('tts-voice').innerHTML = allVoices.map(v =>
+          \`<option value="\${v.voice}">\${v.flag} \${v.name} — \${v.voice}</option>\`).join('');
+      }
+
+      async function trainerGo(){
+        const text = document.getElementById('tr-text').value.trim();
+        const targetLang = document.getElementById('tr-lang').value;
+        const voice = document.getElementById('tr-voice').value;
+        if (!text) return;
+        document.getElementById('tr-result').innerHTML = '⏳ übersetze + synthesize…';
+        const r = await fetch('/api/voice/translate-synth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, targetLang, voice})});
+        if (!r.ok) { document.getElementById('tr-result').innerHTML = '<div class="tr-orig" style="color:var(--err)">Fehler: '+r.status+'</div>'; return; }
+        const original = decodeURIComponent(r.headers.get('X-Original')||'');
+        const translated = decodeURIComponent(r.headers.get('X-Translated')||'');
+        document.getElementById('tr-result').innerHTML = \`
+          <div class="tr-orig">DE: \${original}</div>
+          <div class="tr-trans">\${translated}</div>\`;
+        const blob = await r.blob();
+        const audio = document.getElementById('tr-audio');
+        audio.src = URL.createObjectURL(blob);
+        audio.play();
+      }
+
       async function synth(){
         const text = document.getElementById('tts-text').value.trim();
-        const voice = document.getElementById('tts-voice').value.trim();
+        const voice = document.getElementById('tts-voice').value;
         if (!text) return;
-        const r = await fetch('/api/voice/synth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, voice: voice||undefined})});
+        const r = await fetch('/api/voice/synth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, voice})});
         if (!r.ok) return alert('Synth fehlgeschlagen');
         const blob = await r.blob();
         document.getElementById('tts-audio').src = URL.createObjectURL(blob);
         document.getElementById('tts-audio').play();
       }
+
       async function transcribe(){
         const f = document.getElementById('stt-file').files[0];
         if (!f) return;
         const ext = (f.name.split('.').pop() || 'm4a').toLowerCase();
+        const lang = document.getElementById('stt-lang').value;
         document.getElementById('stt-result').textContent = '⏳ transkribiere…';
-        const r = await fetch('/api/voice/transcribe?lang=de&ext='+ext, {method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});
+        const r = await fetch('/api/voice/transcribe?lang='+lang+'&ext='+ext, {method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});
         const data = await r.json();
         document.getElementById('stt-result').textContent = JSON.stringify(data, null, 2);
       }
+
+      loadVoices();
     </script>`;
 }
 

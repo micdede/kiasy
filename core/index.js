@@ -521,6 +521,43 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, { items, dir });
     }
 
+    // ─── Voice: Liste der konfigurierten Piper-Stimmen ──────
+    if (url.pathname === "/api/voice/voices" && req.method === "GET") {
+      return sendJson(200, { default: process.env.PIPER_VOICE, voices: piper.VOICES });
+    }
+
+    // ─── Voice: Übersetzen (DE → ZIEL) + TTS in einem Call ──
+    if (url.pathname === "/api/voice/translate-synth" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.text || !body.targetLang) return sendJson(400, { error: "text + targetLang erforderlich" });
+      const langName = { de:"Deutsch", en:"Englisch", fr:"Französisch", es:"Spanisch", it:"Italienisch" }[body.targetLang] || body.targetLang;
+
+      // Übersetzung via chat-Modell (qualitativ besser als cheap für mehrsprachige Tasks)
+      const llm = (await import("./lib/providers.js")).getProvider("chat");
+      const trRes = await llm.chat({
+        messages: [{ role: "user", content:
+          `Übersetze WORTGETREU nach ${langName}. Behalte alle Substantive 1:1 bei (Bier=beer/cerveza/birra, Zimmer=room/habitación/camera, etc.). Gib NUR die Übersetzung als einen Satz zurück — kein Kommentar, keine Anführungszeichen, kein Markdown, keine Alternativen.\n\nDeutsch: ${body.text}\n${langName}:` }],
+        tools: [],
+        system: `Du bist ein muttersprachlicher Übersetzer DE → ${langName}. Übersetze WÖRTLICH und korrekt, ohne Inhalte zu ändern oder Synonyme zu ersetzen. Antworte ausschließlich mit der einen wörtlichen Übersetzung als reiner Satz, keine Erklärungen.`
+      });
+      const translated = (trRes.text || "").trim()
+        .replace(/^["„»“]|["«»"]$/g, "")
+        .replace(/^\*+|\*+$/g, "")
+        .split("\n")[0]  // Falls Modell mehrere Zeilen liefert: nur die erste
+        .trim();
+
+      // TTS mit gewünschter Stimme
+      const wav = await piper.synthesize(translated, { voice: body.voice, asWav: true });
+      res.writeHead(200, {
+        "Content-Type": "audio/wav",
+        "X-Original":   encodeURIComponent(body.text),
+        "X-Translated": encodeURIComponent(translated),
+        "X-Voice":      body.voice || process.env.PIPER_VOICE,
+        "Content-Length": wav.length
+      });
+      return res.end(wav);
+    }
+
     // ─── Voice: Transcribe (audio in → Text) ─────────────────
     if (url.pathname === "/api/voice/transcribe" && req.method === "POST") {
       const buf = await readBinary(req);
