@@ -1,0 +1,164 @@
+# kiasy v2 — Container-Stack
+#
+# Starten:  docker compose up -d
+# Stoppen:  docker compose down
+# Logs:     docker compose logs -f <service>
+# Restart:  docker compose restart <service>
+#
+# Ports zum Host: nur 443 via caddy (LAN/VPN-only)
+# Container reden untereinander via Container-DNS (kiasy-net)
+
+name: kiasy
+
+services:
+
+  # ─── Reverse-Proxy + TLS ───────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: kiasy-caddy
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "80:80"          # nur für ACME-Internal-Challenge falls je nötig
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - kiasy-monitor
+      - kiasy-core
+    networks: [kiasy-net]
+
+  # ─── Agent + API + Telegram + Mail + Scheduler ────────────
+  kiasy-core:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    container_name: kiasy-core
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      TZ: Europe/Berlin
+      NODE_ENV: production
+      OLLAMA_URL: http://ollama:11434
+      QDRANT_URL: http://qdrant:6333
+      WHISPER_URL: http://whisper:9000
+      PIPER_HOST: piper
+      PIPER_PORT: "10200"
+      SEARXNG_URL: http://searxng:8080
+    volumes:
+      - ./data:/data
+      - ./notes:/data/notes
+    expose:
+      - "8080"           # API + SSE
+      - "8081"           # WebSocket (Echtdialog Phase 3)
+    depends_on:
+      qdrant:    { condition: service_started }
+      ollama:    { condition: service_started }
+      whisper:   { condition: service_started }
+      piper:     { condition: service_started }
+      searxng:   { condition: service_started }
+    networks: [kiasy-net]
+
+  # ─── Monitor Web-UI ────────────────────────────────────────
+  kiasy-monitor:
+    build:
+      context: ./monitor
+      dockerfile: Dockerfile
+    container_name: kiasy-monitor
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      TZ: Europe/Berlin
+      NODE_ENV: production
+      CORE_URL: http://kiasy-core:8080
+    expose:
+      - "3000"
+    depends_on:
+      - kiasy-core
+    networks: [kiasy-net]
+
+  # ─── LLM (Cloud-Proxy + optional lokal) ───────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: kiasy-ollama
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: "10m"
+    volumes:
+      - ollama-models:/root/.ollama
+    expose:
+      - "11434"
+    networks: [kiasy-net]
+
+  # ─── STT ──────────────────────────────────────────────────
+  # Default: faster-whisper als HTTP-API. Modellgröße via WHISPER_MODEL.
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: kiasy-whisper
+    restart: unless-stopped
+    environment:
+      ASR_MODEL: ${WHISPER_MODEL:-medium}
+      ASR_ENGINE: faster_whisper
+      ASR_DEVICE: cpu
+    volumes:
+      - whisper-models:/root/.cache
+    expose:
+      - "9000"
+    networks: [kiasy-net]
+
+  # ─── TTS (Wyoming-Protocol) ───────────────────────────────
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    container_name: kiasy-piper
+    restart: unless-stopped
+    command: >
+      --voice ${PIPER_VOICE:-de_DE-thorsten-medium}
+      --uri tcp://0.0.0.0:10200
+      --data-dir /data
+      --download-dir /data
+    volumes:
+      - piper-voices:/data
+    expose:
+      - "10200"
+    networks: [kiasy-net]
+
+  # ─── Vector Memory ────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: kiasy-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    expose:
+      - "6333"
+      - "6334"
+    networks: [kiasy-net]
+
+  # ─── Web-Suche ────────────────────────────────────────────
+  searxng:
+    image: searxng/searxng:latest
+    container_name: kiasy-searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      INSTANCE_NAME: kiasy
+    volumes:
+      - ./searxng-config:/etc/searxng:rw
+    expose:
+      - "8080"
+    networks: [kiasy-net]
+
+# ─── Networks ────────────────────────────────────────────────
+networks:
+  kiasy-net:
+    driver: bridge
+
+# ─── Volumes ─────────────────────────────────────────────────
+volumes:
+  caddy-data:        # interne CA + TLS-Zustand (BACKUP)
+  caddy-config:
+  ollama-models:     # LLM-Modelle (regenerierbar)
+  whisper-models:    # Whisper-Cache (regenerierbar)
+  piper-voices:      # Piper-Voices (regenerierbar)
+  qdrant-data:       # Vektor-Memory (BACKUP via Snapshot-API)

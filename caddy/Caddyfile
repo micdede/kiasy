@@ -1,0 +1,56 @@
+# kiasy v2 — Caddy Reverse-Proxy
+#
+# Eingang: 443 (LAN/VPN-only). Self-signed via local_certs.
+# Routes:
+#   /api/*    → kiasy-core:8080
+#   /events   → kiasy-core:8080  (SSE)
+#   /ws/*     → kiasy-core:8081  (WebSocket, Phase 3)
+#   sonst     → kiasy-monitor:3000
+
+{
+    # Interne CA — Caddy generiert sich selbst Certs
+    local_certs
+
+    # Kein automatisches HTTPS-Redirect (LAN-Trust)
+    auto_https disable_redirects
+
+    # Logs auf stdout (docker compose logs caddy)
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}
+
+# Catch-all auf 443: jeder Hostname bekommt internes Cert
+:443 {
+    tls internal
+
+    # ─── API + SSE ───────────────────────────────
+    handle /api/* {
+        reverse_proxy kiasy-core:8080 {
+            flush_interval -1   # für SSE-Streaming wichtig
+        }
+    }
+
+    handle /events {
+        reverse_proxy kiasy-core:8080 {
+            flush_interval -1
+        }
+    }
+
+    # ─── WebSocket (Phase 3) ──────────────────────
+    handle /ws/* {
+        reverse_proxy kiasy-core:8081
+    }
+
+    # ─── Monitor-UI (default) ─────────────────────
+    handle {
+        reverse_proxy kiasy-monitor:3000
+    }
+}
+
+# HTTP → HTTPS Redirect (nur informativ, falls jemand http://ip aufruft)
+:80 {
+    redir https://{host}{uri} permanent
+}

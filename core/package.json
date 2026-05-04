@@ -1,0 +1,13 @@
+{
+  "name": "kiasy-core",
+  "version": "0.1.0",
+  "description": "kiasy v2 — Agent, Tools, Telegram, Mail, Scheduler",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
