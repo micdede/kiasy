@@ -12,6 +12,7 @@ import { readFileSync, existsSync } from "node:fs";
 
 import * as db from "./lib/db.js";
 import * as agent from "./lib/agent.js";
+import * as tools from "./lib/tools.js";
 import * as telegram from "./lib/telegram.js";
 import * as scheduler from "./lib/scheduler.js";
 import { getProvider } from "./lib/providers.js";
@@ -47,15 +48,42 @@ const server = http.createServer(async (req, res) => {
 
     // ─── /api/status ────────────────────────────────────────
     if (url.pathname === "/api/status" && req.method === "GET") {
+      const toolInfo = await tools.listInfo();
       return sendJson(200, {
         phase: 3,
-        etappe: 2,
+        etappe: 3,
         provider: process.env.LLM_PROVIDER || "ollama",
         model_anthropic: process.env.ANTHROPIC_MODEL,
         model_ollama:    process.env.OLLAMA_MODEL,
         telegram:  telegram.getInfo(),
-        scheduler: scheduler.getInfo()
+        scheduler: scheduler.getInfo(),
+        tools:     toolInfo
       });
+    }
+
+    // ─── /api/tools ─────────────────────────────────────────
+    if (url.pathname === "/api/tools" && req.method === "GET") {
+      const defs = await tools.getDefinitions();
+      return sendJson(200, { count: defs.length, tools: defs });
+    }
+
+    // ─── /api/tools/exec ────────────────────────────────────
+    if (url.pathname === "/api/tools/exec" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.name) return sendJson(400, { error: "name fehlt" });
+      try {
+        const result = await tools.execute(body.name, body.input || {});
+        return sendJson(200, { name: body.name, result });
+      } catch (err) {
+        return sendJson(500, { name: body.name, error: String(err.message || err) });
+      }
+    }
+
+    // ─── /api/tools/reload ──────────────────────────────────
+    if (url.pathname === "/api/tools/reload" && req.method === "POST") {
+      tools.reload();
+      const info = await tools.listInfo();
+      return sendJson(200, { reloaded: true, ...info });
     }
 
     // ─── /api/chat/history ──────────────────────────────────
