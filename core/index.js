@@ -12,6 +12,8 @@ import { readFileSync, existsSync } from "node:fs";
 
 import * as db from "./lib/db.js";
 import * as agent from "./lib/agent.js";
+import * as telegram from "./lib/telegram.js";
+import * as scheduler from "./lib/scheduler.js";
 import { getProvider } from "./lib/providers.js";
 
 const PORT = Number(process.env.PORT || 8080);
@@ -20,6 +22,9 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url)))
 
 // DB initialisieren (führt Migrations aus)
 db.init();
+// Telegram + Scheduler starten (beide respektieren _ENABLED env)
+telegram.start();
+scheduler.start();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
@@ -44,10 +49,12 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/status" && req.method === "GET") {
       return sendJson(200, {
         phase: 3,
-        etappe: 1,
+        etappe: 2,
         provider: process.env.LLM_PROVIDER || "ollama",
         model_anthropic: process.env.ANTHROPIC_MODEL,
-        model_ollama:    process.env.OLLAMA_MODEL
+        model_ollama:    process.env.OLLAMA_MODEL,
+        telegram:  telegram.getInfo(),
+        scheduler: scheduler.getInfo()
       });
     }
 
@@ -134,6 +141,8 @@ function readJson(req) {
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => {
     console.log(`[kiasy-core] ${sig} → shutdown`);
+    scheduler.stop();
+    telegram.stop();
     server.close(() => { db.close(); process.exit(0); });
     setTimeout(() => process.exit(1), 5000).unref();
   });
