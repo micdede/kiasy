@@ -285,21 +285,206 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, { checks: results, all_ok: results.every(r => r.ok) });
     }
 
-    // ─── Settings (read-only Snapshot der relevanten ENVs) ──
+    // ─── Settings GET (laufende Werte aus process.env) ─────
     if (url.pathname === "/api/settings" && req.method === "GET") {
-      return sendJson(200, {
-        provider: process.env.LLM_PROVIDER,
-        models: { ollama: process.env.OLLAMA_MODEL, anthropic: process.env.ANTHROPIC_MODEL },
-        flags: {
-          telegram_enabled:    process.env.TELEGRAM_ENABLED === "true",
-          scheduler_enabled:   process.env.SCHEDULER_ENABLED === "true",
-          mail_watcher_enabled: process.env.MAIL_WATCHER_ENABLED === "true",
-          telegram_voice_reply: process.env.TELEGRAM_VOICE_REPLY === "true"
-        },
-        tts: { piper_voice: process.env.PIPER_VOICE },
-        stt: { whisper_model: process.env.WHISPER_MODEL },
-        whitelist: (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").filter(Boolean)
-      });
+      return sendJson(200, currentSettings());
+    }
+
+    // ─── Settings PUT (.env-Datei updaten) ──────────────────
+    if (url.pathname === "/api/settings" && req.method === "PUT") {
+      const body = await readJson(req);
+      const updates = body.updates || {};
+      const path = "/host/.env";
+      const fs = await import("node:fs");
+      if (!fs.existsSync(path)) return sendJson(500, { error: ".env nicht gemountet auf /host/.env" });
+      let content = fs.readFileSync(path, "utf8");
+      for (const [k, v] of Object.entries(updates)) {
+        const safeV = String(v ?? "");
+        const re = new RegExp(`^(\\s*)${k}\\s*=.*$`, "m");
+        if (re.test(content)) {
+          content = content.replace(re, `$1${k}=${safeV}`);
+        } else {
+          content += (content.endsWith("\n") ? "" : "\n") + `${k}=${safeV}\n`;
+        }
+      }
+      fs.writeFileSync(path, content);
+      return sendJson(200, { saved: Object.keys(updates).length, restart_needed: true,
+        hint: "sudo docker compose -f /home/mcde/kiasy/docker-compose.yml --project-directory /home/mcde/kiasy up -d kiasy-core" });
+    }
+
+    // ─── Notes (Markdown KB-Editor) ──────────────────────────
+    if (url.pathname === "/api/notes" && req.method === "GET") {
+      const fs = await import("node:fs");
+      const dir = "/data/notes";
+      if (!fs.existsSync(dir)) return sendJson(200, { items: [] });
+      const items = fs.readdirSync(dir, { withFileTypes: true })
+        .filter(e => e.isFile() && e.name.endsWith(".md"))
+        .map(e => {
+          const st = fs.statSync(`${dir}/${e.name}`);
+          return { filename: e.name, size: st.size, modified: st.mtime.toISOString() };
+        }).sort((a,b) => b.modified.localeCompare(a.modified));
+      return sendJson(200, { items });
+    }
+    {
+      const m = url.pathname.match(/^\/api\/notes\/(.+)$/);
+      if (m) {
+        const fs = await import("node:fs");
+        const filename = decodeURIComponent(m[1]);
+        if (!/^[\w\-. ]+\.md$/.test(filename)) return sendJson(400, { error: "Ungültiger Dateiname" });
+        const filepath = `/data/notes/${filename}`;
+        if (req.method === "GET") {
+          if (!fs.existsSync(filepath)) return sendJson(404, { error: "nicht gefunden" });
+          return sendJson(200, { filename, content: fs.readFileSync(filepath, "utf8") });
+        }
+        if (req.method === "PUT") {
+          const body = await readJson(req);
+          fs.writeFileSync(filepath, body.content || "");
+          return sendJson(200, { filename, saved: true, size: Buffer.byteLength(body.content || "") });
+        }
+        if (req.method === "DELETE") {
+          if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+          return sendJson(200, { deleted: true });
+        }
+      }
+    }
+
+    // ─── Workflows ───────────────────────────────────────────
+    if (url.pathname === "/api/workflows" && req.method === "GET") {
+      const items = db.get().prepare("SELECT id, name, status, current_step, chat_id, created_at, updated_at FROM workflows ORDER BY id DESC LIMIT 50").all();
+      return sendJson(200, { items });
+    }
+    if (url.pathname === "/api/workflows" && req.method === "POST") {
+      const body = await readJson(req);
+      const result = await tools.execute("workflow_create", body);
+      return sendJson(200, result);
+    }
+    {
+      const m = url.pathname.match(/^\/api\/workflows\/(\d+)$/);
+      if (m && req.method === "GET") {
+        const wf = db.get().prepare("SELECT * FROM workflows WHERE id = ?").get(Number(m[1]));
+        if (!wf) return sendJson(404, { error: "nicht gefunden" });
+        const steps = db.get().prepare("SELECT * FROM workflow_steps WHERE workflow_id = ? ORDER BY step_num").all(Number(m[1]));
+        return sendJson(200, { ...wf, steps });
+      }
+      if (m && req.method === "DELETE") {
+        const tx = db.get().transaction(() => {
+          db.get().prepare("DELETE FROM workflow_steps WHERE workflow_id = ?").run(Number(m[1]));
+          db.get().prepare("DELETE FROM workflows WHERE id = ?").run(Number(m[1]));
+        });
+        tx();
+        return sendJson(200, { deleted: true });
+      }
+    }
+
+    // ─── Delegations ─────────────────────────────────────────
+    if (url.pathname === "/api/delegations" && req.method === "GET") {
+      const items = db.get().prepare("SELECT * FROM delegations ORDER BY id DESC LIMIT 100").all();
+      return sendJson(200, { items });
+    }
+    if (url.pathname === "/api/delegations" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.assignee || !body.subject) return sendJson(400, { error: "assignee+subject erforderlich" });
+      const info = db.get().prepare(`
+        INSERT INTO delegations(assignee, assignee_email, subject, body, deadline, status, followup_days)
+        VALUES (?, ?, ?, ?, ?, 'open', ?)
+      `).run(body.assignee, body.assignee_email || null, body.subject, body.body || null,
+             body.deadline || null, body.followup_days || 3);
+      return sendJson(200, { id: Number(info.lastInsertRowid) });
+    }
+    {
+      const m = url.pathname.match(/^\/api\/delegations\/(\d+)$/);
+      if (m && req.method === "PUT") {
+        const body = await readJson(req);
+        const sets = []; const params = [];
+        for (const k of ["status", "deadline", "followup_days", "subject", "body"]) {
+          if (k in body) { sets.push(`${k} = ?`); params.push(body[k]); }
+        }
+        if (!sets.length) return sendJson(400, { error: "nichts zu ändern" });
+        params.push(Number(m[1]));
+        const info = db.get().prepare(`UPDATE delegations SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`).run(...params);
+        return sendJson(200, { updated: info.changes });
+      }
+      if (m && req.method === "DELETE") {
+        const info = db.get().prepare("DELETE FROM delegations WHERE id = ?").run(Number(m[1]));
+        return sendJson(200, { deleted: info.changes });
+      }
+    }
+
+    // ─── Home Assistant Devices (Markdown-Editor) ───────────
+    if (url.pathname === "/api/ha/devices" && req.method === "GET") {
+      const fs = await import("node:fs");
+      const path = "/data/ha-devices.md";
+      const content = fs.existsSync(path) ? fs.readFileSync(path, "utf8") : "";
+      return sendJson(200, { content });
+    }
+    if (url.pathname === "/api/ha/devices" && req.method === "PUT") {
+      const fs = await import("node:fs");
+      const body = await readJson(req);
+      fs.writeFileSync("/data/ha-devices.md", body.content || "");
+      return sendJson(200, { saved: true, size: Buffer.byteLength(body.content || "") });
+    }
+    if (url.pathname === "/api/ha/devices/regenerate" && req.method === "POST") {
+      // Hole alle states von HA, baue eine kompakte Markdown-Liste
+      const states = await tools.execute("ha_states", {});
+      const fs = await import("node:fs");
+      const lines = ["# Home Assistant Devices", "",
+        `Generiert: ${new Date().toISOString()}`, "",
+        `Total: ${states.total}`, "",
+        "## By Domain", ""
+      ];
+      for (const [dom, n] of Object.entries(states.by_domain)) {
+        lines.push(`- **${dom}**: ${n}`);
+      }
+      const content = lines.join("\n") + "\n";
+      fs.writeFileSync("/data/ha-devices.md", content);
+      return sendJson(200, { saved: true, lines: lines.length });
+    }
+
+    // ─── Labs ────────────────────────────────────────────────
+    if (url.pathname === "/api/labs" && req.method === "GET") {
+      const items = db.get().prepare("SELECT * FROM labs_items ORDER BY id DESC").all();
+      return sendJson(200, { items });
+    }
+    if (url.pathname === "/api/labs" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.title) return sendJson(400, { error: "title erforderlich" });
+      const info = db.get().prepare(`
+        INSERT INTO labs_items(title, description, type, status, notes)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(body.title, body.description || null, body.type || "idea", body.status || "idee", body.notes || null);
+      return sendJson(200, { id: Number(info.lastInsertRowid) });
+    }
+    {
+      const m = url.pathname.match(/^\/api\/labs\/(\d+)$/);
+      if (m && req.method === "PUT") {
+        const body = await readJson(req);
+        const sets = []; const params = [];
+        for (const k of ["title", "description", "type", "status", "notes", "tool_link"]) {
+          if (k in body) { sets.push(`${k} = ?`); params.push(body[k]); }
+        }
+        if (!sets.length) return sendJson(400, { error: "nichts zu ändern" });
+        params.push(Number(m[1]));
+        const info = db.get().prepare(`UPDATE labs_items SET ${sets.join(", ")}, updated_at = datetime('now') WHERE id = ?`).run(...params);
+        return sendJson(200, { updated: info.changes });
+      }
+      if (m && req.method === "DELETE") {
+        const info = db.get().prepare("DELETE FROM labs_items WHERE id = ?").run(Number(m[1]));
+        return sendJson(200, { deleted: info.changes });
+      }
+    }
+
+    // ─── Backup-Liste ────────────────────────────────────────
+    if (url.pathname === "/api/backup/list" && req.method === "GET") {
+      const fs = await import("node:fs");
+      const dir = "/host/backups";
+      if (!fs.existsSync(dir)) return sendJson(200, { items: [], note: "/host/backups nicht gemountet" });
+      const items = fs.readdirSync(dir, { withFileTypes: true })
+        .filter(e => e.isFile() && e.name.endsWith(".tar.gz"))
+        .map(e => {
+          const st = fs.statSync(`${dir}/${e.name}`);
+          return { filename: e.name, size: st.size, size_human: humanSize(st.size), created: st.mtime.toISOString() };
+        }).sort((a,b) => b.created.localeCompare(a.created));
+      return sendJson(200, { items, dir });
     }
 
     // ─── Voice: Transcribe (audio in → Text) ─────────────────
@@ -370,6 +555,31 @@ function readJson(req) {
     req.on("end",  () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { reject(e); } });
     req.on("error", reject);
   });
+}
+
+function currentSettings() {
+  return {
+    provider: process.env.LLM_PROVIDER,
+    models: { ollama: process.env.OLLAMA_MODEL, anthropic: process.env.ANTHROPIC_MODEL },
+    flags: {
+      telegram_enabled:    process.env.TELEGRAM_ENABLED === "true",
+      scheduler_enabled:   process.env.SCHEDULER_ENABLED === "true",
+      mail_watcher_enabled: process.env.MAIL_WATCHER_ENABLED === "true",
+      telegram_voice_reply: process.env.TELEGRAM_VOICE_REPLY === "true"
+    },
+    tts: { piper_voice: process.env.PIPER_VOICE },
+    stt: { whisper_model: process.env.WHISPER_MODEL },
+    whitelist: (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").filter(Boolean),
+    embed_model: process.env.EMBED_MODEL,
+    max_tokens: process.env.MAX_TOKENS
+  };
+}
+
+function humanSize(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024*1024) return `${(n/1024).toFixed(1)} KB`;
+  if (n < 1024*1024*1024) return `${(n/1024/1024).toFixed(1)} MB`;
+  return `${(n/1024/1024/1024).toFixed(2)} GB`;
 }
 
 function readBinary(req) {

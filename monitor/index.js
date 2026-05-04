@@ -58,13 +58,20 @@ app.get("/", async (req, res) => {
     </section>
     <section class="cards">
       ${[
-        ["chat","Chat","💬","Web-Chat mit dem Agent"],
-        ["tools","Tools","🔧","Tools aktivieren / testen"],
-        ["memory","Memory","🧠","Facts / Todos / Notes"],
+        ["chat","Chat","💬","Web-Chat mit Agent"],
+        ["notes","Notes","📝","Markdown-Wissensbasis"],
+        ["memory","Memory","🧠","Facts / Todos"],
         ["reminders","Reminders","⏰","Erinnerungen"],
-        ["news","News","📰","Quellen verwalten"],
+        ["workflows","Workflows","⚙️","Mehrstufige Tasks"],
+        ["delegations","Delegations","👥","Aufgaben delegieren"],
+        ["labs","Labs","🧪","Ideen + Drafts"],
+        ["news","News","📰","Quellen-Config"],
+        ["tools","Tools","🔧","Tools verwalten"],
+        ["voice","Voice","🎙","TTS/STT-Test"],
+        ["ha-editor","HA","🏠","HA-Devices"],
         ["health","Health","🩺","Container-Status"],
-        ["settings","Settings","⚙️","Konfiguration"]
+        ["backup","Backup","💾","Backups"],
+        ["settings","Settings","🛠","Konfiguration"]
       ].map(([p, t, e, d]) => `<a class="card-link" href="/${p}"><div class="card"><h3>${e} ${t}</h3><p class="lead">${d}</p></div></a>`).join("")}
     </section>
   `));
@@ -77,6 +84,13 @@ app.get("/reminders", (req, res) => res.send(layout("reminders", "Reminders", re
 app.get("/news", (req, res) => res.send(layout("news", "News-Quellen", newsBody())));
 app.get("/health", (req, res) => res.send(layout("health", "Health", healthBody())));
 app.get("/settings", (req, res) => res.send(layout("settings", "Settings", settingsBody())));
+app.get("/notes", (req, res) => res.send(layout("notes", "Notes", notesBody())));
+app.get("/workflows", (req, res) => res.send(layout("workflows", "Workflows", workflowsBody())));
+app.get("/delegations", (req, res) => res.send(layout("delegations", "Delegations", delegationsBody())));
+app.get("/ha-editor", (req, res) => res.send(layout("ha-editor", "HA-Editor", haEditorBody())));
+app.get("/voice", (req, res) => res.send(layout("voice", "Voice-Test", voiceBody())));
+app.get("/backup", (req, res) => res.send(layout("backup", "Backups", backupBody())));
+app.get("/labs", (req, res) => res.send(layout("labs", "Labs", labsBody())));
 
 app.listen(PORT, "0.0.0.0", () => console.log(`[kiasy-monitor] v${pkg.version} listening on :${PORT}`));
 
@@ -380,29 +394,472 @@ function healthBody() {
 
 function settingsBody() {
   return `
-    <div class="page-head"><h2>Settings</h2></div>
-    <p class="dim">Read-only. Änderungen aktuell nur via <code>.env</code> + <code>docker compose up -d kiasy-core</code> (recreate für ENV-Reload).</p>
-    <div id="settings-content"></div>
+    <div class="page-head"><h2>Settings</h2><button class="btn primary" onclick="saveAll()">💾 Speichern</button></div>
+    <p class="dim">Änderungen werden in <code>.env</code> geschrieben. Container muss neu erstellt werden um sie zu laden — Button "Apply (Recreate)" erinnert dich daran.</p>
+    <div id="settings-form"></div>
+    <div id="save-result" style="margin-top:16px;"></div>
     <style>
       .sec { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:12px; }
       .sec h3 { font-size:14px; color:var(--text-dim); text-transform:uppercase; margin-bottom:12px; }
-      .kv { display:flex; padding:6px 0; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:13px; }
+      .kv { display:flex; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:13px; gap:12px; }
       .kv:last-child { border-bottom:none; }
-      .kv .k { flex:0 0 200px; color:var(--text-dim); }
-      .kv .v { color:var(--text); word-break:break-all; }
-      .kv .v.on { color:var(--ok); }
-      .kv .v.off { color:var(--err); }
+      .kv .k { flex:0 0 220px; color:var(--text-dim); }
+      .kv .v input, .kv .v select { width:100%; padding:6px 10px; background:var(--bg-elevated); border:1px solid var(--border); color:var(--text); border-radius:4px; font-family:var(--mono); font-size:13px; }
+      .kv .v.toggle { display:flex; align-items:center; gap:8px; }
+      .kv .v label { cursor:pointer; }
+      .kv .v { flex:1; }
       code { background:var(--bg-elevated); padding:2px 6px; border-radius:3px; font-family:var(--mono); font-size:12px; }
+      .save-msg { padding:12px 16px; border-radius:var(--radius); }
+      .save-msg.ok { background:rgba(111,229,164,0.12); border:1px solid var(--ok); color:var(--ok); }
+      .save-msg.err { background:rgba(255,107,122,0.12); border:1px solid var(--err); color:var(--err); }
+      .save-msg pre { font-family:var(--mono); font-size:12px; margin-top:8px; padding:8px 12px; background:var(--bg-elevated); border-radius:6px; overflow-x:auto; }
     </style>
     <script>
-      fetch('/api/settings').then(r=>r.json()).then(s=>{
-        const sec = (title, items) => \`<div class="sec"><h3>\${title}</h3>\${items.map(([k,v,cls=''])=>\`<div class="kv"><div class="k">\${k}</div><div class="v \${cls}">\${v}</div></div>\`).join('')}</div>\`;
-        document.getElementById('settings-content').innerHTML =
-          sec('LLM', [['Provider', s.provider], ['Ollama Model', s.models.ollama], ['Anthropic Model', s.models.anthropic||'(nicht aktiv)']]) +
-          sec('Voice', [['STT (Whisper)', s.stt.whisper_model], ['TTS (Piper)', s.tts.piper_voice]]) +
-          sec('Subsysteme (ENABLED-Flags)', Object.entries(s.flags).map(([k,v])=>[k, v?'an':'aus', v?'on':'off'])) +
-          sec('Telegram-Whitelist', [['IDs', s.whitelist.join(', ') || '(leer = alle abgelehnt)']]);
-      });
+      const FIELDS = {
+        'LLM': [
+          ['LLM_PROVIDER', 'Provider', 'select', ['ollama','anthropic']],
+          ['OLLAMA_MODEL', 'Ollama Model', 'text'],
+          ['ANTHROPIC_MODEL', 'Anthropic Model', 'text'],
+          ['MAX_TOKENS', 'Max Tokens', 'text']
+        ],
+        'Voice': [
+          ['WHISPER_MODEL', 'Whisper Model', 'select', ['tiny','base','small','medium','large-v3']],
+          ['PIPER_VOICE', 'Piper Voice', 'text']
+        ],
+        'Subsysteme (Restart nötig)': [
+          ['TELEGRAM_ENABLED', 'Telegram-Bot', 'bool'],
+          ['SCHEDULER_ENABLED', 'Reminder-Scheduler', 'bool'],
+          ['MAIL_WATCHER_ENABLED', 'Mail-Watcher', 'bool'],
+          ['TELEGRAM_VOICE_REPLY', 'Telegram antwortet per Voice', 'bool']
+        ],
+        'Telegram': [
+          ['TELEGRAM_ALLOWED_USERS', 'Whitelist (comma-separated IDs)', 'text']
+        ]
+      };
+      let current = {};
+      async function load(){
+        const s = await (await fetch('/api/settings')).json();
+        current = {
+          LLM_PROVIDER: s.provider, OLLAMA_MODEL: s.models.ollama, ANTHROPIC_MODEL: s.models.anthropic,
+          WHISPER_MODEL: s.stt.whisper_model, PIPER_VOICE: s.tts.piper_voice,
+          TELEGRAM_ENABLED: s.flags.telegram_enabled, SCHEDULER_ENABLED: s.flags.scheduler_enabled,
+          MAIL_WATCHER_ENABLED: s.flags.mail_watcher_enabled, TELEGRAM_VOICE_REPLY: s.flags.telegram_voice_reply,
+          TELEGRAM_ALLOWED_USERS: s.whitelist.join(','), MAX_TOKENS: s.max_tokens
+        };
+        document.getElementById('settings-form').innerHTML = Object.entries(FIELDS).map(([sec, fields]) =>
+          \`<div class="sec"><h3>\${sec}</h3>\${fields.map(([k, label, type, opts]) => {
+            const v = current[k];
+            let input;
+            if (type === 'bool') {
+              input = \`<div class="v toggle"><input type="checkbox" id="f-\${k}" \${v?'checked':''}><label for="f-\${k}">\${v?'an':'aus'}</label></div>\`;
+            } else if (type === 'select') {
+              input = \`<div class="v"><select id="f-\${k}">\${(opts||[]).map(o => \`<option \${o===v?'selected':''}>\${o}</option>\`).join('')}</select></div>\`;
+            } else {
+              input = \`<div class="v"><input type="text" id="f-\${k}" value="\${(v??'').toString().replace(/"/g,'&quot;')}"></div>\`;
+            }
+            return \`<div class="kv"><div class="k">\${label}<br><small style="opacity:0.5">\${k}</small></div>\${input}</div>\`;
+          }).join('')}</div>\`
+        ).join('');
+      }
+      async function saveAll(){
+        const updates = {};
+        for (const fields of Object.values(FIELDS)) {
+          for (const [k, , type] of fields) {
+            const el = document.getElementById('f-' + k);
+            if (!el) continue;
+            if (type === 'bool') updates[k] = el.checked ? 'true' : 'false';
+            else updates[k] = el.value;
+          }
+        }
+        const r = await fetch('/api/settings', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
+        const data = await r.json();
+        const msg = document.getElementById('save-result');
+        if (r.ok) {
+          msg.innerHTML = '<div class="save-msg ok">✓ '+data.saved+' Werte gespeichert. Recreate damit ENV greift:<pre>'+ (data.hint||'') +'</pre></div>';
+        } else {
+          msg.innerHTML = '<div class="save-msg err">✗ '+(data.error||'Fehler')+'</div>';
+        }
+      }
+      load();
+    </script>`;
+}
+
+// ─── Notes Page ───────────────────────────────────────────
+function notesBody() {
+  return `
+    <div class="page-head"><h2>Notes</h2><div><button class="btn" onclick="newNote()">+ neu</button></div></div>
+    <div class="notes-layout">
+      <div class="notes-list" id="notes-list">lade…</div>
+      <div class="notes-editor">
+        <input id="note-filename" class="input" placeholder="filename.md" disabled>
+        <textarea id="note-content" class="input mono" rows="22" placeholder="(Datei links wählen)"></textarea>
+        <div class="note-actions">
+          <button class="btn primary" onclick="saveNote()">💾 Speichern</button>
+          <button class="btn" onclick="delNote()">✕ Löschen</button>
+        </div>
+      </div>
+    </div>
+    <style>
+      .notes-layout { display:grid; grid-template-columns:280px 1fr; gap:16px; height:calc(100vh - 220px); }
+      .notes-list { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:8px; overflow-y:auto; }
+      .notes-list .n { padding:8px 12px; cursor:pointer; border-radius:6px; font-size:13px; }
+      .notes-list .n:hover { background:var(--bg-elevated); }
+      .notes-list .n.active { background:var(--accent-soft); color:var(--accent); }
+      .notes-list .n small { display:block; color:var(--text-dim); font-size:11px; margin-top:2px; }
+      .notes-editor { display:flex; flex-direction:column; gap:8px; }
+      .notes-editor textarea { flex:1; resize:none; }
+      .input { padding:8px 12px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
+      .input.mono { font-family:var(--mono); font-size:13px; line-height:1.6; }
+      .input:disabled { opacity:0.6; }
+      .note-actions { display:flex; gap:8px; }
+      @media(max-width:700px){.notes-layout{grid-template-columns:1fr;height:auto;}}
+    </style>
+    <script>
+      let activeFile = null;
+      async function loadList(){
+        const r = await (await fetch('/api/notes')).json();
+        document.getElementById('notes-list').innerHTML = r.items.length?r.items.map(n=>\`
+          <div class="n \${n.filename===activeFile?'active':''}" onclick="openNote('\${n.filename}')"><strong>\${n.filename}</strong><small>\${n.size}B · \${n.modified.substring(0,10)}</small></div>
+        \`).join(''):'<p class="dim" style="padding:12px">keine Notes</p>';
+      }
+      async function openNote(filename){
+        activeFile = filename;
+        const r = await (await fetch('/api/notes/' + encodeURIComponent(filename))).json();
+        document.getElementById('note-filename').value = filename;
+        document.getElementById('note-filename').disabled = true;
+        document.getElementById('note-content').value = r.content || '';
+        loadList();
+      }
+      function newNote(){
+        activeFile = null;
+        document.getElementById('note-filename').value = '';
+        document.getElementById('note-filename').disabled = false;
+        document.getElementById('note-content').value = '';
+        document.getElementById('note-filename').focus();
+      }
+      async function saveNote(){
+        const filename = document.getElementById('note-filename').value.trim();
+        if (!filename || !filename.endsWith('.md')) return alert('filename.md erforderlich');
+        const content = document.getElementById('note-content').value;
+        await fetch('/api/notes/' + encodeURIComponent(filename), {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
+        activeFile = filename;
+        document.getElementById('note-filename').disabled = true;
+        loadList();
+      }
+      async function delNote(){
+        if (!activeFile) return;
+        if (!confirm('Datei "'+activeFile+'" löschen?')) return;
+        await fetch('/api/notes/' + encodeURIComponent(activeFile), {method:'DELETE'});
+        activeFile = null;
+        document.getElementById('note-filename').value = '';
+        document.getElementById('note-content').value = '';
+        loadList();
+      }
+      loadList();
+    </script>`;
+}
+
+// ─── Workflows Page ───────────────────────────────────────
+function workflowsBody() {
+  return `
+    <div class="page-head"><h2>Workflows</h2></div>
+    <h3>Neuer Workflow</h3>
+    <div class="add-form">
+      <input id="wf-name" placeholder="Name" class="input">
+      <textarea id="wf-steps" placeholder='Steps als JSON-Array, z.B. [{"action":"Hole das Wetter"},{"action":"Schicke per Telegram","delay_minutes":1}]' rows="4" class="input mono"></textarea>
+      <button class="btn primary" onclick="addWf()">erstellen</button>
+    </div>
+    <h3 style="margin-top:24px">Workflows</h3>
+    <div id="wf-list" class="list"></div>
+    <div id="wf-detail" style="margin-top:24px;"></div>
+    <style>
+      .add-form { display:flex; flex-direction:column; gap:8px; max-width:700px; }
+      .add-form .input { width:100%; }
+      .input { padding:8px 12px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
+      .input.mono { font-family:var(--mono); font-size:13px; }
+      .list { display:flex; flex-direction:column; gap:6px; }
+      .row { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; display:flex; gap:12px; align-items:center; cursor:pointer; }
+      .row:hover { border-color:var(--accent); }
+      .row .id { color:var(--text-dim); font-family:var(--mono); flex:0 0 60px; }
+      .row .name { flex:1; font-weight:600; }
+      .row .badge { padding:2px 8px; border-radius:4px; font-size:11px; background:var(--bg-elevated); color:var(--text-dim); }
+      .badge.pending { color:var(--warn); } .badge.running { color:var(--accent); } .badge.done { color:var(--ok); } .badge.cancelled { color:var(--err); }
+      .step { background:var(--bg-elevated); padding:8px 12px; border-radius:6px; margin-bottom:4px; font-family:var(--mono); font-size:12px; }
+    </style>
+    <script>
+      async function loadWfs(){
+        const r = await (await fetch('/api/workflows')).json();
+        document.getElementById('wf-list').innerHTML = r.items.length?r.items.map(w=>\`
+          <div class="row" onclick="showDetail(\${w.id})"><div class="id">#\${w.id}</div><div class="name">\${escapeHtml(w.name)}</div>
+          <span class="badge \${w.status}">\${w.status}</span><span class="badge">step \${w.current_step}</span></div>
+        \`).join(''):'<p class="dim">keine Workflows</p>';
+      }
+      async function showDetail(id){
+        const w = await (await fetch('/api/workflows/' + id)).json();
+        document.getElementById('wf-detail').innerHTML = \`
+          <h3>#\${w.id} \${escapeHtml(w.name)} <button class="btn" onclick="delWf(\${w.id})">✕ löschen</button></h3>
+          \${w.steps.map((s,i)=>\`<div class="step">\${s.step_num}. [\${s.status}] \${escapeHtml(s.action)}\${s.scheduled?' (@'+s.scheduled+')':''}\${s.result?' → '+escapeHtml(s.result.substring(0,80)):''}</div>\`).join('')}\`;
+      }
+      async function addWf(){
+        const name = document.getElementById('wf-name').value.trim();
+        let steps;
+        try { steps = JSON.parse(document.getElementById('wf-steps').value); }
+        catch(e){ return alert('JSON-Fehler: '+e.message); }
+        if (!name) return alert('name fehlt');
+        await fetch('/api/workflows', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, steps})});
+        document.getElementById('wf-name').value=''; document.getElementById('wf-steps').value=''; loadWfs();
+      }
+      async function delWf(id){
+        if (!confirm('löschen?')) return;
+        await fetch('/api/workflows/' + id, {method:'DELETE'});
+        document.getElementById('wf-detail').innerHTML='';
+        loadWfs();
+      }
+      function escapeHtml(s){return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+      loadWfs();
+    </script>`;
+}
+
+// ─── Delegations Page ─────────────────────────────────────
+function delegationsBody() {
+  return `
+    <div class="page-head"><h2>Delegations</h2></div>
+    <h3>Neue Delegation</h3>
+    <div class="add-form">
+      <input id="d-assignee" placeholder="Wer (Name)" class="input">
+      <input id="d-email" placeholder="E-Mail (optional)" class="input">
+      <input id="d-subject" placeholder="Betreff" class="input">
+      <textarea id="d-body" placeholder="Beschreibung" rows="3" class="input"></textarea>
+      <input id="d-deadline" type="date" class="input">
+      <input id="d-followup" type="number" placeholder="Followup nach Tagen (default 3)" class="input">
+      <button class="btn primary" onclick="addDel()">anlegen</button>
+    </div>
+    <h3 style="margin-top:24px">Liste</h3>
+    <div id="d-list" class="list"></div>
+    <style>
+      .add-form { display:flex; flex-direction:column; gap:8px; max-width:600px; }
+      .add-form .input { width:100%; }
+      .input { padding:8px 12px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
+      .list { display:flex; flex-direction:column; gap:6px; }
+      .row { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; display:flex; gap:12px; align-items:flex-start; }
+      .row.overdue { border-color:var(--warn); }
+      .row .meta { flex:0 0 120px; font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+      .row .content { flex:1; }
+      .row .badge { padding:2px 6px; border-radius:4px; font-size:11px; background:var(--bg-elevated); color:var(--text-dim); margin-right:8px; }
+      .badge.open { color:var(--accent); } .badge.done { color:var(--ok); } .badge.overdue { color:var(--warn); } .badge.cancelled { color:var(--err); }
+      .row select, .row button { background:var(--bg-elevated); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer; }
+    </style>
+    <script>
+      async function loadDel(){
+        const r = await (await fetch('/api/delegations')).json();
+        const now = new Date();
+        document.getElementById('d-list').innerHTML = r.items.length?r.items.map(d=>{
+          const ov = d.deadline && new Date(d.deadline)<now && d.status==='open';
+          return \`<div class="row \${ov?'overdue':''}">
+            <div class="meta">#\${d.id}<br>\${d.deadline||'kein Termin'}</div>
+            <div class="content"><span class="badge \${d.status}">\${d.status}</span><strong>\${escapeHtml(d.assignee)}</strong> — \${escapeHtml(d.subject)}\${d.body?'<br><small class="dim">'+escapeHtml(d.body.substring(0,150))+'</small>':''}</div>
+            <select onchange="setStatus(\${d.id},this.value)"><option value="open" \${d.status==='open'?'selected':''}>open</option><option value="done" \${d.status==='done'?'selected':''}>done</option><option value="cancelled" \${d.status==='cancelled'?'selected':''}>cancelled</option></select>
+            <button onclick="delDel(\${d.id})">✕</button></div>\`;
+        }).join(''):'<p class="dim">keine Delegations</p>';
+      }
+      async function addDel(){
+        const body = {
+          assignee: document.getElementById('d-assignee').value.trim(),
+          assignee_email: document.getElementById('d-email').value.trim() || null,
+          subject: document.getElementById('d-subject').value.trim(),
+          body: document.getElementById('d-body').value.trim() || null,
+          deadline: document.getElementById('d-deadline').value || null,
+          followup_days: Number(document.getElementById('d-followup').value) || 3
+        };
+        if (!body.assignee || !body.subject) return alert('Wer + Betreff nötig');
+        await fetch('/api/delegations', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        ['d-assignee','d-email','d-subject','d-body','d-deadline','d-followup'].forEach(i=>document.getElementById(i).value='');
+        loadDel();
+      }
+      async function setStatus(id, status){
+        await fetch('/api/delegations/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+        loadDel();
+      }
+      async function delDel(id){
+        if (!confirm('löschen?')) return;
+        await fetch('/api/delegations/' + id, {method:'DELETE'});
+        loadDel();
+      }
+      function escapeHtml(s){return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+      loadDel();
+    </script>`;
+}
+
+// ─── HA-Editor Page ───────────────────────────────────────
+function haEditorBody() {
+  return `
+    <div class="page-head"><h2>Home-Assistant Devices</h2><button class="btn" onclick="regen()">↻ aus HA neu generieren</button></div>
+    <p class="dim">Markdown-Beschreibung der HA-Geräte. Wird vom Agent in den System-Prompt eingespeist.</p>
+    <textarea id="ha-content" class="input mono" rows="28" placeholder="lade…"></textarea>
+    <div style="margin-top:12px;"><button class="btn primary" onclick="save()">💾 Speichern</button></div>
+    <style>
+      .input { padding:12px 16px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--font); font-size:14px; width:100%; }
+      .input.mono { font-family:var(--mono); font-size:13px; line-height:1.6; resize:vertical; }
+    </style>
+    <script>
+      async function load(){
+        const r = await (await fetch('/api/ha/devices')).json();
+        document.getElementById('ha-content').value = r.content || '';
+      }
+      async function save(){
+        await fetch('/api/ha/devices', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content: document.getElementById('ha-content').value})});
+        alert('gespeichert');
+      }
+      async function regen(){
+        if (!confirm('Aus aktuellen HA-States überschreiben?')) return;
+        const r = await fetch('/api/ha/devices/regenerate', {method:'POST'});
+        if (r.ok) load();
+        else alert('fehlgeschlagen — HOMEASSISTANT_TOKEN gesetzt?');
+      }
+      load();
+    </script>`;
+}
+
+// ─── Voice-Test Page ──────────────────────────────────────
+function voiceBody() {
+  return `
+    <div class="page-head"><h2>Voice-Test</h2></div>
+    <div class="sec">
+      <h3>TTS — Text → Audio (Piper)</h3>
+      <textarea id="tts-text" class="input" rows="3" placeholder="Text…">Hallo, das ist ein Voice-Test mit Piper.</textarea>
+      <input id="tts-voice" class="input" placeholder="Piper-Voice (optional, default aus ENV)">
+      <button class="btn primary" onclick="synth()">🔊 Synthesize</button>
+      <audio id="tts-audio" controls style="display:block;margin-top:12px;width:100%;"></audio>
+    </div>
+    <div class="sec">
+      <h3>STT — Audio → Text (Whisper)</h3>
+      <input type="file" id="stt-file" accept="audio/*" class="input">
+      <button class="btn primary" onclick="transcribe()">📝 Transkribieren</button>
+      <pre id="stt-result" class="result"></pre>
+    </div>
+    <style>
+      .sec { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:16px; }
+      .sec h3 { margin-bottom:12px; }
+      .sec .input, .sec textarea { width:100%; margin-bottom:8px; padding:8px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
+      .result { background:var(--bg-elevated); padding:12px 16px; border-radius:6px; font-family:var(--mono); font-size:13px; min-height:40px; margin-top:8px; }
+    </style>
+    <script>
+      async function synth(){
+        const text = document.getElementById('tts-text').value.trim();
+        const voice = document.getElementById('tts-voice').value.trim();
+        if (!text) return;
+        const r = await fetch('/api/voice/synth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text, voice: voice||undefined})});
+        if (!r.ok) return alert('Synth fehlgeschlagen');
+        const blob = await r.blob();
+        document.getElementById('tts-audio').src = URL.createObjectURL(blob);
+        document.getElementById('tts-audio').play();
+      }
+      async function transcribe(){
+        const f = document.getElementById('stt-file').files[0];
+        if (!f) return;
+        const ext = (f.name.split('.').pop() || 'm4a').toLowerCase();
+        document.getElementById('stt-result').textContent = '⏳ transkribiere…';
+        const r = await fetch('/api/voice/transcribe?lang=de&ext='+ext, {method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f});
+        const data = await r.json();
+        document.getElementById('stt-result').textContent = JSON.stringify(data, null, 2);
+      }
+    </script>`;
+}
+
+// ─── Backup Page ──────────────────────────────────────────
+function backupBody() {
+  return `
+    <div class="page-head"><h2>Backups</h2></div>
+    <p class="dim">Liste aller Backup-Tarballs in <code>/home/mcde/kiasy/backups/</code>. Erstellen via Host:</p>
+    <pre class="result">bash /home/mcde/kiasy/scripts/backup.sh</pre>
+    <h3 style="margin-top:24px">Vorhandene Backups</h3>
+    <div id="bk-list" class="list"></div>
+    <style>
+      .result { background:var(--bg-card); border:1px solid var(--border); padding:12px 16px; border-radius:6px; font-family:var(--mono); font-size:13px; user-select:all; }
+      .list { display:flex; flex-direction:column; gap:6px; }
+      .row { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; display:flex; gap:12px; align-items:center; }
+      .row .name { flex:1; font-family:var(--mono); font-size:13px; }
+      .row .size { color:var(--text-dim); font-family:var(--mono); font-size:12px; }
+      .row .date { color:var(--text-dim); font-size:12px; }
+    </style>
+    <script>
+      async function load(){
+        const r = await (await fetch('/api/backup/list')).json();
+        document.getElementById('bk-list').innerHTML = r.items.length?r.items.map(b=>\`
+          <div class="row"><div class="name">\${b.filename}</div><div class="size">\${b.size_human}</div><div class="date">\${b.created.substring(0,19).replace('T',' ')}</div></div>
+        \`).join(''):'<p class="dim">noch keine Backups in '+r.dir+'. '+(r.note||'')+'</p>';
+      }
+      load();
+    </script>`;
+}
+
+// ─── Labs Page ────────────────────────────────────────────
+function labsBody() {
+  return `
+    <div class="page-head"><h2>Labs <small style="color:var(--text-dim);font-size:13px;">— Ideen, Drafts, Experimente</small></h2></div>
+    <h3>Neue Idee</h3>
+    <div class="add-form">
+      <input id="l-title" placeholder="Titel" class="input">
+      <select id="l-type" class="input"><option value="idea">Idee</option><option value="draft">Tool-Draft</option><option value="experiment">Experiment</option><option value="tool">Tool</option></select>
+      <textarea id="l-desc" placeholder="Beschreibung" rows="3" class="input"></textarea>
+      <button class="btn primary" onclick="addLab()">anlegen</button>
+    </div>
+    <div class="kanban" id="kanban"></div>
+    <style>
+      .add-form { display:flex; flex-direction:column; gap:8px; max-width:600px; margin-bottom:24px; }
+      .add-form .input { width:100%; }
+      .input { padding:8px 12px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
+      .kanban { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+      .col { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px; min-height:100px; }
+      .col h4 { font-size:12px; color:var(--text-dim); text-transform:uppercase; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+      .item { background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:8px 10px; margin-bottom:6px; font-size:12px; }
+      .item .title { font-weight:600; margin-bottom:4px; }
+      .item .desc { color:var(--text-dim); }
+      .item .actions { display:flex; gap:4px; margin-top:6px; }
+      .item select, .item button { background:var(--bg-card); border:1px solid var(--border); color:var(--text-dim); padding:2px 6px; border-radius:3px; font-size:11px; cursor:pointer; }
+      .item .badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; background:var(--bg-card); color:var(--text-dim); margin-bottom:4px; }
+      @media(max-width:1000px){.kanban{grid-template-columns:repeat(2,1fr);}}
+    </style>
+    <script>
+      const STATUSES = ['idee','konzept','bauen','live','verworfen'];
+      async function loadLabs(){
+        const r = await (await fetch('/api/labs')).json();
+        const byStatus = Object.fromEntries(STATUSES.map(s => [s, []]));
+        for (const it of r.items) (byStatus[it.status] || (byStatus[it.status]=[])).push(it);
+        document.getElementById('kanban').innerHTML = STATUSES.map(s => \`
+          <div class="col"><h4>\${s} (\${byStatus[s].length})</h4>
+            \${byStatus[s].map(it => \`
+              <div class="item">
+                <span class="badge">\${it.type}</span>
+                <div class="title">\${escapeHtml(it.title)}</div>
+                \${it.description?'<div class="desc">'+escapeHtml(it.description.substring(0,100))+'</div>':''}
+                <div class="actions">
+                  <select onchange="setStatus(\${it.id},this.value)">\${STATUSES.map(st => \`<option \${st===it.status?'selected':''}>\${st}</option>\`).join('')}</select>
+                  <button onclick="delLab(\${it.id})">✕</button>
+                </div>
+              </div>\`).join('')}</div>\`).join('');
+      }
+      async function addLab(){
+        const body = {
+          title: document.getElementById('l-title').value.trim(),
+          type: document.getElementById('l-type').value,
+          description: document.getElementById('l-desc').value.trim() || null
+        };
+        if (!body.title) return alert('Titel fehlt');
+        await fetch('/api/labs', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        document.getElementById('l-title').value=''; document.getElementById('l-desc').value=''; loadLabs();
+      }
+      async function setStatus(id, status){
+        await fetch('/api/labs/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+        loadLabs();
+      }
+      async function delLab(id){
+        if (!confirm('löschen?')) return;
+        await fetch('/api/labs/' + id, {method:'DELETE'});
+        loadLabs();
+      }
+      function escapeHtml(s){return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+      loadLabs();
     </script>`;
 }
 
@@ -413,11 +870,18 @@ function layout(active, title, body) {
   const navItems = [
     ["dashboard","/","Dashboard"],
     ["chat","/chat","Chat"],
-    ["tools","/tools","Tools"],
+    ["notes","/notes","Notes"],
     ["memory","/memory","Memory"],
     ["reminders","/reminders","Reminders"],
+    ["workflows","/workflows","Workflows"],
+    ["delegations","/delegations","Delegations"],
+    ["labs","/labs","Labs"],
     ["news","/news","News"],
+    ["tools","/tools","Tools"],
+    ["voice","/voice","Voice"],
+    ["ha-editor","/ha-editor","HA"],
     ["health","/health","Health"],
+    ["backup","/backup","Backup"],
     ["settings","/settings","Settings"]
   ];
   return `<!doctype html>

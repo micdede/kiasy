@@ -50,6 +50,8 @@ services:
       - ./data:/data
       - ./notes:/data/notes
       - ./db:/db:ro             # Migration-Files
+      - ./.env:/host/.env:rw    # editable Settings via API
+      - ./backups:/host/backups # Backup-Liste lesen
     expose:
       - "8080"           # API + SSE
       - "8081"           # WebSocket (Echtdialog Phase 3)
