@@ -9,9 +9,12 @@
 import TelegramBot from "node-telegram-bot-api";
 import * as agent from "./agent.js";
 import * as db from "./db.js";
+import * as whisper from "./whisper.js";
+import * as piper from "./piper.js";
 
 const TOKEN   = process.env.TELEGRAM_TOKEN;
 const ENABLED = process.env.TELEGRAM_ENABLED === "true";
+const VOICE_REPLY = process.env.TELEGRAM_VOICE_REPLY === "true";  // antwortet zusätzlich per Voice
 const ALLOWED = (process.env.TELEGRAM_ALLOWED_USERS || "")
   .split(",").map(s => s.trim()).filter(Boolean);
 
@@ -54,9 +57,29 @@ async function handleMessage(msg) {
     return;
   }
 
-  // Etappe 2: nur Text. Voice/Bilder folgen.
+  // Voice-Message → Whisper → Agent
+  if (msg.voice) {
+    try {
+      bot.sendChatAction(chatId, "typing").catch(() => {});
+      const fileLink = await bot.getFileLink(msg.voice.file_id);
+      const audio = await fetch(fileLink).then(r => r.arrayBuffer());
+      const trans = await whisper.transcribe(Buffer.from(audio), { language: "de", ext: "ogg" });
+      const text = trans.text || "";
+      console.log(`[telegram] ${fromId} voice → "${text.substring(0, 80)}"`);
+      db.logEvent({ type: "telegram-voice-in", message: text.substring(0, 200), meta: { fromId, dur: msg.voice.duration } });
+
+      const result = await agent.handle({ chatId, message: text });
+      await safeReply(chatId, `🎙 \`${text}\`\n\n${result.text || "(leere Antwort)"}`);
+      if (VOICE_REPLY) await sendVoice(chatId, result.text);
+    } catch (err) {
+      console.error("[telegram] voice handler:", err);
+      await safeReply(chatId, `Voice-Fehler: ${err.message || err}`);
+    }
+    return;
+  }
+
   if (!msg.text) {
-    await safeReply(chatId, "Voice/Bilder kommen noch — bitte Text.");
+    await safeReply(chatId, "Bilder kommen noch — bitte Text oder Voice.");
     return;
   }
 
@@ -67,9 +90,20 @@ async function handleMessage(msg) {
     bot.sendChatAction(chatId, "typing").catch(() => {});
     const result = await agent.handle({ chatId, message: msg.text });
     await safeReply(chatId, result.text || "(leere Antwort)");
+    if (VOICE_REPLY) await sendVoice(chatId, result.text);
   } catch (err) {
     console.error("[telegram] handler error:", err);
     await safeReply(chatId, `Fehler: ${err.message || err}`);
+  }
+}
+
+async function sendVoice(chatId, text) {
+  if (!text) return;
+  try {
+    const wav = await piper.synthesize(text, { asWav: true });
+    await bot.sendVoice(chatId, wav, {}, { filename: "reply.wav", contentType: "audio/wav" });
+  } catch (err) {
+    console.error("[telegram] sendVoice failed:", err.message);
   }
 }
 

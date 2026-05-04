@@ -1,6 +1,6 @@
 {
   "name": "kiasy-core",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "kiasy v2 — Agent, Tools, Telegram, Mail, Scheduler",
   "type": "module",
   "main": "index.js",
@@ -14,6 +14,9 @@
     "better-sqlite3": "^11.5.0",
     "@anthropic-ai/sdk": "^0.32.0",
     "openai": "^4.73.0",
-    "node-telegram-bot-api": "^0.66.0"
+    "node-telegram-bot-api": "^0.66.0",
+    "cheerio": "^1.0.0",
+    "imapflow": "^1.0.171",
+    "nodemailer": "^6.9.0"
   }
 }
