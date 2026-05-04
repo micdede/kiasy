@@ -12,6 +12,35 @@ name: kiasy
 
 services:
 
+  # ─── Deploy-Helper ─────────────────────────────────────────
+  # Watches /project/.recreate-<service> Flags und führt
+  # `docker compose up -d <service>` aus. Erlaubt der Settings-Page
+  # einen automatischen Recreate nach .env-Edit ohne dass kiasy-core
+  # selbst Docker-Socket-Zugriff braucht.
+  deploy:
+    image: docker:cli
+    container_name: kiasy-deploy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project
+    working_dir: /project
+    command:
+      - sh
+      - -c
+      - |
+        echo "[deploy] watcher gestartet"
+        while true; do
+          for f in /project/.recreate-*; do
+            [ -e "$$f" ] || continue
+            svc=$$(basename "$$f" | sed 's/^.recreate-//')
+            rm -f "$$f"
+            echo "[deploy] $$(date -Iseconds) recreate $$svc"
+            docker compose up -d "$$svc" 2>&1 | tail -5
+          done
+          sleep 2
+        done
+
   # ─── Reverse-Proxy + TLS ───────────────────────────────────
   caddy:
     image: caddy:2-alpine
@@ -50,8 +79,7 @@ services:
       - ./data:/data
       - ./notes:/data/notes
       - ./db:/db:ro             # Migration-Files
-      - ./.env:/host/.env:rw    # editable Settings via API
-      - ./backups:/host/backups # Backup-Liste lesen
+      - ./:/host:rw             # editable .env, backups, recreate-Trigger
     expose:
       - "8080"           # API + SSE
       - "8081"           # WebSocket (Echtdialog Phase 3)

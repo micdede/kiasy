@@ -394,8 +394,13 @@ function healthBody() {
 
 function settingsBody() {
   return `
-    <div class="page-head"><h2>Settings</h2><button class="btn primary" onclick="saveAll()">💾 Speichern</button></div>
-    <p class="dim">Änderungen werden in <code>.env</code> geschrieben. Container muss neu erstellt werden um sie zu laden — Button "Apply (Recreate)" erinnert dich daran.</p>
+    <div class="page-head"><h2>Settings</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="saveAll(false)">💾 Speichern</button>
+        <button class="btn primary" onclick="saveAll(true)">💾 Speichern + Recreate</button>
+      </div>
+    </div>
+    <p class="dim">Änderungen werden in <code>.env</code> geschrieben. <b>Recreate</b> startet kiasy-core via deploy-Sidecar automatisch neu (5–10s).</p>
     <div id="settings-form"></div>
     <div id="save-result" style="margin-top:16px;"></div>
     <style>
@@ -461,7 +466,7 @@ function settingsBody() {
           }).join('')}</div>\`
         ).join('');
       }
-      async function saveAll(){
+      async function saveAll(applyAfter){
         const updates = {};
         for (const fields of Object.values(FIELDS)) {
           for (const [k, , type] of fields) {
@@ -471,14 +476,33 @@ function settingsBody() {
             else updates[k] = el.value;
           }
         }
+        const msg = document.getElementById('save-result');
+        msg.innerHTML = '<div class="save-msg">⏳ speichere…</div>';
         const r = await fetch('/api/settings', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({updates})});
         const data = await r.json();
-        const msg = document.getElementById('save-result');
-        if (r.ok) {
-          msg.innerHTML = '<div class="save-msg ok">✓ '+data.saved+' Werte gespeichert. Recreate damit ENV greift:<pre>'+ (data.hint||'') +'</pre></div>';
-        } else {
-          msg.innerHTML = '<div class="save-msg err">✗ '+(data.error||'Fehler')+'</div>';
+        if (!r.ok) { msg.innerHTML = '<div class="save-msg err">✗ '+(data.error||'Fehler')+'</div>'; return; }
+        if (!applyAfter) {
+          msg.innerHTML = '<div class="save-msg ok">✓ '+data.saved+' Werte gespeichert. <em>kiasy-core</em> noch nicht recreated — Button rechts klicken oder manuell.</div>';
+          return;
         }
+        msg.innerHTML = '<div class="save-msg ok">✓ '+data.saved+' gespeichert. ⏳ Recreate-Trigger gesetzt…</div>';
+        await fetch('/api/restart', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:'kiasy-core'})});
+        // Jetzt poll /health bis core wieder antwortet (max 30s)
+        msg.innerHTML = '<div class="save-msg">⏳ warte auf kiasy-core…</div>';
+        const t0 = Date.now();
+        while (Date.now() - t0 < 30000) {
+          await new Promise(r => setTimeout(r, 1500));
+          try {
+            const h = await fetch('/api/status', {signal: AbortSignal.timeout(2000)});
+            if (h.ok) {
+              const took = ((Date.now() - t0) / 1000).toFixed(1);
+              msg.innerHTML = '<div class="save-msg ok">✓ Recreated in '+took+'s — Settings sind aktiv.</div>';
+              load();
+              return;
+            }
+          } catch {}
+        }
+        msg.innerHTML = '<div class="save-msg err">⚠ Core kommt nicht hoch — <code>docker compose logs kiasy-core</code> prüfen</div>';
       }
       load();
     </script>`;

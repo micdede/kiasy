@@ -290,6 +290,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, currentSettings());
     }
 
+    // ─── Restart (über deploy-Sidecar) ──────────────────────
+    if (url.pathname === "/api/restart" && req.method === "POST") {
+      const body = await readJson(req);
+      const svc = body.service || "kiasy-core";
+      if (!/^[a-z0-9-]+$/.test(svc)) return sendJson(400, { error: "service-Name ungültig" });
+      const fs = await import("node:fs");
+      try {
+        fs.writeFileSync(`/host/.recreate-${svc}`, "");
+        return sendJson(202, { triggered: svc, hint: "Container kommt in 2-5s neu hoch" });
+      } catch (err) {
+        return sendJson(500, { error: "Trigger nicht schreibbar — deploy-Sidecar läuft?" });
+      }
+    }
+
     // ─── Settings PUT (.env-Datei updaten) ──────────────────
     if (url.pathname === "/api/settings" && req.method === "PUT") {
       const body = await readJson(req);
