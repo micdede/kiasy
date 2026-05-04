@@ -6,6 +6,7 @@ import { readFileSync, existsSync } from "node:fs";
 import * as db from "./lib/db.js";
 import * as agent from "./lib/agent.js";
 import * as tools from "./lib/tools.js";
+import * as vectors from "./lib/vectors.js";
 import * as telegram from "./lib/telegram.js";
 import * as scheduler from "./lib/scheduler.js";
 import * as mailWatcher from "./lib/mail-watcher.js";
@@ -17,6 +18,7 @@ const STARTED = Date.now();
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url)));
 
 db.init();
+await vectors.init();
 telegram.start();
 scheduler.start();
 mailWatcher.start();
@@ -46,13 +48,26 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, {
         phase: 3, etappe: "sprint",
         provider: process.env.LLM_PROVIDER || "ollama",
-        model_anthropic: process.env.ANTHROPIC_MODEL,
-        model_ollama:    process.env.OLLAMA_MODEL,
+        models: {
+          chat:     process.env.OLLAMA_MODEL,
+          cheap:    process.env.OLLAMA_MODEL_CHEAP || process.env.OLLAMA_MODEL,
+          embed:    process.env.OLLAMA_MODEL_EMBED || "bge-m3",
+          anthropic: process.env.ANTHROPIC_MODEL
+        },
         telegram:    telegram.getInfo(),
         scheduler:   scheduler.getInfo(),
         mailWatcher: mailWatcher.getInfo(),
+        vectors:     vectors.getInfo(),
         tools:       toolInfo
       });
+    }
+
+    // ─── Semantic Memory Search ──────────────────────────────
+    if (url.pathname === "/api/memory/search/semantic" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.query) return sendJson(400, { error: "query erforderlich" });
+      const results = await vectors.search(body.query, body.limit || 5);
+      return sendJson(200, { count: results.length, results });
     }
 
     // ─── Tools ───────────────────────────────────────────────
@@ -574,17 +589,23 @@ function readJson(req) {
 function currentSettings() {
   return {
     provider: process.env.LLM_PROVIDER,
-    models: { ollama: process.env.OLLAMA_MODEL, anthropic: process.env.ANTHROPIC_MODEL },
+    models: {
+      ollama:        process.env.OLLAMA_MODEL,
+      ollama_cheap:  process.env.OLLAMA_MODEL_CHEAP,
+      ollama_embed:  process.env.OLLAMA_MODEL_EMBED,
+      anthropic:     process.env.ANTHROPIC_MODEL
+    },
     flags: {
-      telegram_enabled:    process.env.TELEGRAM_ENABLED === "true",
-      scheduler_enabled:   process.env.SCHEDULER_ENABLED === "true",
-      mail_watcher_enabled: process.env.MAIL_WATCHER_ENABLED === "true",
-      telegram_voice_reply: process.env.TELEGRAM_VOICE_REPLY === "true"
+      telegram_enabled:      process.env.TELEGRAM_ENABLED === "true",
+      scheduler_enabled:     process.env.SCHEDULER_ENABLED === "true",
+      mail_watcher_enabled:  process.env.MAIL_WATCHER_ENABLED === "true",
+      telegram_voice_reply:  process.env.TELEGRAM_VOICE_REPLY === "true",
+      vector_memory_enabled: process.env.VECTOR_MEMORY_ENABLED === "true"
     },
     tts: { piper_voice: process.env.PIPER_VOICE },
     stt: { whisper_model: process.env.WHISPER_MODEL },
     whitelist: (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").filter(Boolean),
-    embed_model: process.env.EMBED_MODEL,
+    embed_dim: process.env.EMBED_DIM,
     max_tokens: process.env.MAX_TOKENS
   };
 }

@@ -7,31 +7,36 @@
 
 import * as db from "./db.js";
 import * as tools from "./tools.js";
+import * as vectors from "./vectors.js";
 import { getProvider } from "./providers.js";
 
 const HISTORY_LIMIT = Number(process.env.AGENT_HISTORY_LIMIT) || 30;
 const MAX_TURNS     = Number(process.env.AGENT_MAX_TURNS) || 10;
+const RECALL_K      = Number(process.env.AGENT_RECALL_K) || 5;
 
-export async function handle({ chatId, message, provider }) {
+export async function handle({ chatId, message, provider, role }) {
   if (!chatId || !message) throw new Error("chatId+message erforderlich");
 
-  // 1. User-Message persistieren
-  db.saveMessage({ chatId, role: "user", content: message });
+  // 1. User-Message persistieren + im Hintergrund vektorisieren
+  const userMsgId = db.saveMessage({ chatId, role: "user", content: message });
+  vectors.upsertMessage(userMsgId, message, { chat_id: chatId, role: "user" }).catch(() => {});
 
-  // 2. Verlauf laden + Tools holen
+  // 2. Verlauf laden + Semantic-Recall + Tools
   const history = loadHistory(chatId);
   const toolDefs = await tools.getDefinitions();
-  const llm = getProvider(provider);
+  const recall = await semanticRecall(chatId, message);
+  const llm = getProvider(role || provider || "chat");
 
   // 3. Loop bis kein tool_use mehr ODER MAX_TURNS
   const messages = [...history];
   let lastText = "";
   let lastUsage = null;
   let turn = 0;
+  const systemSuffix = recall.length ? buildRecallSystem(recall) : null;
 
   while (turn < MAX_TURNS) {
     turn++;
-    const res = await llm.chat({ messages, tools: toolDefs });
+    const res = await llm.chat({ messages, tools: toolDefs, system: systemSuffix });
     lastText = res.text;
     lastUsage = res.usage;
 
@@ -75,11 +80,12 @@ export async function handle({ chatId, message, provider }) {
     }
   }
 
-  // 4. Finale Assistant-Antwort speichern
+  // 4. Finale Assistant-Antwort speichern + vektorisieren
   const messageId = db.saveMessage({
     chatId, role: "assistant", content: lastText,
-    meta: { usage: lastUsage, model: llm.model, turn, final: true }
+    meta: { usage: lastUsage, model: llm.model, turn, final: true, recall: recall.length }
   });
+  vectors.upsertMessage(messageId, lastText, { chat_id: chatId, role: "assistant" }).catch(() => {});
 
   db.logEvent({
     type: "message",
@@ -90,14 +96,17 @@ export async function handle({ chatId, message, provider }) {
   return { text: lastText, turns: turn, messageId, usage: lastUsage };
 }
 
-export async function* streamHandle({ chatId, message, provider }) {
+export async function* streamHandle({ chatId, message, provider, role }) {
   if (!chatId || !message) throw new Error("chatId+message erforderlich");
 
-  db.saveMessage({ chatId, role: "user", content: message });
+  const userMsgId = db.saveMessage({ chatId, role: "user", content: message });
+  vectors.upsertMessage(userMsgId, message, { chat_id: chatId, role: "user" }).catch(() => {});
 
   const history = loadHistory(chatId);
   const toolDefs = await tools.getDefinitions();
-  const llm = getProvider(provider);
+  const recall = await semanticRecall(chatId, message);
+  const llm = getProvider(role || provider || "chat");
+  const systemSuffix = recall.length ? buildRecallSystem(recall) : null;
 
   const messages = [...history];
   let lastText = "";
@@ -109,7 +118,7 @@ export async function* streamHandle({ chatId, message, provider }) {
     let streamedText = "";
     let toolCallsInTurn = null;
 
-    for await (const ev of llm.chatStream({ messages, tools: toolDefs })) {
+    for await (const ev of llm.chatStream({ messages, tools: toolDefs, system: systemSuffix })) {
       if (ev.delta) {
         streamedText += ev.delta;
         yield { delta: ev.delta };
@@ -150,10 +159,37 @@ export async function* streamHandle({ chatId, message, provider }) {
 
   const messageId = db.saveMessage({
     chatId, role: "assistant", content: lastText,
-    meta: { usage: lastUsage, model: llm.model, turn, final: true }
+    meta: { usage: lastUsage, model: llm.model, turn, final: true, recall: recall.length }
   });
+  vectors.upsertMessage(messageId, lastText, { chat_id: chatId, role: "assistant" }).catch(() => {});
 
   yield { done: { text: lastText, turns: turn, messageId, usage: lastUsage } };
+}
+
+// ─── Semantic Recall ─────────────────────────────────────────
+async function semanticRecall(chatId, query) {
+  if (process.env.VECTOR_MEMORY_ENABLED !== "true") return [];
+  try {
+    // Top-K, optional filter auf type=message
+    const results = await vectors.search(query, RECALL_K);
+    // Aktuelle Conversation-Messages aus dem Recall raus (kommen schon in history)
+    return (results || []).filter(r => {
+      const p = r.payload || {};
+      return p.text && p.text !== query;  // Eigene Eingabe nicht zurückgeben
+    });
+  } catch { return []; }
+}
+
+function buildRecallSystem(recall) {
+  const items = recall.slice(0, 5).map(r => {
+    const p = r.payload || {};
+    const score = (r.score || 0).toFixed(2);
+    return `- [${score}] ${p.type || "?"}${p.role ? "/" + p.role : ""}: ${p.text}`;
+  }).join("\n");
+  return `Du bist JARVIS. Antworte direkt, kurz, deutsch. Nutze Tools wo sinnvoll.
+
+Relevante frühere Inhalte aus dem Memory (Score = Cosine-Similarity):
+${items}`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────

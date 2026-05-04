@@ -421,10 +421,12 @@ function settingsBody() {
     </style>
     <script>
       const FIELDS = {
-        'LLM': [
-          ['LLM_PROVIDER', 'Provider', 'select', ['ollama','anthropic']],
-          ['OLLAMA_MODEL', 'Ollama Model', 'text'],
-          ['ANTHROPIC_MODEL', 'Anthropic Model', 'text'],
+        'LLM-Modelle (3 Rollen)': [
+          ['LLM_PROVIDER', 'Default-Provider', 'select', ['ollama','anthropic']],
+          ['OLLAMA_MODEL', 'Chat-Modell (Hauptantworten)', 'text'],
+          ['OLLAMA_MODEL_CHEAP', 'Cheap-Modell (Klassifikation, Routing)', 'text'],
+          ['OLLAMA_MODEL_EMBED', 'Embedding-Modell (Vector-Memory)', 'text'],
+          ['ANTHROPIC_MODEL', 'Anthropic Model (Fallback)', 'text'],
           ['MAX_TOKENS', 'Max Tokens', 'text']
         ],
         'Voice': [
@@ -435,7 +437,8 @@ function settingsBody() {
           ['TELEGRAM_ENABLED', 'Telegram-Bot', 'bool'],
           ['SCHEDULER_ENABLED', 'Reminder-Scheduler', 'bool'],
           ['MAIL_WATCHER_ENABLED', 'Mail-Watcher', 'bool'],
-          ['TELEGRAM_VOICE_REPLY', 'Telegram antwortet per Voice', 'bool']
+          ['TELEGRAM_VOICE_REPLY', 'Telegram antwortet per Voice', 'bool'],
+          ['VECTOR_MEMORY_ENABLED', 'Vector-Memory (Auto-Embed + Recall)', 'bool']
         ],
         'Telegram': [
           ['TELEGRAM_ALLOWED_USERS', 'Whitelist (comma-separated IDs)', 'text']
@@ -445,10 +448,13 @@ function settingsBody() {
       async function load(){
         const s = await (await fetch('/api/settings')).json();
         current = {
-          LLM_PROVIDER: s.provider, OLLAMA_MODEL: s.models.ollama, ANTHROPIC_MODEL: s.models.anthropic,
+          LLM_PROVIDER: s.provider,
+          OLLAMA_MODEL: s.models.ollama, OLLAMA_MODEL_CHEAP: s.models.ollama_cheap, OLLAMA_MODEL_EMBED: s.models.ollama_embed,
+          ANTHROPIC_MODEL: s.models.anthropic,
           WHISPER_MODEL: s.stt.whisper_model, PIPER_VOICE: s.tts.piper_voice,
           TELEGRAM_ENABLED: s.flags.telegram_enabled, SCHEDULER_ENABLED: s.flags.scheduler_enabled,
           MAIL_WATCHER_ENABLED: s.flags.mail_watcher_enabled, TELEGRAM_VOICE_REPLY: s.flags.telegram_voice_reply,
+          VECTOR_MEMORY_ENABLED: s.flags.vector_memory_enabled,
           TELEGRAM_ALLOWED_USERS: s.whitelist.join(','), MAX_TOKENS: s.max_tokens
         };
         document.getElementById('settings-form').innerHTML = Object.entries(FIELDS).map(([sec, fields]) =>
