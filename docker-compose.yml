@@ -23,15 +23,17 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - .:/project
-    working_dir: /project
+      # WICHTIG: gleicher Pfad innen wie außen, damit relative Mounts in der
+      # docker-compose.yml vom Daemon korrekt zu Host-Pfaden auflösen.
+      - /home/mcde/kiasy:/home/mcde/kiasy
+    working_dir: /home/mcde/kiasy
     command:
       - sh
       - -c
       - |
         echo "[deploy] watcher gestartet"
         while true; do
-          for f in /project/.recreate-*; do
+          for f in /home/mcde/kiasy/.recreate-*; do
             [ -e "$$f" ] || continue
             svc=$$(basename "$$f" | sed 's/^.recreate-//')
             rm -f "$$f"
