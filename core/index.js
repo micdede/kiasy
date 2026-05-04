@@ -118,6 +118,190 @@ const server = http.createServer(async (req, res) => {
       return res.end();
     }
 
+    // ─── Tools: Settings (Toggle) ────────────────────────────
+    if (url.pathname === "/api/tools/settings" && req.method === "GET") {
+      const rows = db.get().prepare("SELECT filename, enabled, visibility, updated FROM tool_settings ORDER BY filename").all();
+      return sendJson(200, { count: rows.length, settings: rows });
+    }
+    {
+      const m = url.pathname.match(/^\/api\/tools\/settings\/(.+)$/);
+      if (m && req.method === "POST") {
+        const filename = decodeURIComponent(m[1]);
+        const body = await readJson(req);
+        const enabled = body.enabled ? 1 : 0;
+        const visibility = body.visibility || "public";
+        db.get().prepare(`
+          INSERT INTO tool_settings(filename, enabled, visibility, updated)
+          VALUES (?, ?, ?, datetime('now','localtime'))
+          ON CONFLICT(filename) DO UPDATE SET enabled = excluded.enabled,
+            visibility = excluded.visibility, updated = excluded.updated
+        `).run(filename, enabled, visibility);
+        tools.reload();
+        return sendJson(200, { filename, enabled, visibility });
+      }
+    }
+
+    // ─── Memory CRUD ─────────────────────────────────────────
+    if (url.pathname === "/api/memory" && req.method === "GET") {
+      const cat = url.searchParams.get("category");
+      const q   = url.searchParams.get("q");
+      const limit = Math.min(Number(url.searchParams.get("limit") || 100), 500);
+      let sql = "SELECT id, category, key, value, added FROM memory";
+      const params = [];
+      const wheres = [];
+      if (cat) { wheres.push("category = ?"); params.push(cat); }
+      if (q)   {
+        wheres.push("id IN (SELECT rowid FROM memory_fts WHERE memory_fts MATCH ?)");
+        params.push(q);
+      }
+      if (wheres.length) sql += " WHERE " + wheres.join(" AND ");
+      sql += " ORDER BY id DESC LIMIT ?";
+      params.push(limit);
+      const items = db.get().prepare(sql).all(...params);
+      return sendJson(200, { count: items.length, items });
+    }
+    if (url.pathname === "/api/memory" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.category || !body.value) return sendJson(400, { error: "category+value erforderlich" });
+      const info = db.get().prepare(`
+        INSERT INTO memory(category, key, value, added)
+        VALUES (?, ?, ?, date('now','localtime'))
+      `).run(body.category, body.key || null, body.value);
+      return sendJson(200, { id: Number(info.lastInsertRowid) });
+    }
+    {
+      const m = url.pathname.match(/^\/api\/memory\/(\d+)$/);
+      if (m && req.method === "DELETE") {
+        const info = db.get().prepare("DELETE FROM memory WHERE id = ?").run(Number(m[1]));
+        return sendJson(200, { deleted: info.changes });
+      }
+      if (m && req.method === "PUT") {
+        const body = await readJson(req);
+        const info = db.get().prepare("UPDATE memory SET value = ?, key = ? WHERE id = ?")
+                       .run(body.value, body.key || null, Number(m[1]));
+        return sendJson(200, { updated: info.changes });
+      }
+    }
+
+    // ─── Reminders CRUD ──────────────────────────────────────
+    if (url.pathname === "/api/reminders" && req.method === "GET") {
+      const done = url.searchParams.get("done");
+      let sql = "SELECT * FROM reminders";
+      const params = [];
+      if (done === "0" || done === "1") { sql += " WHERE done = ?"; params.push(Number(done)); }
+      sql += " ORDER BY due ASC LIMIT 200";
+      return sendJson(200, { items: db.get().prepare(sql).all(...params) });
+    }
+    if (url.pathname === "/api/reminders" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.text || !body.due) return sendJson(400, { error: "text+due erforderlich" });
+      const info = db.get().prepare(`
+        INSERT INTO reminders(text, due, chat_id, type, interval_hours)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(body.text, body.due, body.chat_id || process.env.TELEGRAM_OWNER_CHAT_ID || null,
+             body.type || "oneshot", body.interval_hours || null);
+      return sendJson(200, { id: Number(info.lastInsertRowid) });
+    }
+    {
+      const m = url.pathname.match(/^\/api\/reminders\/(\d+)$/);
+      if (m && req.method === "PUT") {
+        const body = await readJson(req);
+        const sets = []; const params = [];
+        for (const k of ["done", "text", "due"]) {
+          if (k in body) { sets.push(`${k} = ?`); params.push(body[k]); }
+        }
+        if (!sets.length) return sendJson(400, { error: "nichts zu ändern" });
+        params.push(Number(m[1]));
+        const info = db.get().prepare(`UPDATE reminders SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+        return sendJson(200, { updated: info.changes });
+      }
+      if (m && req.method === "DELETE") {
+        const info = db.get().prepare("DELETE FROM reminders WHERE id = ?").run(Number(m[1]));
+        return sendJson(200, { deleted: info.changes });
+      }
+    }
+
+    // ─── News-Sources CRUD ───────────────────────────────────
+    if (url.pathname === "/api/news/sources" && req.method === "GET") {
+      return sendJson(200, { items: db.get().prepare("SELECT * FROM news_sources ORDER BY type, name").all() });
+    }
+    if (url.pathname === "/api/news/sources" && req.method === "POST") {
+      const body = await readJson(req);
+      if (!body.type || !body.name || !body.url) return sendJson(400, { error: "type+name+url erforderlich" });
+      const info = db.get().prepare(`
+        INSERT INTO news_sources(type, name, url, api_key, category, enabled)
+        VALUES (?, ?, ?, ?, ?, 1)
+      `).run(body.type, body.name, body.url, body.api_key || null, body.category || null);
+      return sendJson(200, { id: Number(info.lastInsertRowid) });
+    }
+    {
+      const m = url.pathname.match(/^\/api\/news\/sources\/(\d+)$/);
+      if (m && req.method === "PUT") {
+        const body = await readJson(req);
+        const sets = []; const params = [];
+        for (const k of ["enabled", "name", "url", "api_key", "category"]) {
+          if (k in body) { sets.push(`${k} = ?`); params.push(body[k]); }
+        }
+        if (!sets.length) return sendJson(400, { error: "nichts zu ändern" });
+        params.push(Number(m[1]));
+        const info = db.get().prepare(`UPDATE news_sources SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+        return sendJson(200, { updated: info.changes });
+      }
+      if (m && req.method === "DELETE") {
+        const info = db.get().prepare("DELETE FROM news_sources WHERE id = ?").run(Number(m[1]));
+        return sendJson(200, { deleted: info.changes });
+      }
+    }
+
+    // ─── Health-Check (Upstream-Pings) ───────────────────────
+    if (url.pathname === "/api/health/check" && req.method === "GET") {
+      const checks = [
+        { name: "ollama",  url: `${process.env.OLLAMA_URL}/api/tags`, expect: 200 },
+        { name: "qdrant",  url: `${process.env.QDRANT_URL}/`, expect: 200 },
+        { name: "whisper", url: `${process.env.WHISPER_URL}/`, expect: 200 },
+        { name: "searxng", url: `${process.env.SEARXNG_URL}/healthz`, expect: 200 }
+      ];
+      const results = await Promise.all(checks.map(async c => {
+        const t0 = Date.now();
+        try {
+          const r = await fetch(c.url, { signal: AbortSignal.timeout(3000) });
+          return { name: c.name, ok: r.status === c.expect, status: r.status, latency_ms: Date.now() - t0 };
+        } catch (e) {
+          return { name: c.name, ok: false, error: e.message, latency_ms: Date.now() - t0 };
+        }
+      }));
+      // Piper TCP-Check separat
+      const piperResult = await new Promise(resolve => {
+        const t0 = Date.now();
+        import("node:net").then(({ connect }) => {
+          const s = connect({ host: process.env.PIPER_HOST || "piper", port: Number(process.env.PIPER_PORT || 10200) });
+          const cleanup = (ok, err) => { s.destroy(); resolve({ name: "piper", ok, latency_ms: Date.now() - t0, error: err }); };
+          s.on("connect", () => cleanup(true, null));
+          s.on("error", e => cleanup(false, e.message));
+          setTimeout(() => cleanup(false, "timeout"), 3000);
+        });
+      });
+      results.push(piperResult);
+      return sendJson(200, { checks: results, all_ok: results.every(r => r.ok) });
+    }
+
+    // ─── Settings (read-only Snapshot der relevanten ENVs) ──
+    if (url.pathname === "/api/settings" && req.method === "GET") {
+      return sendJson(200, {
+        provider: process.env.LLM_PROVIDER,
+        models: { ollama: process.env.OLLAMA_MODEL, anthropic: process.env.ANTHROPIC_MODEL },
+        flags: {
+          telegram_enabled:    process.env.TELEGRAM_ENABLED === "true",
+          scheduler_enabled:   process.env.SCHEDULER_ENABLED === "true",
+          mail_watcher_enabled: process.env.MAIL_WATCHER_ENABLED === "true",
+          telegram_voice_reply: process.env.TELEGRAM_VOICE_REPLY === "true"
+        },
+        tts: { piper_voice: process.env.PIPER_VOICE },
+        stt: { whisper_model: process.env.WHISPER_MODEL },
+        whitelist: (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").filter(Boolean)
+      });
+    }
+
     // ─── Voice: Transcribe (audio in → Text) ─────────────────
     if (url.pathname === "/api/voice/transcribe" && req.method === "POST") {
       const buf = await readBinary(req);
