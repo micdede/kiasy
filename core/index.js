@@ -1,75 +1,140 @@
-// kiasy-core — Phase 1 Skelett
-// Minimaler HTTP-Server mit /health.
-// Echtes Agent-Loop, Tools, Telegram, Mail, Scheduler folgen in Phase 3.
+// kiasy-core — HTTP-Server (Phase 3 Etappe 1)
+//
+// Endpoints:
+//   GET  /health              — System-Status + Upstreams
+//   GET  /api/status          — Phase-Info
+//   POST /api/chat/send       — { chatId?, message, provider? } → { text, messageId }
+//   POST /api/chat/send/stream — SSE-Stream mit delta/done events
+//   GET  /api/chat/history?chatId=… → { messages: [...] }
 
 import http from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 
+import * as db from "./lib/db.js";
+import * as agent from "./lib/agent.js";
+import { getProvider } from "./lib/providers.js";
+
 const PORT = Number(process.env.PORT || 8080);
-const VERSION = "0.1.0";
 const STARTED = Date.now();
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url)));
 
-function pkgVersion() {
+// DB initialisieren (führt Migrations aus)
+db.init();
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const setJson  = () => res.setHeader("Content-Type", "application/json; charset=utf-8");
+  const sendJson = (status, obj) => { setJson(); res.writeHead(status); res.end(JSON.stringify(obj)); };
+
   try {
-    return JSON.parse(readFileSync(new URL("./package.json", import.meta.url))).version;
-  } catch { return VERSION; }
-}
+    // ─── /health ────────────────────────────────────────────
+    if (url.pathname === "/health" && req.method === "GET") {
+      return sendJson(200, {
+        ok: true,
+        service: "kiasy-core",
+        version: pkg.version,
+        uptime_s: Math.round((Date.now() - STARTED) / 1000),
+        upstreams: upstreams(),
+        data_volume_mounted: existsSync("/data"),
+        db: { messages: db.countMessages() }
+      });
+    }
 
-function checkUpstreams() {
-  const upstreams = {
+    // ─── /api/status ────────────────────────────────────────
+    if (url.pathname === "/api/status" && req.method === "GET") {
+      return sendJson(200, {
+        phase: 3,
+        etappe: 1,
+        provider: process.env.LLM_PROVIDER || "ollama",
+        model_anthropic: process.env.ANTHROPIC_MODEL,
+        model_ollama:    process.env.OLLAMA_MODEL
+      });
+    }
+
+    // ─── /api/chat/history ──────────────────────────────────
+    if (url.pathname === "/api/chat/history" && req.method === "GET") {
+      const chatId = url.searchParams.get("chatId") || "default";
+      const limit  = Number(url.searchParams.get("limit") || 30);
+      const messages = db.getRecentMessages(chatId, limit);
+      return sendJson(200, { chatId, messages });
+    }
+
+    // ─── /api/chat/send ─────────────────────────────────────
+    if (url.pathname === "/api/chat/send" && req.method === "POST") {
+      const body = await readJson(req);
+      const chatId  = body.chatId || "default";
+      const message = body.message;
+      const provider = body.provider;
+      if (!message) return sendJson(400, { error: "message fehlt" });
+
+      const result = await agent.handle({ chatId, message, provider });
+      return sendJson(200, { chatId, ...result });
+    }
+
+    // ─── /api/chat/send/stream (SSE) ────────────────────────
+    if (url.pathname === "/api/chat/send/stream" && req.method === "POST") {
+      const body = await readJson(req);
+      const chatId  = body.chatId || "default";
+      const message = body.message;
+      const provider = body.provider;
+      if (!message) return sendJson(400, { error: "message fehlt" });
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive"
+      });
+      const sse = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+      try {
+        for await (const ev of agent.streamHandle({ chatId, message, provider })) {
+          if (ev.delta) sse("delta", { text: ev.delta });
+          if (ev.done)  sse("done", ev.done);
+        }
+      } catch (err) {
+        sse("error", { error: String(err.message || err) });
+      }
+      return res.end();
+    }
+
+    // ─── 404 ────────────────────────────────────────────────
+    return sendJson(404, { error: "Not Found", path: url.pathname });
+  } catch (err) {
+    console.error("[kiasy-core] handler error:", err);
+    return sendJson(500, { error: String(err.message || err) });
+  }
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`[kiasy-core] v${pkg.version} listening on :${PORT}`);
+  console.log(`[kiasy-core] provider: ${process.env.LLM_PROVIDER || "ollama"}`);
+});
+
+// ─── Helpers ─────────────────────────────────────────────────
+function upstreams() {
+  return {
     ollama:  process.env.OLLAMA_URL  || null,
     qdrant:  process.env.QDRANT_URL  || null,
     whisper: process.env.WHISPER_URL || null,
     piper:   process.env.PIPER_HOST ? `${process.env.PIPER_HOST}:${process.env.PIPER_PORT||"10200"}` : null,
     searxng: process.env.SEARXNG_URL || null
   };
-  return upstreams;
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+function readJson(req) {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    req.on("data", c => { raw += c; if (raw.length > 1_000_000) reject(new Error("body too large")); });
+    req.on("end",  () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { reject(e); } });
+    req.on("error", reject);
+  });
+}
 
-  // Health
-  if (url.pathname === "/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      ok: true,
-      service: "kiasy-core",
-      version: pkgVersion(),
-      uptime_s: Math.round((Date.now() - STARTED) / 1000),
-      upstreams: checkUpstreams(),
-      data_volume_mounted: existsSync("/data"),
-    }, null, 2));
-    return;
-  }
-
-  // Phase 1 Stub-API
-  if (url.pathname === "/api/status") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ phase: 1, message: "Skelett läuft. Echte API folgt in Phase 3." }));
-    return;
-  }
-
-  if (url.pathname === "/") {
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end(`kiasy-core ${pkgVersion()} — Phase 1 Skelett\nGet /health for status.\n`);
-    return;
-  }
-
-  res.writeHead(404, { "Content-Type": "text/plain" });
-  res.end("Not Found");
-});
-
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`[kiasy-core] v${pkgVersion()} listening on :${PORT}`);
-  console.log(`[kiasy-core] upstreams:`, checkUpstreams());
-});
-
-// Graceful Shutdown
+// ─── Graceful Shutdown ───────────────────────────────────────
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => {
-    console.log(`[kiasy-core] ${sig} → shutting down`);
-    server.close(() => process.exit(0));
+    console.log(`[kiasy-core] ${sig} → shutdown`);
+    server.close(() => { db.close(); process.exit(0); });
     setTimeout(() => process.exit(1), 5000).unref();
   });
 }

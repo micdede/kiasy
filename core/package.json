@@ -1,6 +1,6 @@
 {
   "name": "kiasy-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "kiasy v2 — Agent, Tools, Telegram, Mail, Scheduler",
   "type": "module",
   "main": "index.js",
@@ -9,5 +9,10 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "@anthropic-ai/sdk": "^0.32.0",
+    "openai": "^4.73.0"
   }
 }

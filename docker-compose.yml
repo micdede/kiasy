@@ -49,6 +49,7 @@ services:
     volumes:
       - ./data:/data
       - ./notes:/data/notes
+      - ./db:/db:ro             # Migration-Files
     expose:
       - "8080"           # API + SSE
       - "8081"           # WebSocket (Echtdialog Phase 3)
