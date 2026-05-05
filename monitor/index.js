@@ -450,7 +450,7 @@ function settingsBody() {
           ['MAIL_WATCHER_ENABLED', 'Mail-Watcher', 'bool'],
           ['TELEGRAM_REPLY_MODE', 'Telegram-Antwort: text/voice/both/auto', 'select', ['auto','text','voice','both']],
           ['VECTOR_MEMORY_ENABLED', 'Vector-Memory (Auto-Embed + Recall)', 'bool'],
-          ['AGENT_AUTO_ROUTE', 'Auto-Route kurze Messages → Cheap-Modell', 'bool']
+          ['AGENT_AUTO_ROUTE', 'Cheap-Fallback wenn Cloud nicht erreichbar (30s Cooldown)', 'bool']
         ],
         'Telegram': [
           ['TELEGRAM_ALLOWED_USERS', 'Whitelist (comma-separated IDs)', 'text']

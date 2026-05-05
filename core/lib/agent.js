@@ -42,16 +42,40 @@ function detectTranslationRequest(message) {
   return { target_lang: lang, text };
 }
 
-// Heuristik: kurze, einfache Messages → cheap. Trigger-Words → chat (für Tools).
-const TOOL_TRIGGERS = /\b(such(e|en|t)?|find(e|en|et)?|wann|wo|wer|wieviel|tool|remind|erinner|merk|speicher|schick|sende|mail|email|kalender|termin|wetter|news|workflow|delegier|hass|home assistant|status|liste|zeig|öffne|aktivier|deaktivier|files?|read|write|übersetz|sprich|sag\s+mir\s+auf)\b/i;
+// AGENT_AUTO_ROUTE neu: chat first, cheap als Fallback wenn Cloud nicht erreichbar.
+// Circuit-Breaker: 30s lang nach Fehler direkt cheap, ohne erneut in Cloud-Timeout zu rennen.
+const FALLBACK_COOLDOWN_MS = 30_000;
+let cloudDownUntil = 0;
 
-function pickRole(message, explicitRole) {
+function pickRole(explicitRole) {
   if (explicitRole) return explicitRole;
-  if (!AUTO_ROUTE) return "chat";
-  const text = (message || "").trim();
-  // Kurz + kein "?" + kein Trigger → cheap
-  if (text.length < 80 && !text.endsWith("?") && !TOOL_TRIGGERS.test(text)) return "cheap";
   return "chat";
+}
+
+// Wrapper: chat() mit Auto-Fallback auf cheap (ohne Tools) bei Fehler.
+// Returns { res, providerUsed, fallback: true|false, error?: string }
+async function chatWithFallback({ messages, tools: toolDefs, system }) {
+  const useFallback = AUTO_ROUTE;
+  if (useFallback && cloudDownUntil > Date.now()) {
+    const remaining = Math.ceil((cloudDownUntil - Date.now()) / 1000);
+    console.warn(`[agent] cloud known-down for ${remaining}s — using cheap directly`);
+    const cheap = getProvider("cheap");
+    const res = await cheap.chat({ messages, tools: [], system });
+    return { res, providerUsed: cheap, fallback: true, reason: `cloud cooldown ${remaining}s` };
+  }
+  const primary = getProvider("chat");
+  try {
+    const res = await primary.chat({ messages, tools: toolDefs, system });
+    if (cloudDownUntil) { cloudDownUntil = 0; console.log("[agent] cloud back online — fallback cleared"); }
+    return { res, providerUsed: primary, fallback: false };
+  } catch (err) {
+    if (!useFallback) throw err;
+    console.error(`[agent] chat-provider failed (${err.message}) — fallback to cheap`);
+    cloudDownUntil = Date.now() + FALLBACK_COOLDOWN_MS;
+    const cheap = getProvider("cheap");
+    const res = await cheap.chat({ messages, tools: [], system });
+    return { res, providerUsed: cheap, fallback: true, reason: err.message };
+  }
 }
 
 export async function handle({ chatId, message, provider, role }) {
@@ -85,10 +109,10 @@ export async function handle({ chatId, message, provider, role }) {
   const history = loadHistory(chatId);
   const toolDefs = await tools.getDefinitions();
   const recall = await semanticRecall(chatId, message);
-  const chosenRole = pickRole(message, role || provider);
-  const llm = getProvider(chosenRole);
-  // Cheap-Modell ohne Tools — reduziert Context, vermeidet Hänger bei kleinen Modellen
-  const effectiveTools = chosenRole === "cheap" ? [] : toolDefs;
+  const explicitRole = pickRole(role || provider);  // null oder "cheap" wenn explizit angefragt
+  // Bei explizitem Role-Override: direkt das Modell, kein Fallback-Wrapper
+  const explicitLLM = explicitRole && (explicitRole === "cheap" || explicitRole === "chat") ? getProvider(explicitRole) : null;
+  const explicitTools = explicitRole === "cheap" ? [] : toolDefs;
 
   // 3. Loop bis kein tool_use mehr ODER MAX_TURNS
   const messages = [...history];
@@ -96,11 +120,26 @@ export async function handle({ chatId, message, provider, role }) {
   let lastUsage = null;
   let turn = 0;
   const toolsUsed = [];
+  let usedFallback = false;
+  let fallbackReason = null;
+  let llm = explicitLLM;          // wird nach erstem Fallback "festgenagelt"
+  let effectiveTools = explicitLLM ? explicitTools : toolDefs;
   const systemSuffix = recall.length ? buildRecallSystem(recall) : null;
 
   while (turn < MAX_TURNS) {
     turn++;
-    const res = await llm.chat({ messages, tools: effectiveTools, system: systemSuffix });
+    let res;
+    if (llm) {
+      // Festes Modell (entweder explizit oder nach Fallback im vorigen Turn)
+      res = await llm.chat({ messages, tools: effectiveTools, system: systemSuffix });
+    } else {
+      // chat first, mit Auto-Fallback
+      const wrap = await chatWithFallback({ messages, tools: toolDefs, system: systemSuffix });
+      res = wrap.res;
+      llm = wrap.providerUsed;
+      effectiveTools = wrap.fallback ? [] : toolDefs;
+      if (wrap.fallback) { usedFallback = true; fallbackReason = wrap.reason; }
+    }
     lastText = res.text;
     lastUsage = res.usage;
 
@@ -146,19 +185,26 @@ export async function handle({ chatId, message, provider, role }) {
   }
 
   // 4. Finale Assistant-Antwort speichern + vektorisieren
+  // Bei Fallback: Hinweis-Suffix anhängen, damit der User sieht dass das lokale Modell antwortete
+  if (usedFallback) {
+    lastText = (lastText || "").trimEnd() +
+      `\n\n_⚠ Fallback: lokales Modell (${llm.model}) — Cloud nicht erreichbar` +
+      (fallbackReason ? `: ${fallbackReason}` : "") + `_`;
+  }
+  const roleLabel = usedFallback ? "fallback-cheap" : (explicitRole || "chat");
   const messageId = db.saveMessage({
     chatId, role: "assistant", content: lastText,
-    meta: { usage: lastUsage, model: llm.model, turn, final: true, recall: recall.length }
+    meta: { usage: lastUsage, model: llm.model, turn, final: true, recall: recall.length, fallback: usedFallback }
   });
   vectors.upsertMessage(messageId, lastText, { chat_id: chatId, role: "assistant" }).catch(() => {});
 
   db.logEvent({
     type: "message",
-    message: `chat:${chatId} role=${chosenRole} ${turn} turn(s) ${lastText.length} chars`,
-    meta: { usage: lastUsage, turns: turn, role: chosenRole }
+    message: `chat:${chatId} role=${roleLabel} ${turn} turn(s) ${lastText.length} chars${usedFallback ? " [FALLBACK]" : ""}`,
+    meta: { usage: lastUsage, turns: turn, role: roleLabel, fallback: usedFallback, fallback_reason: fallbackReason }
   });
 
-  return { text: lastText, turns: turn, messageId, usage: lastUsage, role: chosenRole, tools_used: toolsUsed };
+  return { text: lastText, turns: turn, messageId, usage: lastUsage, role: roleLabel, tools_used: toolsUsed, fallback: usedFallback };
 }
 
 export async function* streamHandle({ chatId, message, provider, role }) {
@@ -170,7 +216,9 @@ export async function* streamHandle({ chatId, message, provider, role }) {
   const history = loadHistory(chatId);
   const toolDefs = await tools.getDefinitions();
   const recall = await semanticRecall(chatId, message);
-  const chosenRole = pickRole(message, role || provider);
+  // Stream-Pfad: kein Auto-Fallback (würde Streaming bedeutend komplizieren).
+  // Bei Cloud-Down → reiner Stream-Aufruf wirft, Caller muss notfalls non-stream nochmal probieren.
+  const chosenRole = pickRole(role || provider) || "chat";
   const llm = getProvider(chosenRole);
   const effectiveTools = chosenRole === "cheap" ? [] : toolDefs;
   const systemSuffix = recall.length ? buildRecallSystem(recall) : null;
