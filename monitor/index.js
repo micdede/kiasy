@@ -546,6 +546,12 @@ function settingsBody() {
     <p class="dim">Änderungen werden in <code>.env</code> geschrieben. <b>Recreate</b> startet kiasy-core via deploy-Sidecar automatisch neu (5–10s).</p>
     <div id="settings-form"></div>
     <div class="sec" style="margin-top:12px;">
+      <h3>CalDAV-Test</h3>
+      <p class="dim" style="font-size:12px;margin-bottom:8px;">Probt die Verbindung mit den oben gespeicherten CalDAV-Werten.</p>
+      <button class="btn" onclick="probeCal()">🩺 Verbindung testen</button>
+      <pre id="cal-probe" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;margin-top:8px;display:none;white-space:pre-wrap;"></pre>
+    </div>
+    <div class="sec" style="margin-top:12px;">
       <h3>Mail-Signatur</h3>
       <p class="dim" style="font-size:12px;margin-bottom:8px;">Wird an jede via <code>mail_send</code> verschickte Mail angehängt (Standard-Trenner <code>-- </code>). Datei: <code>/data/mail-signature.txt</code>.</p>
       <textarea id="mail-sig" rows="8" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);font-size:13px;padding:10px;" placeholder="Viele Grüße&#10;Michael Dedecke&#10;..."></textarea>
@@ -693,6 +699,16 @@ function settingsBody() {
           } catch {}
         }
         msg.innerHTML = '<div class="save-msg err">⚠ Core kommt nicht hoch — <code>docker compose logs kiasy-core</code> prüfen</div>';
+      }
+      async function probeCal(){
+        const out = document.getElementById('cal-probe');
+        out.style.display = 'block';
+        out.textContent = '⏳ teste…';
+        try {
+          const r = await fetch('/api/calendar/probe');
+          const d = await r.json();
+          out.textContent = JSON.stringify(d, null, 2);
+        } catch (e) { out.textContent = 'Fehler: ' + e.message; }
       }
       async function loadSig(){
         try {

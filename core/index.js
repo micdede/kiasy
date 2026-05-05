@@ -383,6 +383,16 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, currentSettings());
     }
 
+    // ─── Calendar Probe (Test-Button im Settings) ───────────
+    if (url.pathname === "/api/calendar/probe" && req.method === "GET") {
+      try {
+        const calMod = await import("./tools/calendar.js");
+        return sendJson(200, await calMod.probe());
+      } catch (err) {
+        return sendJson(500, { ok: false, error: err.message });
+      }
+    }
+
     // ─── Mail-Signatur (Datei: /data/mail-signature.txt) ────
     if (url.pathname === "/api/mail/signature" && req.method === "GET") {
       const fs = await import("node:fs");

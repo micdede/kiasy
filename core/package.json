@@ -17,6 +17,8 @@
     "node-telegram-bot-api": "^0.66.0",
     "cheerio": "^1.0.0",
     "imapflow": "^1.0.171",
-    "nodemailer": "^6.9.0"
+    "nodemailer": "^6.9.0",
+    "tsdav": "^2.1.5",
+    "ical.js": "^2.1.0"
   }
 }
