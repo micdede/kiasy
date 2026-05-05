@@ -223,6 +223,11 @@ function eventToJson(event) {
     const vevent = comp.getFirstSubcomponent("vevent");
     if (!vevent) return null;
     const e = new ICAL.Event(vevent);
+    const atts = vevent.getAllProperties("attendee").map(p => {
+      const v = String(p.getFirstValue() || "");
+      return v.replace(/^mailto:/i, "");
+    });
+    const orgRaw = vevent.getFirstPropertyValue("organizer");
     return {
       uid:        e.uid,
       summary:    e.summary || "",
@@ -231,6 +236,8 @@ function eventToJson(event) {
       start:      e.startDate?.toJSDate()?.toISOString() || null,
       end:        e.endDate?.toJSDate()?.toISOString() || null,
       allDay:     e.startDate?.isDate || false,
+      attendees:  atts,
+      organizer:  orgRaw ? String(orgRaw).replace(/^mailto:/i, "") : null,
       url:        event.url
     };
   } catch (err) {
@@ -238,7 +245,14 @@ function eventToJson(event) {
   }
 }
 
-function buildICS({ summary, description = "", location = "", start, end, allDay = false }) {
+// Extrahiert reine E-Mail aus "Name <mail@x>" oder "mail@x"
+function extractEmail(s) {
+  if (!s) return null;
+  const m = String(s).match(/<([^>]+)>/);
+  return (m ? m[1] : s).trim().toLowerCase();
+}
+
+function buildICS({ summary, description = "", location = "", start, end, allDay = false, attendees = [], organizer = null, uid = null }) {
   const dtstart = new Date(start);
   const dtend   = new Date(end || (dtstart.getTime() + 60*60*1000));
   if (isNaN(dtstart.getTime())) throw new Error("start ungültig");
@@ -246,17 +260,24 @@ function buildICS({ summary, description = "", location = "", start, end, allDay
   const fmt = (d) => allDay
     ? d.toISOString().substring(0,10).replace(/-/g,"")
     : d.toISOString().replace(/[-:]/g,"").split(".")[0] + "Z";
-  const uid = `kiasy-${Date.now()}-${Math.random().toString(36).slice(2,10)}@kiasy`;
+  uid = uid || `kiasy-${Date.now()}-${Math.random().toString(36).slice(2,10)}@kiasy`;
   const stamp = fmt(new Date());
   const dt = allDay
     ? `DTSTART;VALUE=DATE:${fmt(dtstart)}\r\nDTEND;VALUE=DATE:${fmt(dtend)}`
     : `DTSTART:${fmt(dtstart)}\r\nDTEND:${fmt(dtend)}`;
   const esc = s => String(s||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
-  return [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//kiasy//calendar//DE",
-    "CALSCALE:GREGORIAN",
+  // Organizer: nötig damit Kerio Einladungen verschickt
+  const orgEmail = extractEmail(organizer || process.env.KERIO_FROM);
+  const orgLine = orgEmail ? `ORGANIZER;CN=${esc(USER || orgEmail)}:mailto:${orgEmail}` : null;
+  // Attendees: jede Adresse als ATTENDEE-Zeile
+  const atLines = (attendees || []).map(a => {
+    const email = extractEmail(a);
+    if (!email) return null;
+    return `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${email}`;
+  }).filter(Boolean);
+  const lines = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//kiasy//calendar//DE", "CALSCALE:GREGORIAN",
+    atLines.length ? "METHOD:REQUEST" : null,  // Kerio triggert Invitation-Mails bei METHOD:REQUEST
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${stamp}`,
@@ -264,9 +285,11 @@ function buildICS({ summary, description = "", location = "", start, end, allDay
     `SUMMARY:${esc(summary)}`,
     description ? `DESCRIPTION:${esc(description)}` : null,
     location    ? `LOCATION:${esc(location)}`       : null,
-    "END:VEVENT",
-    "END:VCALENDAR"
-  ].filter(Boolean).join("\r\n") + "\r\n";
+    orgLine,
+    ...atLines,
+    "END:VEVENT", "END:VCALENDAR"
+  ].filter(Boolean);
+  return lines.join("\r\n") + "\r\n";
 }
 
 export const definitions = [
@@ -284,7 +307,7 @@ export const definitions = [
   },
   {
     name: "calendar_create",
-    description: "Erstellt einen neuen Kalender-Eintrag. Default-Dauer 1h wenn end fehlt.",
+    description: "Erstellt einen neuen Kalender-Eintrag. Default-Dauer 1h wenn end fehlt. Mit attendees werden Einladungsmails verschickt (Kerio).",
     input_schema: {
       type: "object",
       properties: {
@@ -294,9 +317,30 @@ export const definitions = [
         location:    { type: "string", description: "Ort (optional)" },
         description: { type: "string", description: "Beschreibung (optional)" },
         allDay:      { type: "boolean", description: "Ganztägig (default false)" },
+        attendees:   { type: "array", items: { type: "string" }, description: "E-Mail-Adressen der Teilnehmer (löst Einladungsmails aus)" },
         calendar:    { type: "string", description: "Kalender-Name (substring match, optional)" }
       },
       required: ["summary", "start"]
+    }
+  },
+  {
+    name: "calendar_update",
+    description: "Bearbeitet einen bestehenden Termin per UID. Nur übergebene Felder werden geändert. Mit attendees werden Einladungsmails verschickt.",
+    input_schema: {
+      type: "object",
+      properties: {
+        uid:         { type: "string" },
+        summary:     { type: "string" },
+        start:       { type: "string" },
+        end:         { type: "string" },
+        location:    { type: "string" },
+        description: { type: "string" },
+        allDay:      { type: "boolean" },
+        attendees:   { type: "array", items: { type: "string" }, description: "E-Mails — überschreibt bisherige Liste komplett" },
+        add_attendees:    { type: "array", items: { type: "string" }, description: "Diese E-Mails zur bestehenden Liste hinzufügen" },
+        remove_attendees: { type: "array", items: { type: "string" }, description: "Diese E-Mails aus der Liste entfernen" }
+      },
+      required: ["uid"]
     }
   },
   {
@@ -449,12 +493,52 @@ export async function execute(name, input) {
     const c    = await client();
     const ics  = buildICS(input);
     const filename = `kiasy-${Date.now()}.ics`;
-    const result = await c.createCalendarObject({
-      calendar: cal,
-      filename,
-      iCalString: ics
-    });
-    return { created: true, calendar: cal.displayName, filename, status: result.status, url: result.url };
+    const result = await c.createCalendarObject({ calendar: cal, filename, iCalString: ics });
+    return { created: true, calendar: cal.displayName, filename, status: result.status, url: result.url, attendees: input.attendees || [] };
+  }
+
+  if (name === "calendar_update") {
+    if (MODE !== "write") throw new Error(`CALDAV_MODE=${MODE} — Schreiben nicht erlaubt`);
+    if (!input?.uid) throw new Error("uid erforderlich");
+    const cals = await calendars();
+    // Such Event über alle Kalender per VEVENT-Filter
+    for (const cal of cals) {
+      let objects;
+      try { objects = await fetchByComponent(cal.url, "VEVENT"); } catch { continue; }
+      for (const obj of objects) {
+        const ev = eventToJson(obj);
+        if (!ev || ev.uid !== input.uid) continue;
+        // Attendees mergen
+        let attendees = ev.attendees || [];
+        if (Array.isArray(input.attendees)) attendees = input.attendees;
+        if (Array.isArray(input.add_attendees))    attendees = [...new Set([...attendees, ...input.add_attendees])];
+        if (Array.isArray(input.remove_attendees)) {
+          const rm = new Set(input.remove_attendees.map(s => extractEmail(s)));
+          attendees = attendees.filter(a => !rm.has(extractEmail(a)));
+        }
+        const merged = {
+          uid:         ev.uid,
+          summary:     input.summary     ?? ev.summary,
+          description: input.description ?? ev.description,
+          location:    input.location    ?? ev.location,
+          start:       input.start       ?? ev.start,
+          end:         input.end         ?? ev.end,
+          allDay:      input.allDay      ?? ev.allDay,
+          attendees,
+          organizer:   ev.organizer || process.env.KERIO_FROM
+        };
+        const ics = buildICS(merged);
+        const auth = "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64");
+        const r = await fetch(obj.url, {
+          method: "PUT",
+          headers: { "Authorization": auth, "Content-Type": "text/calendar; charset=utf-8" },
+          body: ics
+        });
+        if (!r.ok) throw new Error(`PUT failed: HTTP ${r.status} ${(await r.text()).substring(0,200)}`);
+        return { updated: true, calendar: cal.displayName, uid: input.uid, attendees };
+      }
+    }
+    throw new Error(`UID nicht gefunden: ${input.uid}`);
   }
 
   if (name === "task_list") {
