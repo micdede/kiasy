@@ -328,6 +328,8 @@ const server = http.createServer(async (req, res) => {
       if (!fs.existsSync(path)) return sendJson(500, { error: ".env nicht gemountet auf /host/.env" });
       let content = fs.readFileSync(path, "utf8");
       for (const [k, v] of Object.entries(updates)) {
+        // Skip unchanged masked password fields
+        if (v === "********") continue;
         const safeV = String(v ?? "");
         const re = new RegExp(`^(\\s*)${k}\\s*=.*$`, "m");
         if (re.test(content)) {
@@ -649,7 +651,24 @@ function currentSettings() {
     stt: { whisper_model: process.env.WHISPER_MODEL },
     whitelist: (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").filter(Boolean),
     embed_dim: process.env.EMBED_DIM,
-    max_tokens: process.env.MAX_TOKENS
+    max_tokens: process.env.MAX_TOKENS,
+    mail: {
+      kerio_host:           process.env.KERIO_HOST || "",
+      kerio_user:           process.env.KERIO_USER || "",
+      kerio_password:       process.env.KERIO_PASSWORD ? "********" : "",
+      kerio_from:           process.env.KERIO_FROM || "",
+      mail_allowed_domains: process.env.MAIL_ALLOWED_DOMAINS || "",
+      mail_whitelist:       process.env.MAIL_WHITELIST || "",
+      email_mode:           process.env.EMAIL_MODE || "read",
+      email_mark_read:      process.env.EMAIL_MARK_READ === "true",
+      support_email:        process.env.SUPPORT_EMAIL || ""
+    },
+    calendar: {
+      caldav_url:  process.env.CALDAV_URL  || "",
+      caldav_user: process.env.CALDAV_USER || "",
+      caldav_pass: process.env.CALDAV_PASS ? "********" : "",
+      caldav_mode: process.env.CALDAV_MODE || "read"
+    }
   };
 }
 

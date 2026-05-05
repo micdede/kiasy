@@ -443,6 +443,23 @@ function settingsBody() {
         ],
         'Telegram': [
           ['TELEGRAM_ALLOWED_USERS', 'Whitelist (comma-separated IDs)', 'text']
+        ],
+        'Mail (Kerio IMAP/SMTP)': [
+          ['KERIO_HOST', 'IMAP/SMTP Host', 'text'],
+          ['KERIO_USER', 'Benutzername', 'text'],
+          ['KERIO_PASSWORD', 'Passwort', 'password'],
+          ['KERIO_FROM', 'Absender (Name <email>)', 'text'],
+          ['MAIL_ALLOWED_DOMAINS', 'Erlaubte Empfänger-Domains (comma)', 'text'],
+          ['MAIL_WHITELIST', 'Adress-Whitelist (comma)', 'text'],
+          ['EMAIL_MODE', 'Modus', 'select', ['read','write','off']],
+          ['EMAIL_MARK_READ', 'Gelesene markieren', 'bool'],
+          ['SUPPORT_EMAIL', 'Support-Adresse', 'text']
+        ],
+        'Kalender (CalDAV)': [
+          ['CALDAV_URL', 'CalDAV-URL (z.B. https://server/dav/calendars/user/default/)', 'text'],
+          ['CALDAV_USER', 'Benutzername', 'text'],
+          ['CALDAV_PASS', 'Passwort', 'password'],
+          ['CALDAV_MODE', 'Modus', 'select', ['read','write','off']]
         ]
       };
       let current = {};
@@ -457,7 +474,13 @@ function settingsBody() {
           MAIL_WATCHER_ENABLED: s.flags.mail_watcher_enabled, TELEGRAM_VOICE_REPLY: s.flags.telegram_voice_reply,
           VECTOR_MEMORY_ENABLED: s.flags.vector_memory_enabled,
           AGENT_AUTO_ROUTE: s.flags.agent_auto_route,
-          TELEGRAM_ALLOWED_USERS: s.whitelist.join(','), MAX_TOKENS: s.max_tokens
+          TELEGRAM_ALLOWED_USERS: s.whitelist.join(','), MAX_TOKENS: s.max_tokens,
+          KERIO_HOST: s.mail?.kerio_host, KERIO_USER: s.mail?.kerio_user, KERIO_PASSWORD: s.mail?.kerio_password,
+          KERIO_FROM: s.mail?.kerio_from, MAIL_ALLOWED_DOMAINS: s.mail?.mail_allowed_domains,
+          MAIL_WHITELIST: s.mail?.mail_whitelist, EMAIL_MODE: s.mail?.email_mode,
+          EMAIL_MARK_READ: s.mail?.email_mark_read, SUPPORT_EMAIL: s.mail?.support_email,
+          CALDAV_URL: s.calendar?.caldav_url, CALDAV_USER: s.calendar?.caldav_user,
+          CALDAV_PASS: s.calendar?.caldav_pass, CALDAV_MODE: s.calendar?.caldav_mode
         };
         document.getElementById('settings-form').innerHTML = Object.entries(FIELDS).map(([sec, fields]) =>
           \`<div class="sec"><h3>\${sec}</h3>\${fields.map(([k, label, type, opts]) => {
@@ -467,6 +490,8 @@ function settingsBody() {
               input = \`<div class="v toggle"><input type="checkbox" id="f-\${k}" \${v?'checked':''}><label for="f-\${k}">\${v?'an':'aus'}</label></div>\`;
             } else if (type === 'select') {
               input = \`<div class="v"><select id="f-\${k}">\${(opts||[]).map(o => \`<option \${o===v?'selected':''}>\${o}</option>\`).join('')}</select></div>\`;
+            } else if (type === 'password') {
+              input = \`<div class="v"><input type="password" id="f-\${k}" value="\${(v??'').toString().replace(/"/g,'&quot;')}" placeholder="(leer lassen = unverändert)"></div>\`;
             } else {
               input = \`<div class="v"><input type="text" id="f-\${k}" value="\${(v??'').toString().replace(/"/g,'&quot;')}"></div>\`;
             }
@@ -481,7 +506,11 @@ function settingsBody() {
             const el = document.getElementById('f-' + k);
             if (!el) continue;
             if (type === 'bool') updates[k] = el.checked ? 'true' : 'false';
-            else updates[k] = el.value;
+            else if (type === 'password') {
+              // Leeres Feld ODER unverändertes ******** überspringen
+              if (el.value === '' || el.value === '********') continue;
+              updates[k] = el.value;
+            } else updates[k] = el.value;
           }
         }
         const msg = document.getElementById('save-result');
