@@ -3,8 +3,22 @@
 
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
+import fs from "node:fs";
 
 const HOST = process.env.KERIO_HOST || "wrsk-mail.de";
+const SIG_FILE = "/data/mail-signature.txt";
+
+function loadSignature() {
+  // Priorität: Datei /data/mail-signature.txt → ENV MAIL_SIGNATURE (mit \n als literal)
+  try {
+    if (fs.existsSync(SIG_FILE)) {
+      const s = fs.readFileSync(SIG_FILE, "utf8").trim();
+      if (s) return s;
+    }
+  } catch {}
+  const envSig = process.env.MAIL_SIGNATURE || "";
+  return envSig.replace(/\\n/g, "\n").trim();
+}
 const USER = process.env.KERIO_USER;
 const PASS = process.env.KERIO_PASSWORD || process.env.KERIO_PASS;
 const FROM = process.env.KERIO_FROM || `${USER}@${HOST}`;
@@ -128,10 +142,12 @@ export async function execute(name, input) {
       auth: { user: USER, pass: PASS },
       tls: { rejectUnauthorized: false }
     });
+    const sig = loadSignature();
+    const bodyWithSig = sig ? `${input.body.trimEnd()}\n\n-- \n${sig}\n` : input.body;
     const info = await transport.sendMail({
-      from: FROM, to: input.to, subject: input.subject, text: input.body
+      from: FROM, to: input.to, subject: input.subject, text: bodyWithSig
     });
-    return { sent: true, messageId: info.messageId, accepted: info.accepted };
+    return { sent: true, messageId: info.messageId, accepted: info.accepted, signature_used: !!sig };
   }
 
   throw new Error(`unknown: ${name}`);

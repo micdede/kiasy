@@ -404,6 +404,15 @@ function settingsBody() {
     </div>
     <p class="dim">Änderungen werden in <code>.env</code> geschrieben. <b>Recreate</b> startet kiasy-core via deploy-Sidecar automatisch neu (5–10s).</p>
     <div id="settings-form"></div>
+    <div class="sec" style="margin-top:12px;">
+      <h3>Mail-Signatur</h3>
+      <p class="dim" style="font-size:12px;margin-bottom:8px;">Wird an jede via <code>mail_send</code> verschickte Mail angehängt (Standard-Trenner <code>-- </code>). Datei: <code>/data/mail-signature.txt</code>.</p>
+      <textarea id="mail-sig" rows="8" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);font-size:13px;padding:10px;" placeholder="Viele Grüße&#10;Michael Dedecke&#10;..."></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+        <button class="btn primary" onclick="saveSig()">💾 Signatur speichern</button>
+        <span id="sig-msg" class="dim" style="font-size:12px;"></span>
+      </div>
+    </div>
     <div id="save-result" style="margin-top:16px;"></div>
     <style>
       .sec { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:12px; }
@@ -543,7 +552,25 @@ function settingsBody() {
         }
         msg.innerHTML = '<div class="save-msg err">⚠ Core kommt nicht hoch — <code>docker compose logs kiasy-core</code> prüfen</div>';
       }
+      async function loadSig(){
+        try {
+          const r = await fetch('/api/mail/signature');
+          const d = await r.json();
+          document.getElementById('mail-sig').value = d.content || '';
+        } catch {}
+      }
+      async function saveSig(){
+        const content = document.getElementById('mail-sig').value;
+        const m = document.getElementById('sig-msg');
+        m.textContent = 'speichere…';
+        try {
+          const r = await fetch('/api/mail/signature', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
+          const d = await r.json();
+          m.textContent = r.ok ? '✓ gespeichert ('+d.bytes+' Bytes) — sofort aktiv' : '✗ '+(d.error||'Fehler');
+        } catch (e) { m.textContent = '✗ '+e.message; }
+      }
       load();
+      loadSig();
     </script>`;
 }
 

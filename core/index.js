@@ -327,6 +327,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, currentSettings());
     }
 
+    // ─── Mail-Signatur (Datei: /data/mail-signature.txt) ────
+    if (url.pathname === "/api/mail/signature" && req.method === "GET") {
+      const fs = await import("node:fs");
+      const path = "/data/mail-signature.txt";
+      const content = fs.existsSync(path) ? fs.readFileSync(path, "utf8") : "";
+      return sendJson(200, { content });
+    }
+    if (url.pathname === "/api/mail/signature" && req.method === "PUT") {
+      const body = await readJson(req);
+      const fs = await import("node:fs");
+      fs.writeFileSync("/data/mail-signature.txt", body.content || "");
+      return sendJson(200, { saved: true, bytes: Buffer.byteLength(body.content || "") });
+    }
+
     // ─── Logs (Ring-Buffer + Live-SSE) ──────────────────────
     if (url.pathname === "/api/logs" && req.method === "GET") {
       const n = Math.min(Number(url.searchParams.get("n")) || 200, LOG_MAX);
