@@ -614,10 +614,14 @@ function settingsBody() {
           ['SUPPORT_EMAIL', 'Support-Adresse', 'text']
         ],
         'Kalender (CalDAV)': [
-          ['CALDAV_URL', 'CalDAV-URL (z.B. https://server/dav/calendars/user/default/)', 'text'],
+          ['CALDAV_URL', 'CalDAV-URL (z.B. https://wrsk-mail.de — Auto-Discovery)', 'text'],
           ['CALDAV_USER', 'Benutzername', 'text'],
           ['CALDAV_PASS', 'Passwort', 'password'],
-          ['CALDAV_MODE', 'Modus', 'select', ['read','write','off']]
+          ['CALDAV_MODE', 'Modus', 'select', ['read','write','off']],
+          ['CALDAV_CALENDAR', 'Reminder-Kalender (Name oder Substring, leer = erster)', 'text'],
+          ['CALDAV_TASKS', 'Tasks-Kalender (Name oder Substring, leer = "Tasks")', 'text'],
+          ['CALDAV_WATCHER_ENABLED', 'CalDAV-Watcher (Cron-Ersatz: Events feuern Reminder/Agent)', 'bool'],
+          ['CALDAV_POLL_SECONDS', 'Poll-Intervall (Sekunden)', 'text']
         ]
       };
       let current = {};
@@ -639,7 +643,10 @@ function settingsBody() {
           MAIL_WHITELIST: s.mail?.mail_whitelist, EMAIL_MODE: s.mail?.email_mode,
           EMAIL_MARK_READ: s.mail?.email_mark_read, SUPPORT_EMAIL: s.mail?.support_email,
           CALDAV_URL: s.calendar?.caldav_url, CALDAV_USER: s.calendar?.caldav_user,
-          CALDAV_PASS: s.calendar?.caldav_pass, CALDAV_MODE: s.calendar?.caldav_mode
+          CALDAV_PASS: s.calendar?.caldav_pass, CALDAV_MODE: s.calendar?.caldav_mode,
+          CALDAV_CALENDAR: s.calendar?.caldav_calendar, CALDAV_TASKS: s.calendar?.caldav_tasks,
+          CALDAV_WATCHER_ENABLED: s.calendar?.caldav_watcher,
+          CALDAV_POLL_SECONDS: String(s.calendar?.caldav_poll_seconds || 300)
         };
         document.getElementById('settings-form').innerHTML = Object.entries(FIELDS).map(([sec, fields]) =>
           \`<div class="sec"><h3>\${sec}</h3>\${fields.map(([k, label, type, opts]) => {

@@ -8,6 +8,10 @@ const URL_RAW = process.env.CALDAV_URL || "";
 const USER    = process.env.CALDAV_USER || "";
 const PASS    = process.env.CALDAV_PASS || "";
 const MODE    = (process.env.CALDAV_MODE || "read").toLowerCase();  // read | write | off
+// Spezifische Kalender für Reminders/Tasks (Substring-Match auf displayName).
+// Default: erster gefundener Calendar bzw. erster mit "task" im Namen.
+const CAL_EVENTS = process.env.CALDAV_CALENDAR || "";
+const CAL_TASKS  = process.env.CALDAV_TASKS    || "";
 
 let _client = null;
 let _calendars = null;
@@ -43,12 +47,31 @@ async function calendars() {
 
 function pickCalendar(cals, hint) {
   if (!cals.length) throw new Error("Keine Kalender gefunden");
-  if (!hint) {
-    // Bevorzuge "Calendar"/"Standard"/erstes Schreib-Kalender
+  const h = (hint || CAL_EVENTS || "").trim();
+  if (!h) {
     return cals.find(c => /calendar|standard|default|kalender/i.test(c.displayName || "")) || cals[0];
   }
-  return cals.find(c => (c.displayName || "").toLowerCase().includes(hint.toLowerCase())) || cals[0];
+  return cals.find(c => (c.displayName || "").toLowerCase().includes(h.toLowerCase())) || cals[0];
 }
+
+function pickTaskCalendar(cals, hint) {
+  if (!cals.length) throw new Error("Keine Kalender gefunden");
+  const h = (hint || CAL_TASKS || "").trim();
+  if (h) return cals.find(c => (c.displayName || "").toLowerCase().includes(h.toLowerCase())) || cals[0];
+  // Default: Kalender mit "task"/"aufgabe"/"todo" im Namen, sonst erster
+  return cals.find(c => /task|aufgabe|todo|to-do/i.test(c.displayName || "")) || cals[0];
+}
+
+// Public: für caldav-watcher.js
+export async function getEventsCalendar(hint = null) {
+  const cals = await calendars();
+  return pickCalendar(cals, hint);
+}
+export async function getTasksCalendar(hint = null) {
+  const cals = await calendars();
+  return pickTaskCalendar(cals, hint);
+}
+export async function getClient() { return client(); }
 
 function fmtDate(s) {
   if (!s) return null;
@@ -56,9 +79,54 @@ function fmtDate(s) {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function normalizeIcs(s) {
+export function normalizeIcs(s) {
   // Manche Server (Kerio) liefern Bare-CR statt CRLF. Normalisiere beides → \r\n
   return String(s || "").replace(/\r\n|\r|\n/g, "\r\n");
+}
+
+// VTODO-Parser für Tasks
+export function todoToJson(obj) {
+  try {
+    const jcal = ICAL.parse(normalizeIcs(obj.data));
+    const comp = new ICAL.Component(jcal);
+    const vtodo = comp.getFirstSubcomponent("vtodo");
+    if (!vtodo) return null;
+    const get = (n) => vtodo.getFirstPropertyValue(n);
+    const due = get("due");
+    const completed = get("completed");
+    return {
+      uid:         get("uid"),
+      summary:     get("summary") || "",
+      description: get("description") || "",
+      status:      get("status") || "NEEDS-ACTION",
+      due:         due ? due.toJSDate().toISOString() : null,
+      completed:   completed ? completed.toJSDate().toISOString() : null,
+      priority:    get("priority"),
+      url:         obj.url
+    };
+  } catch (err) {
+    return { uid: null, error: err.message };
+  }
+}
+
+function buildVTODO({ summary, description = "", due = null }) {
+  const fmt = (d) => d.toISOString().replace(/[-:]/g,"").split(".")[0] + "Z";
+  const uid = `kiasy-task-${Date.now()}-${Math.random().toString(36).slice(2,10)}@kiasy`;
+  const stamp = fmt(new Date());
+  const esc = s => String(s||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+  const dueLine = due ? `DUE:${fmt(new Date(due))}` : null;
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//kiasy//calendar//DE", "CALSCALE:GREGORIAN",
+    "BEGIN:VTODO",
+    `UID:${uid}`,
+    `DTSTAMP:${stamp}`,
+    `SUMMARY:${esc(summary)}`,
+    description ? `DESCRIPTION:${esc(description)}` : null,
+    dueLine,
+    "STATUS:NEEDS-ACTION",
+    "END:VTODO",
+    "END:VCALENDAR"
+  ].filter(Boolean).join("\r\n") + "\r\n";
 }
 
 function eventToJson(event) {
@@ -159,6 +227,40 @@ export const definitions = [
     name: "calendar_calendars",
     description: "Listet alle verfügbaren Kalender (Name, URL, Read/Write).",
     input_schema: { type: "object", properties: {} }
+  },
+  {
+    name: "task_list",
+    description: "Listet Tasks (VTODO) aus dem Tasks-Kalender. Default: nur offene (NEEDS-ACTION/IN-PROCESS).",
+    input_schema: {
+      type: "object",
+      properties: {
+        include_completed: { type: "boolean", description: "Auch erledigte Tasks (default false)" },
+        calendar:          { type: "string",  description: "Kalender-Name (substring), default: CALDAV_TASKS oder erster mit 'task' im Namen" }
+      }
+    }
+  },
+  {
+    name: "task_create",
+    description: "Erstellt eine neue Aufgabe (VTODO). Optional mit Fälligkeitsdatum.",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary:     { type: "string", description: "Titel" },
+        description: { type: "string" },
+        due:         { type: "string", description: "ISO-DateTime, optional" },
+        calendar:    { type: "string", description: "Kalender-Name (substring), optional" }
+      },
+      required: ["summary"]
+    }
+  },
+  {
+    name: "task_complete",
+    description: "Markiert eine Task als erledigt (status COMPLETED).",
+    input_schema: {
+      type: "object",
+      properties: { uid: { type: "string" } },
+      required: ["uid"]
+    }
   }
 ];
 
@@ -209,6 +311,62 @@ export async function execute(name, input) {
       iCalString: ics
     });
     return { created: true, calendar: cal.displayName, filename, status: result.status, url: result.url };
+  }
+
+  if (name === "task_list") {
+    const cals = await calendars();
+    const cal = pickTaskCalendar(cals, input?.calendar);
+    const c = await client();
+    // Alle Objekte holen (kein timeRange — VTODO hat oft kein DTSTART)
+    const objects = await c.fetchCalendarObjects({ calendar: cal });
+    const tasks = objects.map(todoToJson).filter(t => t && t.uid);
+    const filtered = input?.include_completed
+      ? tasks
+      : tasks.filter(t => t.status !== "COMPLETED");
+    filtered.sort((a,b) => {
+      // Offene oben, sortiert nach due (null ans Ende)
+      if (!a.due && !b.due) return 0;
+      if (!a.due) return 1;
+      if (!b.due) return -1;
+      return a.due.localeCompare(b.due);
+    });
+    return { calendar: cal.displayName, count: filtered.length, total: tasks.length, tasks: filtered };
+  }
+
+  if (name === "task_create") {
+    if (MODE !== "write") throw new Error(`CALDAV_MODE=${MODE} — Schreiben nicht erlaubt`);
+    if (!input?.summary) throw new Error("summary erforderlich");
+    const cals = await calendars();
+    const cal  = pickTaskCalendar(cals, input.calendar);
+    const c    = await client();
+    const ics  = buildVTODO(input);
+    const filename = `kiasy-task-${Date.now()}.ics`;
+    const result = await c.createCalendarObject({ calendar: cal, filename, iCalString: ics });
+    return { created: true, calendar: cal.displayName, filename, status: result.status, url: result.url };
+  }
+
+  if (name === "task_complete") {
+    if (MODE !== "write") throw new Error(`CALDAV_MODE=${MODE} — Schreiben nicht erlaubt`);
+    if (!input?.uid) throw new Error("uid erforderlich");
+    const cals = await calendars();
+    const c = await client();
+    for (const cal of cals) {
+      const objects = await c.fetchCalendarObjects({ calendar: cal });
+      for (const obj of objects) {
+        const t = todoToJson(obj);
+        if (t && t.uid === input.uid) {
+          // ICS rebauen mit STATUS:COMPLETED + COMPLETED:<now>
+          const stamp = new Date().toISOString().replace(/[-:]/g,"").split(".")[0] + "Z";
+          let updated = normalizeIcs(obj.data);
+          if (/STATUS:/i.test(updated)) updated = updated.replace(/STATUS:[^\r\n]*/i, "STATUS:COMPLETED");
+          else updated = updated.replace(/END:VTODO/i, `STATUS:COMPLETED\r\nEND:VTODO`);
+          if (!/COMPLETED:/i.test(updated)) updated = updated.replace(/END:VTODO/i, `COMPLETED:${stamp}\r\nEND:VTODO`);
+          await c.updateCalendarObject({ calendarObject: { ...obj, data: updated } });
+          return { completed: true, calendar: cal.displayName, uid: t.uid };
+        }
+      }
+    }
+    throw new Error(`Task-UID nicht gefunden: ${input.uid}`);
   }
 
   if (name === "calendar_delete") {

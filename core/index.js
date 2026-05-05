@@ -10,6 +10,7 @@ import * as vectors from "./lib/vectors.js";
 import * as telegram from "./lib/telegram.js";
 import * as scheduler from "./lib/scheduler.js";
 import * as mailWatcher from "./lib/mail-watcher.js";
+import * as caldavWatcher from "./lib/caldav-watcher.js";
 import * as whisper from "./lib/whisper.js";
 import * as piper from "./lib/piper.js";
 
@@ -44,6 +45,7 @@ await vectors.init();
 telegram.start();
 scheduler.start();
 mailWatcher.start();
+caldavWatcher.start();
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
@@ -790,10 +792,14 @@ function currentSettings() {
       support_email:        process.env.SUPPORT_EMAIL || ""
     },
     calendar: {
-      caldav_url:  process.env.CALDAV_URL  || "",
-      caldav_user: process.env.CALDAV_USER || "",
-      caldav_pass: process.env.CALDAV_PASS ? "********" : "",
-      caldav_mode: process.env.CALDAV_MODE || "read"
+      caldav_url:      process.env.CALDAV_URL  || "",
+      caldav_user:     process.env.CALDAV_USER || "",
+      caldav_pass:     process.env.CALDAV_PASS ? "********" : "",
+      caldav_mode:     process.env.CALDAV_MODE || "read",
+      caldav_calendar: process.env.CALDAV_CALENDAR || "",
+      caldav_tasks:    process.env.CALDAV_TASKS    || "",
+      caldav_watcher:  process.env.CALDAV_WATCHER_ENABLED === "true",
+      caldav_poll_seconds: Number(process.env.CALDAV_POLL_SECONDS) || 300
     }
   };
 }
