@@ -14,7 +14,16 @@ import * as piper from "./piper.js";
 
 const TOKEN   = process.env.TELEGRAM_TOKEN;
 const ENABLED = process.env.TELEGRAM_ENABLED === "true";
-const VOICE_REPLY = process.env.TELEGRAM_VOICE_REPLY === "true";  // antwortet zusätzlich per Voice
+// Reply-Mode: "auto" (text + voice nur wenn Input Voice war), "text", "voice", "both"
+// Legacy: TELEGRAM_VOICE_REPLY=true ⇒ "both", false ⇒ "text"
+const REPLY_MODE = (process.env.TELEGRAM_REPLY_MODE
+  || (process.env.TELEGRAM_VOICE_REPLY === "true" ? "both" : "text")).toLowerCase();
+function shouldSendText(inputWasVoice)  { return REPLY_MODE === "text"  || REPLY_MODE === "both" || REPLY_MODE === "auto"; }
+function shouldSendVoice(inputWasVoice) {
+  if (REPLY_MODE === "voice" || REPLY_MODE === "both") return true;
+  if (REPLY_MODE === "auto") return inputWasVoice;
+  return false;
+}
 const ALLOWED = (process.env.TELEGRAM_ALLOWED_USERS || "")
   .split(",").map(s => s.trim()).filter(Boolean);
 
@@ -69,9 +78,14 @@ async function handleMessage(msg) {
       db.logEvent({ type: "telegram-voice-in", message: text.substring(0, 200), meta: { fromId, dur: msg.voice.duration } });
 
       const result = await agent.handle({ chatId, message: text });
-      await safeReply(chatId, `🎙 \`${text}\`\n\n${result.text || "(leere Antwort)"}`);
       const skipVoiceV = result.tools_used?.includes("translate_and_speak");
-      if (VOICE_REPLY && !skipVoiceV) await sendVoice(chatId, result.text);
+      // Bei Voice-Input: Transkript immer mitschicken (zur Verifikation), Body je nach Modus
+      if (shouldSendText(true)) {
+        await safeReply(chatId, `🎙 \`${text}\`\n\n${result.text || "(leere Antwort)"}`);
+      } else {
+        await safeReply(chatId, `🎙 \`${text}\``);
+      }
+      if (shouldSendVoice(true) && !skipVoiceV) await sendVoice(chatId, result.text);
     } catch (err) {
       console.error("[telegram] voice handler:", err);
       await safeReply(chatId, `Voice-Fehler: ${err.message || err}`);
@@ -90,10 +104,9 @@ async function handleMessage(msg) {
   try {
     bot.sendChatAction(chatId, "typing").catch(() => {});
     const result = await agent.handle({ chatId, message: msg.text });
-    await safeReply(chatId, result.text || "(leere Antwort)");
-    // Skip Voice-Reply wenn das Tool schon eine Voice in der richtigen Sprache geschickt hat
     const skipVoice = result.tools_used?.includes("translate_and_speak");
-    if (VOICE_REPLY && !skipVoice) await sendVoice(chatId, result.text);
+    if (shouldSendText(false)) await safeReply(chatId, result.text || "(leere Antwort)");
+    if (shouldSendVoice(false) && !skipVoice) await sendVoice(chatId, result.text);
   } catch (err) {
     console.error("[telegram] handler error:", err);
     await safeReply(chatId, `Fehler: ${err.message || err}`);

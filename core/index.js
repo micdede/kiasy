@@ -706,6 +706,8 @@ function currentSettings() {
       vector_memory_enabled: process.env.VECTOR_MEMORY_ENABLED === "true",
       agent_auto_route:      process.env.AGENT_AUTO_ROUTE === "true"
     },
+    telegram_reply_mode: process.env.TELEGRAM_REPLY_MODE
+      || (process.env.TELEGRAM_VOICE_REPLY === "true" ? "both" : "text"),
     tts: { piper_voice: process.env.PIPER_VOICE },
     stt: { whisper_model: process.env.WHISPER_MODEL },
     whitelist: (process.env.TELEGRAM_ALLOWED_USERS || "").split(",").filter(Boolean),

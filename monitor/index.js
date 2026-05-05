@@ -448,7 +448,7 @@ function settingsBody() {
           ['TELEGRAM_ENABLED', 'Telegram-Bot', 'bool'],
           ['SCHEDULER_ENABLED', 'Reminder-Scheduler', 'bool'],
           ['MAIL_WATCHER_ENABLED', 'Mail-Watcher', 'bool'],
-          ['TELEGRAM_VOICE_REPLY', 'Telegram antwortet per Voice', 'bool'],
+          ['TELEGRAM_REPLY_MODE', 'Telegram-Antwort: text/voice/both/auto', 'select', ['auto','text','voice','both']],
           ['VECTOR_MEMORY_ENABLED', 'Vector-Memory (Auto-Embed + Recall)', 'bool'],
           ['AGENT_AUTO_ROUTE', 'Auto-Route kurze Messages → Cheap-Modell', 'bool']
         ],
@@ -482,7 +482,8 @@ function settingsBody() {
           ANTHROPIC_MODEL: s.models.anthropic,
           WHISPER_MODEL: s.stt.whisper_model, PIPER_VOICE: s.tts.piper_voice,
           TELEGRAM_ENABLED: s.flags.telegram_enabled, SCHEDULER_ENABLED: s.flags.scheduler_enabled,
-          MAIL_WATCHER_ENABLED: s.flags.mail_watcher_enabled, TELEGRAM_VOICE_REPLY: s.flags.telegram_voice_reply,
+          MAIL_WATCHER_ENABLED: s.flags.mail_watcher_enabled,
+          TELEGRAM_REPLY_MODE: s.telegram_reply_mode || 'auto',
           VECTOR_MEMORY_ENABLED: s.flags.vector_memory_enabled,
           AGENT_AUTO_ROUTE: s.flags.agent_auto_route,
           TELEGRAM_ALLOWED_USERS: s.whitelist.join(','), MAX_TOKENS: s.max_tokens,
