@@ -342,7 +342,16 @@ export const definitions = [
   },
   {
     name: "task_complete",
-    description: "Markiert eine Task als erledigt (status COMPLETED).",
+    description: "Markiert eine Task als erledigt (status COMPLETED). Behält die Task in der Liste.",
+    input_schema: {
+      type: "object",
+      properties: { uid: { type: "string" } },
+      required: ["uid"]
+    }
+  },
+  {
+    name: "task_delete",
+    description: "Löscht eine Task endgültig (entfernt sie komplett, nicht nur als erledigt markieren).",
     input_schema: {
       type: "object",
       properties: { uid: { type: "string" } },
@@ -478,6 +487,11 @@ export async function execute(name, input) {
     return { created: true, calendar: cal.displayName, filename, status: result.status, url: result.url };
   }
 
+  if (name === "task_delete") {
+    // Wir nutzen calendar_delete-Logik (sucht über alle Komponenten)
+    return execute("calendar_delete", input);
+  }
+
   if (name === "task_complete") {
     if (MODE !== "write") throw new Error(`CALDAV_MODE=${MODE} — Schreiben nicht erlaubt`);
     if (!input?.uid) throw new Error("uid erforderlich");
@@ -588,14 +602,21 @@ export async function execute(name, input) {
     if (!input?.uid) throw new Error("uid erforderlich");
     const cals = await calendars();
     const c = await client();
-    // Such Event über alle Kalender
+    // Such über alle Kalender und alle Komponenten (VEVENT + VTODO + VJOURNAL)
+    const auth = "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64");
     for (const cal of cals) {
-      const objects = await c.fetchCalendarObjects({ calendar: cal });
-      for (const obj of objects) {
-        const e = eventToJson(obj);
-        if (e && e.uid === input.uid) {
-          await c.deleteCalendarObject({ calendarObject: obj });
-          return { deleted: true, calendar: cal.displayName, uid: input.uid };
+      for (const comp of ["VEVENT", "VTODO", "VJOURNAL"]) {
+        let objects;
+        try { objects = await fetchByComponent(cal.url, comp); } catch { continue; }
+        for (const obj of objects) {
+          // UID aus dem Roh-ICS rauslesen
+          const m = normalizeIcs(obj.data).match(/UID:([^\r\n]+)/i);
+          if (m && m[1].trim() === input.uid) {
+            // Direkt mit DELETE löschen (etag wäre nice, geht aber auch ohne)
+            const r = await fetch(obj.url, { method: "DELETE", headers: { "Authorization": auth } });
+            if (!r.ok) throw new Error(`DELETE failed: HTTP ${r.status}`);
+            return { deleted: true, calendar: cal.displayName, component: comp, uid: input.uid };
+          }
         }
       }
     }
