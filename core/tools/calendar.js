@@ -12,6 +12,7 @@ const MODE    = (process.env.CALDAV_MODE || "read").toLowerCase();  // read | wr
 // Default: erster gefundener Calendar bzw. erster mit "task" im Namen.
 const CAL_EVENTS = process.env.CALDAV_CALENDAR || "";
 const CAL_TASKS  = process.env.CALDAV_TASKS    || "";
+const CAL_NOTES  = process.env.CALDAV_NOTES    || "";  // Default: gleicher Kalender wie Events (Kerio-Konvention)
 
 let _client = null;
 let _calendars = null;
@@ -58,8 +59,15 @@ function pickTaskCalendar(cals, hint) {
   if (!cals.length) throw new Error("Keine Kalender gefunden");
   const h = (hint || CAL_TASKS || "").trim();
   if (h) return cals.find(c => (c.displayName || "").toLowerCase().includes(h.toLowerCase())) || cals[0];
-  // Default: Kalender mit "task"/"aufgabe"/"todo" im Namen, sonst erster
   return cals.find(c => /task|aufgabe|todo|to-do/i.test(c.displayName || "")) || cals[0];
+}
+
+function pickNoteCalendar(cals, hint) {
+  if (!cals.length) throw new Error("Keine Kalender gefunden");
+  const h = (hint || CAL_NOTES || "").trim();
+  if (h) return cals.find(c => (c.displayName || "").toLowerCase().includes(h.toLowerCase())) || cals[0];
+  // Default: Notes-spezifisch wenn vorhanden, sonst Events-Kalender (Kerio-Konvention)
+  return cals.find(c => /note|notiz|journal/i.test(c.displayName || "")) || pickCalendar(cals, null);
 }
 
 // Public: für caldav-watcher.js
@@ -82,6 +90,50 @@ function fmtDate(s) {
 export function normalizeIcs(s) {
   // Manche Server (Kerio) liefern Bare-CR statt CRLF. Normalisiere beides → \r\n
   return String(s || "").replace(/\r\n|\r|\n/g, "\r\n");
+}
+
+// VJOURNAL-Parser für Notes (Kerio speichert Notizen als VJOURNAL im Calendar)
+export function noteToJson(obj) {
+  try {
+    const jcal = ICAL.parse(normalizeIcs(obj.data));
+    const comp = new ICAL.Component(jcal);
+    const vj = comp.getFirstSubcomponent("vjournal");
+    if (!vj) return null;
+    const get = (n) => vj.getFirstPropertyValue(n);
+    const dtstart = get("dtstart");
+    const catProp = vj.getFirstProperty("categories");
+    const cats = catProp ? catProp.getValues().flatMap(v => String(v).split(",").map(s => s.trim()).filter(Boolean)) : [];
+    return {
+      uid:         get("uid"),
+      summary:     get("summary") || "",
+      description: get("description") || "",
+      categories:  cats,
+      created:     dtstart ? dtstart.toJSDate().toISOString() : null,
+      url:         obj.url
+    };
+  } catch (err) {
+    return { uid: null, error: err.message };
+  }
+}
+
+function buildVJOURNAL({ summary, description = "", categories = [] }) {
+  const fmt = (d) => d.toISOString().replace(/[-:]/g,"").split(".")[0] + "Z";
+  const uid = `kiasy-note-${Date.now()}-${Math.random().toString(36).slice(2,10)}@kiasy`;
+  const stamp = fmt(new Date());
+  const esc = s => String(s||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+  const cats = categories.length ? `CATEGORIES:${categories.map(esc).join(",")}` : null;
+  return [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//kiasy//calendar//DE", "CALSCALE:GREGORIAN",
+    "BEGIN:VJOURNAL",
+    `UID:${uid}`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART:${stamp}`,
+    `SUMMARY:${esc(summary)}`,
+    description ? `DESCRIPTION:${esc(description)}` : null,
+    cats,
+    "END:VJOURNAL",
+    "END:VCALENDAR"
+  ].filter(Boolean).join("\r\n") + "\r\n";
 }
 
 // VTODO-Parser für Tasks
@@ -261,6 +313,54 @@ export const definitions = [
       properties: { uid: { type: "string" } },
       required: ["uid"]
     }
+  },
+  {
+    name: "note_list",
+    description: "Listet Notizen vom Mailserver (Kerio: VJOURNAL im Calendar). Nicht zu verwechseln mit der lokalen Markdown-Wissensbasis.",
+    input_schema: {
+      type: "object",
+      properties: {
+        category: { type: "string", description: "Optional: nur Notizen mit dieser Kategorie" },
+        calendar: { type: "string", description: "Kalender-Name (substring), default: Notes-Kalender oder erster mit 'note' im Namen, sonst Events-Kalender" }
+      }
+    }
+  },
+  {
+    name: "note_create",
+    description: "Erstellt eine neue Server-Notiz (VJOURNAL).",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary:     { type: "string", description: "Titel" },
+        description: { type: "string", description: "Inhalt (mehrzeilig erlaubt)" },
+        categories:  { type: "array", items: { type: "string" }, description: "Tags (optional)" },
+        calendar:    { type: "string" }
+      },
+      required: ["summary"]
+    }
+  },
+  {
+    name: "note_update",
+    description: "Aktualisiert summary/description/categories einer Notiz per UID.",
+    input_schema: {
+      type: "object",
+      properties: {
+        uid:         { type: "string" },
+        summary:     { type: "string" },
+        description: { type: "string" },
+        categories:  { type: "array", items: { type: "string" } }
+      },
+      required: ["uid"]
+    }
+  },
+  {
+    name: "note_delete",
+    description: "Löscht eine Notiz per UID.",
+    input_schema: {
+      type: "object",
+      properties: { uid: { type: "string" } },
+      required: ["uid"]
+    }
   }
 ];
 
@@ -367,6 +467,88 @@ export async function execute(name, input) {
       }
     }
     throw new Error(`Task-UID nicht gefunden: ${input.uid}`);
+  }
+
+  if (name === "note_list") {
+    const cals = await calendars();
+    const cal = pickNoteCalendar(cals, input?.calendar);
+    const c = await client();
+    const objects = await c.fetchCalendarObjects({ calendar: cal });
+    let notes = objects.map(noteToJson).filter(n => n && n.uid);
+    if (input?.category) {
+      const cat = input.category.toLowerCase();
+      notes = notes.filter(n => n.categories.some(c => c.toLowerCase().includes(cat)));
+    }
+    notes.sort((a,b) => (b.created || "").localeCompare(a.created || ""));
+    return { calendar: cal.displayName, count: notes.length, notes };
+  }
+
+  if (name === "note_create") {
+    if (MODE !== "write") throw new Error(`CALDAV_MODE=${MODE} — Schreiben nicht erlaubt`);
+    if (!input?.summary) throw new Error("summary erforderlich");
+    const cals = await calendars();
+    const cal  = pickNoteCalendar(cals, input.calendar);
+    const c    = await client();
+    const ics  = buildVJOURNAL(input);
+    const filename = `kiasy-note-${Date.now()}.ics`;
+    const result = await c.createCalendarObject({ calendar: cal, filename, iCalString: ics });
+    return { created: true, calendar: cal.displayName, filename, status: result.status, url: result.url };
+  }
+
+  if (name === "note_update") {
+    if (MODE !== "write") throw new Error(`CALDAV_MODE=${MODE} — Schreiben nicht erlaubt`);
+    if (!input?.uid) throw new Error("uid erforderlich");
+    const cals = await calendars();
+    const c = await client();
+    for (const cal of cals) {
+      const objects = await c.fetchCalendarObjects({ calendar: cal });
+      for (const obj of objects) {
+        const n = noteToJson(obj);
+        if (n && n.uid === input.uid) {
+          // Rebuild VJOURNAL mit gleicher UID
+          const merged = {
+            summary:     input.summary     ?? n.summary,
+            description: input.description ?? n.description,
+            categories:  input.categories  ?? n.categories
+          };
+          const stamp = new Date().toISOString().replace(/[-:]/g,"").split(".")[0] + "Z";
+          const esc = s => String(s||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+          const cats = merged.categories?.length ? `CATEGORIES:${merged.categories.map(esc).join(",")}` : null;
+          const ics = [
+            "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//kiasy//calendar//DE","CALSCALE:GREGORIAN",
+            "BEGIN:VJOURNAL",
+            `UID:${input.uid}`,
+            `DTSTAMP:${stamp}`,
+            `DTSTART:${stamp}`,
+            `SUMMARY:${esc(merged.summary)}`,
+            merged.description ? `DESCRIPTION:${esc(merged.description)}` : null,
+            cats,
+            "END:VJOURNAL","END:VCALENDAR"
+          ].filter(Boolean).join("\r\n") + "\r\n";
+          await c.updateCalendarObject({ calendarObject: { ...obj, data: ics } });
+          return { updated: true, calendar: cal.displayName, uid: input.uid };
+        }
+      }
+    }
+    throw new Error(`Note-UID nicht gefunden: ${input.uid}`);
+  }
+
+  if (name === "note_delete") {
+    if (MODE !== "write") throw new Error(`CALDAV_MODE=${MODE} — Schreiben nicht erlaubt`);
+    if (!input?.uid) throw new Error("uid erforderlich");
+    const cals = await calendars();
+    const c = await client();
+    for (const cal of cals) {
+      const objects = await c.fetchCalendarObjects({ calendar: cal });
+      for (const obj of objects) {
+        const n = noteToJson(obj);
+        if (n && n.uid === input.uid) {
+          await c.deleteCalendarObject({ calendarObject: obj });
+          return { deleted: true, calendar: cal.displayName, uid: input.uid };
+        }
+      }
+    }
+    throw new Error(`Note-UID nicht gefunden: ${input.uid}`);
   }
 
   if (name === "calendar_delete") {

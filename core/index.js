@@ -798,6 +798,7 @@ function currentSettings() {
       caldav_mode:     process.env.CALDAV_MODE || "read",
       caldav_calendar: process.env.CALDAV_CALENDAR || "",
       caldav_tasks:    process.env.CALDAV_TASKS    || "",
+      caldav_notes:    process.env.CALDAV_NOTES    || "",
       caldav_watcher:  process.env.CALDAV_WATCHER_ENABLED === "true",
       caldav_poll_seconds: Number(process.env.CALDAV_POLL_SECONDS) || 300
     }

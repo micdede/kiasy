@@ -620,6 +620,7 @@ function settingsBody() {
           ['CALDAV_MODE', 'Modus', 'select', ['read','write','off']],
           ['CALDAV_CALENDAR', 'Reminder-Kalender (Name oder Substring, leer = erster)', 'text'],
           ['CALDAV_TASKS', 'Tasks-Kalender (Name oder Substring, leer = "Tasks")', 'text'],
+          ['CALDAV_NOTES', 'Notizen-Kalender (Substring; leer = Events-Kalender, Kerio-Konvention)', 'text'],
           ['CALDAV_WATCHER_ENABLED', 'CalDAV-Watcher (Cron-Ersatz: Events feuern Reminder/Agent)', 'bool'],
           ['CALDAV_POLL_SECONDS', 'Poll-Intervall (Sekunden)', 'text']
         ]
@@ -645,6 +646,7 @@ function settingsBody() {
           CALDAV_URL: s.calendar?.caldav_url, CALDAV_USER: s.calendar?.caldav_user,
           CALDAV_PASS: s.calendar?.caldav_pass, CALDAV_MODE: s.calendar?.caldav_mode,
           CALDAV_CALENDAR: s.calendar?.caldav_calendar, CALDAV_TASKS: s.calendar?.caldav_tasks,
+          CALDAV_NOTES: s.calendar?.caldav_notes,
           CALDAV_WATCHER_ENABLED: s.calendar?.caldav_watcher,
           CALDAV_POLL_SECONDS: String(s.calendar?.caldav_poll_seconds || 300)
         };
