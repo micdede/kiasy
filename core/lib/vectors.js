@@ -169,6 +169,20 @@ export async function stats() {
   }
 }
 
+// ─── Delete by Type-Filter (für Cleanup von V1-Migrations-Vektoren) ──
+export async function deleteByTypes(types) {
+  if (!ENABLED || !initialized) return { deleted: 0, error: "vectors disabled" };
+  if (!Array.isArray(types) || !types.length) return { deleted: 0, error: "types[] erforderlich" };
+  const before = (await fetch(`${QDRANT_URL}/collections/${COLLECTION}`).then(r => r.json())).result.points_count;
+  await qdrant("POST", `/collections/${COLLECTION}/points/delete`, {
+    filter: { must: [{ key: "type", match: { any: types } }] }
+  });
+  // Qdrant ist async — kurz warten und Stats erneut holen
+  await new Promise(r => setTimeout(r, 500));
+  const after = (await fetch(`${QDRANT_URL}/collections/${COLLECTION}`).then(r => r.json())).result.points_count;
+  return { deleted: before - after, before, after, types };
+}
+
 // ─── Scroll: Punkte auflisten (mit Pagination) ───────────────
 export async function scroll({ limit = 50, offset = null, type = null } = {}) {
   if (!ENABLED || !initialized) return { points: [], next: null };

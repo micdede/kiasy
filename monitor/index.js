@@ -260,7 +260,8 @@ function memoryBody() {
           <option value="note">note</option>
         </select>
         <button class="btn" onclick="loadBrowse(true)">refresh</button>
-        <button class="btn" onclick="reindex()" style="margin-left:auto;">🔄 Re-Index alles</button>
+        <button class="btn" onclick="cleanup()" style="margin-left:auto;">🧹 V1-Altlast löschen</button>
+        <button class="btn" onclick="reindex()">🔄 Re-Index alles</button>
       </div>
       <div id="bresults" class="list"></div>
       <div style="text-align:center;margin-top:12px;">
@@ -370,6 +371,15 @@ function memoryBody() {
           document.getElementById('bmore').style.display = d.next != null ? '' : 'none';
           browseLoaded = true;
         } catch (e) { document.getElementById('bresults').innerHTML = '<p class="dim">Fehler: '+e.message+'</p>'; }
+      }
+      async function cleanup(){
+        if (!confirm('Alle Vektoren mit type=kb oder type=chat (V1-Migrations-Altlast) endgültig aus Qdrant löschen?')) return;
+        try {
+          const r = await fetch('/api/memory/vectors/cleanup', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+          const d = await r.json();
+          alert('Cleanup:\\n' + JSON.stringify(d, null, 2));
+          loadStats(); loadBrowse(true);
+        } catch (e) { alert('Fehler: '+e.message); }
       }
       async function reindex(){
         if (!confirm('Alle Messages, Memory-Einträge und Notes neu vektorisieren? (kann je nach Anzahl 1-5 Min dauern)')) return;

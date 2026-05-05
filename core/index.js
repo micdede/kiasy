@@ -108,6 +108,14 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, r);
     }
 
+    // ─── Vector-Cleanup: alte Typen löschen (z.B. V1-Migration: kb, chat) ──
+    if (url.pathname === "/api/memory/vectors/cleanup" && req.method === "POST") {
+      const body = await readJson(req).catch(() => ({}));
+      const types = body.types || ["kb", "chat"];
+      const result = await vectors.deleteByTypes(types);
+      return sendJson(200, result);
+    }
+
     // ─── Re-Index: alle messages + memory + notes neu vektorisieren ──
     if (url.pathname === "/api/memory/vectors/reindex" && req.method === "POST") {
       const body = await readJson(req).catch(() => ({}));
