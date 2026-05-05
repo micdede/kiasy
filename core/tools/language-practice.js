@@ -19,10 +19,16 @@ function pickVoice(lang) {
 export const definitions = [{
   name: "translate_and_speak",
   description:
-    "Übersetzt einen deutschen Satz in eine Zielsprache (Englisch/Französisch/Spanisch/Italienisch) " +
-    "und schickt das Ergebnis als Sprachnachricht über Telegram an Michael. " +
-    "Nutze das wenn der User fragt 'wie sagt man auf <Sprache> ...', " +
-    "'übersetz das ins <Sprache> und sprich es vor', oder ähnliches.",
+    "PFLICHT-Tool für ALLE Übersetzungs-Anfragen in andere Sprachen. " +
+    "Übersetzt einen deutschen Satz und schickt das Ergebnis als Voice-Message in der ZIELSPRACHE-Stimme an Michael. " +
+    "MUSST du IMMER nutzen wenn der User folgendes fragt:\n" +
+    "  - 'Wie sagt man auf <Sprache>: ...'\n" +
+    "  - 'Übersetz das ins <Sprache>'\n" +
+    "  - 'Auf <Sprache>: ...'\n" +
+    "  - 'Sag mir auf <Sprache> wie...'\n" +
+    "  - 'Sprich mir das auf <Sprache> vor'\n" +
+    "Niemals nur Text antworten — IMMER dieses Tool aufrufen, damit der User die korrekte Aussprache hört. " +
+    "Sprachen: en (Englisch), fr (Französisch), es (Spanisch), it (Italienisch), de (Deutsch).",
   input_schema: {
     type: "object",
     properties: {

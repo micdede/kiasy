@@ -15,8 +15,35 @@ const MAX_TURNS     = Number(process.env.AGENT_MAX_TURNS) || 10;
 const RECALL_K      = Number(process.env.AGENT_RECALL_K) || 5;
 const AUTO_ROUTE    = process.env.AGENT_AUTO_ROUTE === "true";
 
+// Übersetzungs-Pattern: Detection im Agent, weil LLMs (insbes. minimax)
+// das Tool nicht zuverlässig selbst wählen. Match → direkter Tool-Call,
+// kein LLM-Round.
+const LANG_FLAG = { en: "🇺🇸", fr: "🇫🇷", es: "🇪🇸", it: "🇮🇹", de: "🇩🇪" };
+
+// Akzeptiert Deklinationen: "italienisch", "italienische", "italienischen", "italian", …
+function detectLang(s) {
+  const t = s.toLowerCase();
+  if (t.startsWith("englisch") || t.startsWith("english")) return "en";
+  if (t.startsWith("französ")  || t.startsWith("french")  || t.startsWith("franz"))  return "fr";
+  if (t.startsWith("spanisch") || t.startsWith("spanish") || t.startsWith("span"))   return "es";
+  if (t.startsWith("italien")  || t.startsWith("italian"))  return "it";
+  if (t.startsWith("deutsch")  || t.startsWith("german"))   return "de";
+  return null;
+}
+
+function detectTranslationRequest(message) {
+  const re = /^\s*(?:wie\s+sagt\s+man\s+auf|übersetz(?:e)?\s+(?:das|mir|den\s+(?:text|satz))?\s*(?:ins?|nach|in)|sag\s+mir\s+auf|sprich\s+(?:es\s+)?auf|auf)\s+([a-zäöüß]+)\s*[:,.\-]?\s+(.+?)\s*[?!.]?\s*$/i;
+  const m = message.match(re);
+  if (!m) return null;
+  const lang = detectLang(m[1]);
+  if (!lang) return null;
+  const text = m[2].trim().replace(/^["„»“]|["«"”]$/g, "").trim();
+  if (text.length < 2) return null;
+  return { target_lang: lang, text };
+}
+
 // Heuristik: kurze, einfache Messages → cheap. Trigger-Words → chat (für Tools).
-const TOOL_TRIGGERS = /\b(such(e|en|t)?|find(e|en|et)?|wann|wo|wer|wieviel|tool|remind|erinner|merk|speicher|schick|sende|mail|email|kalender|termin|wetter|news|workflow|delegier|hass|home assistant|status|liste|zeig|öffne|aktivier|deaktivier|files?|read|write)\b/i;
+const TOOL_TRIGGERS = /\b(such(e|en|t)?|find(e|en|et)?|wann|wo|wer|wieviel|tool|remind|erinner|merk|speicher|schick|sende|mail|email|kalender|termin|wetter|news|workflow|delegier|hass|home assistant|status|liste|zeig|öffne|aktivier|deaktivier|files?|read|write|übersetz|sprich|sag\s+mir\s+auf)\b/i;
 
 function pickRole(message, explicitRole) {
   if (explicitRole) return explicitRole;
@@ -34,6 +61,26 @@ export async function handle({ chatId, message, provider, role }) {
   const userMsgId = db.saveMessage({ chatId, role: "user", content: message });
   vectors.upsertMessage(userMsgId, message, { chat_id: chatId, role: "user" }).catch(() => {});
 
+  // 1a. Übersetzungs-Shortcut: Pattern erkannt → direkter Tool-Call ohne LLM
+  const tr = detectTranslationRequest(message);
+  if (tr) {
+    try {
+      const result = await tools.execute("translate_and_speak", tr);
+      const flag = LANG_FLAG[tr.target_lang] || "🌐";
+      const replyText = `${flag} ${result.translated || ""}\n\n_(Voice in ${result.voice} verschickt)_`;
+      const messageId = db.saveMessage({
+        chatId, role: "assistant", content: replyText,
+        meta: { tools_used: ["translate_and_speak"], shortcut: true, voice: result.voice, lang: tr.target_lang }
+      });
+      vectors.upsertMessage(messageId, replyText, { chat_id: chatId, role: "assistant" }).catch(() => {});
+      db.logEvent({ type: "translation-shortcut", message: `${tr.target_lang}: ${tr.text.substring(0,80)}`, meta: result });
+      return { text: replyText, turns: 0, messageId, usage: null, role: "shortcut", tools_used: ["translate_and_speak"] };
+    } catch (err) {
+      console.error("[agent] translation shortcut failed:", err.message);
+      // Fallthrough zum LLM
+    }
+  }
+
   // 2. Verlauf laden + Semantic-Recall + Tools
   const history = loadHistory(chatId);
   const toolDefs = await tools.getDefinitions();
@@ -48,6 +95,7 @@ export async function handle({ chatId, message, provider, role }) {
   let lastText = "";
   let lastUsage = null;
   let turn = 0;
+  const toolsUsed = [];
   const systemSuffix = recall.length ? buildRecallSystem(recall) : null;
 
   while (turn < MAX_TURNS) {
@@ -74,6 +122,7 @@ export async function handle({ chatId, message, provider, role }) {
 
     // Alle Tool-Calls ausführen
     for (const tc of res.tool_calls) {
+      toolsUsed.push(tc.name);
       let result;
       try {
         result = await tools.execute(tc.name, tc.input);
@@ -109,7 +158,7 @@ export async function handle({ chatId, message, provider, role }) {
     meta: { usage: lastUsage, turns: turn, role: chosenRole }
   });
 
-  return { text: lastText, turns: turn, messageId, usage: lastUsage, role: chosenRole };
+  return { text: lastText, turns: turn, messageId, usage: lastUsage, role: chosenRole, tools_used: toolsUsed };
 }
 
 export async function* streamHandle({ chatId, message, provider, role }) {
@@ -130,6 +179,7 @@ export async function* streamHandle({ chatId, message, provider, role }) {
   let lastText = "";
   let lastUsage = null;
   let turn = 0;
+  const toolsUsed = [];
 
   while (turn < MAX_TURNS) {
     turn++;
@@ -157,6 +207,7 @@ export async function* streamHandle({ chatId, message, provider, role }) {
     messages.push({ role: "assistant", content: lastText, tool_calls: toolCallsInTurn });
 
     for (const tc of toolCallsInTurn) {
+      toolsUsed.push(tc.name);
       yield { tool_use: { name: tc.name, input: tc.input } };
       let result;
       try {
@@ -181,7 +232,7 @@ export async function* streamHandle({ chatId, message, provider, role }) {
   });
   vectors.upsertMessage(messageId, lastText, { chat_id: chatId, role: "assistant" }).catch(() => {});
 
-  yield { done: { text: lastText, turns: turn, messageId, usage: lastUsage } };
+  yield { done: { text: lastText, turns: turn, messageId, usage: lastUsage, tools_used: toolsUsed } };
 }
 
 // ─── Semantic Recall ─────────────────────────────────────────

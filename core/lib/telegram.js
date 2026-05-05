@@ -70,7 +70,8 @@ async function handleMessage(msg) {
 
       const result = await agent.handle({ chatId, message: text });
       await safeReply(chatId, `🎙 \`${text}\`\n\n${result.text || "(leere Antwort)"}`);
-      if (VOICE_REPLY) await sendVoice(chatId, result.text);
+      const skipVoiceV = result.tools_used?.includes("translate_and_speak");
+      if (VOICE_REPLY && !skipVoiceV) await sendVoice(chatId, result.text);
     } catch (err) {
       console.error("[telegram] voice handler:", err);
       await safeReply(chatId, `Voice-Fehler: ${err.message || err}`);
@@ -90,7 +91,9 @@ async function handleMessage(msg) {
     bot.sendChatAction(chatId, "typing").catch(() => {});
     const result = await agent.handle({ chatId, message: msg.text });
     await safeReply(chatId, result.text || "(leere Antwort)");
-    if (VOICE_REPLY) await sendVoice(chatId, result.text);
+    // Skip Voice-Reply wenn das Tool schon eine Voice in der richtigen Sprache geschickt hat
+    const skipVoice = result.tools_used?.includes("translate_and_speak");
+    if (VOICE_REPLY && !skipVoice) await sendVoice(chatId, result.text);
   } catch (err) {
     console.error("[telegram] handler error:", err);
     await safeReply(chatId, `Fehler: ${err.message || err}`);
