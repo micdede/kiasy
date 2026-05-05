@@ -81,6 +81,41 @@ export async function getTasksCalendar(hint = null) {
 }
 export async function getClient() { return client(); }
 
+// Direkter CalDAV-REPORT für eine bestimmte Komponente (VTODO, VJOURNAL).
+// Workaround: tsdav.fetchCalendarObjects filtert per default nur VEVENT,
+// VTODO/VJOURNAL liefert es leer. Wir machen den REPORT selbst und holen
+// die ICS-Dateien über GET.
+async function fetchByComponent(calendarUrl, component) {
+  const auth = "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64");
+  const reportXml = `<?xml version="1.0" encoding="UTF-8"?>
+<c:calendar-query xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">
+  <d:prop><d:getetag/></d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="${component}"/>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>`;
+  const r = await fetch(calendarUrl, {
+    method: "REPORT",
+    headers: { "Authorization": auth, "Depth": "1", "Content-Type": "application/xml" },
+    body: reportXml
+  });
+  if (!r.ok) throw new Error(`REPORT ${component}: HTTP ${r.status}`);
+  const xml = await r.text();
+  // hrefs extrahieren (Namespace-agnostisch)
+  const hrefs = [...new Set([...xml.matchAll(/<[^:>]*:?href[^>]*>([^<]+\.ics)<\/[^>]+>/gi)].map(m => m[1]))];
+  // Pro href GET (parallel)
+  const base = new URL(calendarUrl).origin;
+  const objs = await Promise.all(hrefs.map(async h => {
+    const url = h.startsWith("http") ? h : base + h;
+    const gr = await fetch(url, { headers: { "Authorization": auth } });
+    if (!gr.ok) return null;
+    return { url, data: await gr.text() };
+  }));
+  return objs.filter(Boolean);
+}
+
 function fmtDate(s) {
   if (!s) return null;
   const d = new Date(s);
@@ -416,9 +451,7 @@ export async function execute(name, input) {
   if (name === "task_list") {
     const cals = await calendars();
     const cal = pickTaskCalendar(cals, input?.calendar);
-    const c = await client();
-    // Alle Objekte holen (kein timeRange — VTODO hat oft kein DTSTART)
-    const objects = await c.fetchCalendarObjects({ calendar: cal });
+    const objects = await fetchByComponent(cal.url, "VTODO");
     const tasks = objects.map(todoToJson).filter(t => t && t.uid);
     const filtered = input?.include_completed
       ? tasks
@@ -451,7 +484,7 @@ export async function execute(name, input) {
     const cals = await calendars();
     const c = await client();
     for (const cal of cals) {
-      const objects = await c.fetchCalendarObjects({ calendar: cal });
+      const objects = await fetchByComponent(cal.url, "VTODO");
       for (const obj of objects) {
         const t = todoToJson(obj);
         if (t && t.uid === input.uid) {
@@ -472,8 +505,7 @@ export async function execute(name, input) {
   if (name === "note_list") {
     const cals = await calendars();
     const cal = pickNoteCalendar(cals, input?.calendar);
-    const c = await client();
-    const objects = await c.fetchCalendarObjects({ calendar: cal });
+    const objects = await fetchByComponent(cal.url, "VJOURNAL");
     let notes = objects.map(noteToJson).filter(n => n && n.uid);
     if (input?.category) {
       const cat = input.category.toLowerCase();
@@ -501,7 +533,7 @@ export async function execute(name, input) {
     const cals = await calendars();
     const c = await client();
     for (const cal of cals) {
-      const objects = await c.fetchCalendarObjects({ calendar: cal });
+      const objects = await fetchByComponent(cal.url, "VJOURNAL");
       for (const obj of objects) {
         const n = noteToJson(obj);
         if (n && n.uid === input.uid) {
@@ -539,7 +571,7 @@ export async function execute(name, input) {
     const cals = await calendars();
     const c = await client();
     for (const cal of cals) {
-      const objects = await c.fetchCalendarObjects({ calendar: cal });
+      const objects = await fetchByComponent(cal.url, "VJOURNAL");
       for (const obj of objects) {
         const n = noteToJson(obj);
         if (n && n.uid === input.uid) {
