@@ -59,7 +59,7 @@ app.get("/", async (req, res) => {
     <section class="cards">
       ${[
         ["chat","Chat","💬","Web-Chat mit Agent"],
-        ["notes","Notes","📝","Markdown-Wissensbasis"],
+        // ["notes","Notes","📝","Markdown-Wissensbasis"],  // DEPRECATED: nach Kerio migriert (siehe note_* Tools)
         ["memory","Memory","🧠","Facts/Todos + Vector-Suche"],
         ["reminders","Reminders","⏰","Erinnerungen"],
         ["workflows","Workflows","⚙️","Mehrstufige Tasks"],
@@ -85,7 +85,9 @@ app.get("/reminders", (req, res) => res.send(layout("reminders", "Reminders", re
 app.get("/news", (req, res) => res.send(layout("news", "News-Quellen", newsBody())));
 app.get("/health", (req, res) => res.send(layout("health", "Health", healthBody())));
 app.get("/settings", (req, res) => res.send(layout("settings", "Settings", settingsBody())));
-app.get("/notes", (req, res) => res.send(layout("notes", "Notes", notesBody())));
+// DEPRECATED: lokale Markdown-Notes ersetzt durch Kerio CalDAV (note_* Tools).
+// Code bleibt als Fallback — Route deaktiviert.
+// app.get("/notes", (req, res) => res.send(layout("notes", "Notes", notesBody())));
 app.get("/workflows", (req, res) => res.send(layout("workflows", "Workflows", workflowsBody())));
 app.get("/delegations", (req, res) => res.send(layout("delegations", "Delegations", delegationsBody())));
 app.get("/ha-editor", (req, res) => res.send(layout("ha-editor", "HA-Editor", haEditorBody())));
@@ -1303,7 +1305,7 @@ function layout(active, title, body) {
   const navItems = [
     ["dashboard","/","Dashboard"],
     ["chat","/chat","Chat"],
-    ["notes","/notes","Notes"],
+    // ["notes","/notes","Notes"],  // DEPRECATED: nach Kerio migriert
     ["memory","/memory","Memory"],
     ["reminders","/reminders","Reminders"],
     ["workflows","/workflows","Workflows"],

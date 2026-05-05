@@ -131,14 +131,14 @@ const server = http.createServer(async (req, res) => {
           catch { counts.errors++; }
         }
       }
-      // Notes (Markdown-Dateien)
+      // Notes: deprecated lokales System; bleibt als Fallback vektorisiert,
+      // damit semantischer Recall der alten Inhalte weiter klappt.
       if (types.includes("notes")) {
         const fs = await import("node:fs");
         const dir = "/data/notes";
         if (fs.existsSync(dir)) {
           for (const f of fs.readdirSync(dir).filter(n => n.endsWith(".md"))) {
             const content = fs.readFileSync(`${dir}/${f}`, "utf8").substring(0, 2000);
-            // stabile numerische ID aus filename
             let h = 0; for (const c of f) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
             try {
               await vectors.upsertMemory(Math.abs(h), `${f}\n\n${content}`, { type: "note", filename: f });
@@ -146,6 +146,19 @@ const server = http.createServer(async (req, res) => {
             } catch { counts.errors++; }
           }
         }
+        // Server-Notes (Kerio VJOURNAL) zusätzlich vektorisieren
+        try {
+          const calMod = await import("./tools/calendar.js");
+          const r = await calMod.execute("note_list", {});
+          for (const n of (r.notes || [])) {
+            const text = `${n.summary}\n\n${n.description || ""}`;
+            let h = 0; for (const c of n.uid) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+            try {
+              await vectors.upsertMemory(Math.abs(h) + 1_000_000, text, { type: "note", source: "kerio", uid: n.uid, categories: n.categories });
+              counts.notes++;
+            } catch { counts.errors++; }
+          }
+        } catch (err) { console.warn("[reindex] Kerio-Notes failed:", err.message); }
       }
       return sendJson(200, { reindexed: counts });
     }
@@ -471,6 +484,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ─── Notes (Markdown KB-Editor) ──────────────────────────
+    // DEPRECATED: Lokale Markdown-Notes wurden nach Kerio CalDAV (VJOURNAL)
+    // migriert. Tools dafür: note_list / note_create / note_update / note_delete.
+    // Code + /data/notes-Dateien bleiben als Fallback bestehen.
+    /*
     if (url.pathname === "/api/notes" && req.method === "GET") {
       const fs = await import("node:fs");
       const dir = "/data/notes";
@@ -497,7 +514,6 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "PUT") {
           const body = await readJson(req);
           fs.writeFileSync(filepath, body.content || "");
-          // Note vektorisieren (stabile numerische ID aus filename)
           let nh = 0; for (const c of filename) nh = ((nh << 5) - nh + c.charCodeAt(0)) | 0;
           const noteText = `${filename}\n\n${(body.content || "").substring(0, 2000)}`;
           import("./lib/vectors.js").then(v => v.upsertMemory(Math.abs(nh), noteText, { type: "note", filename }).catch(() => {}));
@@ -509,6 +525,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
     }
+    */
 
     // ─── Workflows ───────────────────────────────────────────
     if (url.pathname === "/api/workflows" && req.method === "GET") {
