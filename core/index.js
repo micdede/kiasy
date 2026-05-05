@@ -17,6 +17,28 @@ const PORT = Number(process.env.PORT || 8080);
 const STARTED = Date.now();
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url)));
 
+// ─── In-Memory Log Ring-Buffer + SSE-Subscriber ─────────────
+const LOG_BUFFER = [];
+const LOG_MAX = 1000;
+const logSubs = new Set();
+function pushLog(level, args) {
+  const msg = args.map(a =>
+    typeof a === "string" ? a :
+    a instanceof Error    ? (a.stack || a.message) :
+                            (() => { try { return JSON.stringify(a); } catch { return String(a); } })()
+  ).join(" ");
+  const line = { ts: Date.now(), level, msg };
+  LOG_BUFFER.push(line);
+  if (LOG_BUFFER.length > LOG_MAX) LOG_BUFFER.shift();
+  for (const fn of logSubs) { try { fn(line); } catch {} }
+}
+const _origLog  = console.log.bind(console);
+const _origWarn = console.warn.bind(console);
+const _origErr  = console.error.bind(console);
+console.log   = (...a) => { pushLog("info",  a); _origLog(...a); };
+console.warn  = (...a) => { pushLog("warn",  a); _origWarn(...a); };
+console.error = (...a) => { pushLog("error", a); _origErr(...a); };
+
 db.init();
 await vectors.init();
 telegram.start();
@@ -303,6 +325,29 @@ const server = http.createServer(async (req, res) => {
     // ─── Settings GET (laufende Werte aus process.env) ─────
     if (url.pathname === "/api/settings" && req.method === "GET") {
       return sendJson(200, currentSettings());
+    }
+
+    // ─── Logs (Ring-Buffer + Live-SSE) ──────────────────────
+    if (url.pathname === "/api/logs" && req.method === "GET") {
+      const n = Math.min(Number(url.searchParams.get("n")) || 200, LOG_MAX);
+      return sendJson(200, { items: LOG_BUFFER.slice(-n), buffer_size: LOG_BUFFER.length, max: LOG_MAX });
+    }
+    if (url.pathname === "/api/logs/stream" && req.method === "GET") {
+      res.writeHead(200, {
+        "Content-Type":  "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection":    "keep-alive",
+        "X-Accel-Buffering": "no"
+      });
+      const initial = LOG_BUFFER.slice(-200);
+      res.write(`event: snapshot\ndata: ${JSON.stringify({ items: initial })}\n\n`);
+      const fn = (line) => {
+        try { res.write(`event: log\ndata: ${JSON.stringify(line)}\n\n`); } catch {}
+      };
+      logSubs.add(fn);
+      const ka = setInterval(() => { try { res.write(`: keepalive\n\n`); } catch {} }, 15_000);
+      req.on("close", () => { logSubs.delete(fn); clearInterval(ka); });
+      return;
     }
 
     // ─── Restart (über deploy-Sidecar) ──────────────────────

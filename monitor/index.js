@@ -70,6 +70,7 @@ app.get("/", async (req, res) => {
         ["voice","Voice","🎙","TTS/STT-Test"],
         ["ha-editor","HA","🏠","HA-Devices"],
         ["health","Health","🩺","Container-Status"],
+        ["logs","Logs","📜","Live-Logs core"],
         ["backup","Backup","💾","Backups"],
         ["settings","Settings","🛠","Konfiguration"]
       ].map(([p, t, e, d]) => `<a class="card-link" href="/${p}"><div class="card"><h3>${e} ${t}</h3><p class="lead">${d}</p></div></a>`).join("")}
@@ -91,6 +92,7 @@ app.get("/ha-editor", (req, res) => res.send(layout("ha-editor", "HA-Editor", ha
 app.get("/voice", (req, res) => res.send(layout("voice", "Voice-Test", voiceBody())));
 app.get("/backup", (req, res) => res.send(layout("backup", "Backups", backupBody())));
 app.get("/labs", (req, res) => res.send(layout("labs", "Labs", labsBody())));
+app.get("/logs", (req, res) => res.send(layout("logs", "Logs", logsBody())));
 
 app.listen(PORT, "0.0.0.0", () => console.log(`[kiasy-monitor] v${pkg.version} listening on :${PORT}`));
 
@@ -998,6 +1000,108 @@ function labsBody() {
     </script>`;
 }
 
+// ─── Logs Page ───────────────────────────────────────────
+function logsBody() {
+  return `
+    <div class="page-head"><h2>Logs (kiasy-core, live)</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="lf" class="input" placeholder="Filter (substring)" style="width:240px;">
+        <select id="ll" class="input" style="width:130px;">
+          <option value="">Alle Levels</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+        </select>
+        <button class="btn" id="bp">⏸ Pause</button>
+        <button class="btn" id="bc">🗑 Clear</button>
+        <span id="bs" class="dim" style="font-size:12px;">connecting…</span>
+      </div>
+    </div>
+    <p class="dim">Ring-Buffer (max 1000 Zeilen). Stream wird automatisch reconnected. <b>Tipp:</b> für vollständige Logs (incl. anderer Container) <code>sudo docker logs kiasy-core -f</code> auf dem Host.</p>
+    <div id="lv" class="logs"></div>
+    <style>
+      .logs { background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; height:calc(100vh - 280px); overflow-y:auto; font-family:var(--mono); font-size:12px; line-height:1.5; }
+      .logs .ln { white-space:pre-wrap; word-break:break-word; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+      .logs .ln .t { color:var(--text-dim); margin-right:8px; }
+      .logs .ln .l { display:inline-block; width:48px; text-transform:uppercase; font-weight:600; margin-right:8px; }
+      .logs .ln .l.info  { color:var(--accent); }
+      .logs .ln .l.warn  { color:#e5b34a; }
+      .logs .ln .l.error { color:var(--err); }
+      .logs .ln.hi { background:rgba(255,255,255,0.05); }
+      .input { padding:6px 10px; background:var(--bg-elevated); border:1px solid var(--border); color:var(--text); border-radius:4px; font-size:13px; }
+    </style>
+    <script>
+      const lv = document.getElementById('lv');
+      const lf = document.getElementById('lf');
+      const ll = document.getElementById('ll');
+      const bp = document.getElementById('bp');
+      const bc = document.getElementById('bc');
+      const bs = document.getElementById('bs');
+      let paused = false;
+      let buffer = [];
+      const MAX_RENDER = 1000;
+      function fmt(line) {
+        const d = new Date(line.ts);
+        const t = d.toLocaleTimeString('de-DE', { hour12:false }) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+        const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+        return \`<div class="ln" data-l="\${line.level}"><span class="t">\${t}</span><span class="l \${line.level}">\${line.level}</span>\${esc(line.msg)}</div>\`;
+      }
+      function applyFilter() {
+        const fq = lf.value.toLowerCase();
+        const fl = ll.value;
+        let html = '';
+        let count = 0;
+        for (let i = buffer.length - 1; i >= 0 && count < MAX_RENDER; i--) {
+          const b = buffer[i];
+          if (fl && b.level !== fl) continue;
+          if (fq && !b.msg.toLowerCase().includes(fq)) continue;
+          html = fmt(b) + html;
+          count++;
+        }
+        lv.innerHTML = html;
+        const atBottom = lv.scrollTop + lv.clientHeight >= lv.scrollHeight - 50;
+        if (atBottom) lv.scrollTop = lv.scrollHeight;
+      }
+      function append(line) {
+        buffer.push(line);
+        if (buffer.length > 2000) buffer.splice(0, buffer.length - 2000);
+        if (paused) return;
+        const fq = lf.value.toLowerCase();
+        const fl = ll.value;
+        if (fl && line.level !== fl) return;
+        if (fq && !line.msg.toLowerCase().includes(fq)) return;
+        const wasAtBottom = lv.scrollTop + lv.clientHeight >= lv.scrollHeight - 50;
+        lv.insertAdjacentHTML('beforeend', fmt(line));
+        while (lv.children.length > MAX_RENDER) lv.removeChild(lv.firstChild);
+        if (wasAtBottom) lv.scrollTop = lv.scrollHeight;
+      }
+      lf.addEventListener('input', applyFilter);
+      ll.addEventListener('change', applyFilter);
+      bp.addEventListener('click', () => { paused = !paused; bp.textContent = paused ? '▶ Resume' : '⏸ Pause'; if (!paused) applyFilter(); });
+      bc.addEventListener('click', () => { buffer = []; lv.innerHTML = ''; });
+      let es;
+      function connect() {
+        bs.textContent = 'connecting…';
+        es = new EventSource('/api/logs/stream');
+        es.addEventListener('snapshot', e => {
+          const d = JSON.parse(e.data);
+          buffer = d.items || [];
+          applyFilter();
+          bs.textContent = 'live';
+        });
+        es.addEventListener('log', e => {
+          append(JSON.parse(e.data));
+        });
+        es.onerror = () => {
+          bs.textContent = 'reconnecting…';
+          es.close();
+          setTimeout(connect, 3000);
+        };
+      }
+      connect();
+    </script>`;
+}
+
 // ═════════════════════════════════════════════════════════════
 // Layout (mit Top-Nav)
 // ═════════════════════════════════════════════════════════════
@@ -1016,6 +1120,7 @@ function layout(active, title, body) {
     ["voice","/voice","Voice"],
     ["ha-editor","/ha-editor","HA"],
     ["health","/health","Health"],
+    ["logs","/logs","Logs"],
     ["backup","/backup","Backup"],
     ["settings","/settings","Settings"]
   ];
