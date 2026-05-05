@@ -92,6 +92,62 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, { count: results.length, results });
     }
 
+    // ─── Vector-Stats ────────────────────────────────────────
+    if (url.pathname === "/api/memory/vectors/stats" && req.method === "GET") {
+      return sendJson(200, await vectors.stats());
+    }
+
+    // ─── Vector-Browse (Scroll-API) ──────────────────────────
+    if (url.pathname === "/api/memory/vectors/browse" && req.method === "GET") {
+      const limit  = Math.min(Number(url.searchParams.get("limit")) || 30, 200);
+      const type   = url.searchParams.get("type") || null;
+      const offset = url.searchParams.get("offset") || null;
+      const r = await vectors.scroll({ limit, type, offset: offset ? Number(offset) : null });
+      return sendJson(200, r);
+    }
+
+    // ─── Re-Index: alle messages + memory + notes neu vektorisieren ──
+    if (url.pathname === "/api/memory/vectors/reindex" && req.method === "POST") {
+      const body = await readJson(req).catch(() => ({}));
+      const types = body.types || ["messages", "memory", "notes"];
+      const counts = { messages: 0, memory: 0, notes: 0, errors: 0 };
+      const sqlite = db.get();
+      // Messages
+      if (types.includes("messages")) {
+        const rows = sqlite.prepare("SELECT id, content, chat_id, role FROM messages WHERE content IS NOT NULL AND length(content) >= 10 ORDER BY id DESC LIMIT 5000").all();
+        for (const r of rows) {
+          try { await vectors.upsertMessage(r.id, r.content, { chat_id: r.chat_id, role: r.role }); counts.messages++; }
+          catch { counts.errors++; }
+        }
+      }
+      // Memory
+      if (types.includes("memory")) {
+        const rows = sqlite.prepare("SELECT id, key, value, category FROM memory").all();
+        for (const r of rows) {
+          const text = `[${r.category}] ${r.key ? r.key + ": " : ""}${r.value}`;
+          try { await vectors.upsertMemory(r.id, text, { category: r.category, key: r.key }); counts.memory++; }
+          catch { counts.errors++; }
+        }
+      }
+      // Notes (Markdown-Dateien)
+      if (types.includes("notes")) {
+        const fs = await import("node:fs");
+        const dir = "/data/notes";
+        if (fs.existsSync(dir)) {
+          for (const f of fs.readdirSync(dir).filter(n => n.endsWith(".md"))) {
+            const content = fs.readFileSync(`${dir}/${f}`, "utf8").substring(0, 2000);
+            // stabile numerische ID aus filename
+            let h = 0; for (const c of f) h = ((h << 5) - h + c.charCodeAt(0)) | 0;
+            try {
+              await vectors.upsertMemory(Math.abs(h), `${f}\n\n${content}`, { type: "note", filename: f });
+              counts.notes++;
+            } catch { counts.errors++; }
+          }
+        }
+      }
+      return sendJson(200, { reindexed: counts });
+    }
+
     // ─── Tools ───────────────────────────────────────────────
     if (url.pathname === "/api/tools" && req.method === "GET") {
       const defs = await tools.getDefinitions();
@@ -429,11 +485,10 @@ const server = http.createServer(async (req, res) => {
         if (req.method === "PUT") {
           const body = await readJson(req);
           fs.writeFileSync(filepath, body.content || "");
-          // Note vektorisieren (filename als Schlüssel für Idempotenz)
-          const noteId = filename.replace(/[^\w]/g, "_");
+          // Note vektorisieren (stabile numerische ID aus filename)
+          let nh = 0; for (const c of filename) nh = ((nh << 5) - nh + c.charCodeAt(0)) | 0;
           const noteText = `${filename}\n\n${(body.content || "").substring(0, 2000)}`;
-          // upsertMemory mit prefix=note für Filter-Möglichkeit
-          import("./lib/vectors.js").then(v => v.upsertMemory(0, noteText, { type: "note", filename }).catch(() => {}));
+          import("./lib/vectors.js").then(v => v.upsertMemory(Math.abs(nh), noteText, { type: "note", filename }).catch(() => {}));
           return sendJson(200, { filename, saved: true, size: Buffer.byteLength(body.content || "") });
         }
         if (req.method === "DELETE") {

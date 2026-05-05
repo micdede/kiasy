@@ -60,7 +60,7 @@ app.get("/", async (req, res) => {
       ${[
         ["chat","Chat","💬","Web-Chat mit Agent"],
         ["notes","Notes","📝","Markdown-Wissensbasis"],
-        ["memory","Memory","🧠","Facts / Todos"],
+        ["memory","Memory","🧠","Facts/Todos + Vector-Suche"],
         ["reminders","Reminders","⏰","Erinnerungen"],
         ["workflows","Workflows","⚙️","Mehrstufige Tasks"],
         ["delegations","Delegations","👥","Aufgaben delegieren"],
@@ -208,41 +208,124 @@ function toolsBody() {
 function memoryBody() {
   return `
     <div class="page-head"><h2>Memory</h2></div>
-    <div class="filter-bar">
-      <select id="cat" class="input"><option value="">alle</option><option>facts</option><option>todos</option><option>notes</option></select>
-      <input id="q" placeholder="Volltext-Suche…" class="input">
-      <button class="btn" onclick="loadMem()">filter</button>
+
+    <!-- Qdrant-Stats Panel -->
+    <div class="vec-stats" id="vec-stats">lade Vector-Status…</div>
+
+    <!-- Tabs: Facts/Todos vs Vectors -->
+    <div class="tabs">
+      <button class="tab active" data-tab="explicit" onclick="setTab('explicit')">📋 Facts / Todos / Notes (SQLite)</button>
+      <button class="tab" data-tab="search" onclick="setTab('search')">🔍 Semantische Suche (Qdrant)</button>
+      <button class="tab" data-tab="browse" onclick="setTab('browse')">📚 Vector-Browser</button>
     </div>
-    <h3 style="margin-top:24px">Neu</h3>
-    <div class="add-form">
-      <select id="new-cat" class="input"><option>facts</option><option>todos</option><option>notes</option></select>
-      <input id="new-key" placeholder="Stichwort (optional)" class="input">
-      <textarea id="new-val" placeholder="Inhalt…" rows="2" class="input"></textarea>
-      <button class="btn primary" onclick="addMem()">speichern</button>
+
+    <!-- Tab: explicit (SQLite memory) -->
+    <div class="tab-pane" id="tab-explicit">
+      <div class="filter-bar">
+        <select id="cat" class="input"><option value="">alle</option><option>facts</option><option>todos</option><option>notes</option></select>
+        <input id="q" placeholder="Volltext-Suche…" class="input">
+        <button class="btn" onclick="loadMem()">filter</button>
+      </div>
+      <h3 style="margin-top:24px">Neu</h3>
+      <div class="add-form">
+        <select id="new-cat" class="input"><option>facts</option><option>todos</option><option>notes</option></select>
+        <input id="new-key" placeholder="Stichwort (optional)" class="input">
+        <textarea id="new-val" placeholder="Inhalt…" rows="2" class="input"></textarea>
+        <button class="btn primary" onclick="addMem()">speichern</button>
+      </div>
+      <h3 style="margin-top:24px">Einträge</h3>
+      <div id="mem-list" class="list"></div>
     </div>
-    <h3 style="margin-top:24px">Einträge</h3>
-    <div id="mem-list" class="list"></div>
+
+    <!-- Tab: semantische Suche -->
+    <div class="tab-pane" id="tab-search" style="display:none;">
+      <p class="dim">Sucht in <b>allen</b> auto-vektorisierten Inhalten (Chat-Messages, Memory, Notes) mit bge-m3 + Cosine-Similarity.</p>
+      <div style="display:flex;gap:8px;margin:16px 0;">
+        <input id="sq" class="input" placeholder="z.B. 'Wann war der letzte Kerio-Backup'" style="flex:1;">
+        <select id="sk" class="input" style="width:80px;"><option>5</option><option>10</option><option>20</option><option>50</option></select>
+        <button class="btn primary" onclick="doSearch()">🔍 Suchen</button>
+      </div>
+      <div id="sresults" class="list"></div>
+    </div>
+
+    <!-- Tab: Vector-Browser -->
+    <div class="tab-pane" id="tab-browse" style="display:none;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <select id="bt" class="input" onchange="loadBrowse(true)">
+          <option value="">alle Typen</option>
+          <option value="message">message</option>
+          <option value="memory">memory</option>
+          <option value="note">note</option>
+        </select>
+        <button class="btn" onclick="loadBrowse(true)">refresh</button>
+        <button class="btn" onclick="reindex()" style="margin-left:auto;">🔄 Re-Index alles</button>
+      </div>
+      <div id="bresults" class="list"></div>
+      <div style="text-align:center;margin-top:12px;">
+        <button class="btn" id="bmore" onclick="loadBrowse(false)" style="display:none;">↓ mehr laden</button>
+      </div>
+    </div>
+
     <style>
+      .vec-stats { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; margin-bottom:16px; display:flex; gap:24px; flex-wrap:wrap; font-size:13px; }
+      .vec-stats .stat { display:flex; flex-direction:column; gap:2px; }
+      .vec-stats .stat .v { font-size:20px; font-weight:600; color:var(--accent); font-family:var(--mono); }
+      .vec-stats .stat .l { color:var(--text-dim); font-size:11px; text-transform:uppercase; }
+      .vec-stats .err { color:var(--err); }
+      .tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--border); }
+      .tab { background:none; border:none; padding:10px 16px; cursor:pointer; color:var(--text-dim); font-size:13px; border-bottom:2px solid transparent; }
+      .tab:hover { color:var(--text); }
+      .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
       .filter-bar, .add-form { display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap; }
       .add-form { flex-direction:column; max-width:600px; }
       .add-form .input { width:100%; }
       .input { padding:8px 12px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font); font-size:14px; }
       .list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
       .row { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; display:flex; gap:12px; align-items:flex-start; }
-      .row .meta { flex:0 0 100px; color:var(--text-dim); font-size:12px; font-family:var(--mono); }
-      .row .content { flex:1; word-wrap:break-word; }
+      .row .meta { flex:0 0 110px; color:var(--text-dim); font-size:11px; font-family:var(--mono); }
+      .row .content { flex:1; word-wrap:break-word; word-break:break-word; }
       .row .delete { background:none; border:none; color:var(--err); cursor:pointer; opacity:0.5; }
       .row:hover .delete { opacity:1; }
       .badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; background:var(--accent-soft); color:var(--accent); margin-right:6px; }
+      .badge.message { background:rgba(56,139,253,0.18); color:#79b8ff; }
+      .badge.memory  { background:rgba(111,229,164,0.18); color:#7ee5a8; }
+      .badge.note    { background:rgba(229,179,74,0.18); color:#e5b34a; }
+      .score { font-family:var(--mono); color:var(--accent); font-weight:600; font-size:12px; }
     </style>
     <script>
+      // ─── Stats ───────────────────────────────
+      async function loadStats(){
+        try {
+          const s = await (await fetch('/api/memory/vectors/stats')).json();
+          const el = document.getElementById('vec-stats');
+          if (!s.enabled) { el.innerHTML = '<span class="err">Vector-Memory deaktiviert (VECTOR_MEMORY_ENABLED=false)</span>'; return; }
+          if (s.error)    { el.innerHTML = '<span class="err">Qdrant-Fehler: '+s.error+'</span>'; return; }
+          const t = s.types || {};
+          el.innerHTML = \`
+            <div class="stat"><span class="v">\${s.total||0}</span><span class="l">Total Vektoren</span></div>
+            <div class="stat"><span class="v">\${t.message||0}</span><span class="l">Messages</span></div>
+            <div class="stat"><span class="v">\${t.memory||0}</span><span class="l">Memory</span></div>
+            <div class="stat"><span class="v">\${t.note||0}</span><span class="l">Notes</span></div>
+            <div class="stat"><span class="v" style="font-size:13px;">\${s.collection}</span><span class="l">Collection (\${s.dim}d, \${s.status})</span></div>
+          \`;
+        } catch (e) {
+          document.getElementById('vec-stats').innerHTML = '<span class="err">Stats nicht erreichbar: '+e.message+'</span>';
+        }
+      }
+      // ─── Tabs ────────────────────────────────
+      function setTab(t){
+        document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab===t));
+        document.querySelectorAll('.tab-pane').forEach(p => p.style.display = (p.id==='tab-'+t) ? '' : 'none');
+        if (t==='browse' && !browseLoaded) loadBrowse(true);
+      }
+      // ─── Explicit memory (SQLite) ────────────
       async function loadMem(){
         const cat=document.getElementById('cat').value, q=document.getElementById('q').value.trim();
         const params=new URLSearchParams(); if(cat)params.set('category',cat); if(q)params.set('q',q);
         const r=await fetch('/api/memory?'+params).then(r=>r.json());
         document.getElementById('mem-list').innerHTML = r.items.length?r.items.map(m=>\`
-          <div class="row"><div class="meta">#\${m.id}<br>\${m.added}</div>
-          <div class="content"><span class="badge">\${m.category}</span>\${m.key?'<strong>'+m.key+':</strong> ':''}\${escapeHtml(m.value)}</div>
+          <div class="row"><div class="meta">#\${m.id}<br>\${m.added||''}</div>
+          <div class="content"><span class="badge">\${m.category}</span>\${m.key?'<strong>'+escapeHtml(m.key)+':</strong> ':''}\${escapeHtml(m.value)}</div>
           <button class="delete" onclick="delMem(\${m.id})">✕</button></div>
         \`).join(''):'<p class="dim">keine Einträge</p>';
       }
@@ -250,11 +333,69 @@ function memoryBody() {
         const body={category:document.getElementById('new-cat').value,key:document.getElementById('new-key').value.trim()||null,value:document.getElementById('new-val').value.trim()};
         if(!body.value)return alert('Wert leer');
         await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-        document.getElementById('new-val').value=''; document.getElementById('new-key').value=''; loadMem();
+        document.getElementById('new-val').value=''; document.getElementById('new-key').value=''; loadMem(); loadStats();
       }
-      async function delMem(id){if(!confirm('löschen?'))return; await fetch('/api/memory/'+id,{method:'DELETE'}); loadMem();}
-      function escapeHtml(s){return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-      loadMem();
+      async function delMem(id){if(!confirm('löschen?'))return; await fetch('/api/memory/'+id,{method:'DELETE'}); loadMem(); loadStats();}
+      // ─── Semantic Search ─────────────────────
+      async function doSearch(){
+        const query = document.getElementById('sq').value.trim();
+        const limit = Number(document.getElementById('sk').value);
+        if (!query) return;
+        const el = document.getElementById('sresults');
+        el.innerHTML = '<p class="dim">⏳ embedding + suche…</p>';
+        try {
+          const r = await fetch('/api/memory/search/semantic', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query, limit})});
+          const d = await r.json();
+          if (!d.results?.length) { el.innerHTML = '<p class="dim">keine Treffer</p>'; return; }
+          el.innerHTML = d.results.map(p => renderPoint(p)).join('');
+        } catch (e) { el.innerHTML = '<p class="dim">Fehler: '+e.message+'</p>'; }
+      }
+      // ─── Vector-Browser ──────────────────────
+      let browseLoaded = false, browseOffset = null;
+      async function loadBrowse(reset){
+        const type = document.getElementById('bt').value;
+        if (reset) { browseOffset = null; document.getElementById('bresults').innerHTML = ''; }
+        const params = new URLSearchParams(); params.set('limit', 30);
+        if (type) params.set('type', type);
+        if (browseOffset != null) params.set('offset', browseOffset);
+        try {
+          const r = await fetch('/api/memory/vectors/browse?'+params);
+          const d = await r.json();
+          const list = document.getElementById('bresults');
+          if (reset && (!d.points || !d.points.length)) { list.innerHTML = '<p class="dim">keine Vektoren</p>'; return; }
+          list.insertAdjacentHTML('beforeend', d.points.map(p => renderPoint(p)).join(''));
+          browseOffset = d.next;
+          document.getElementById('bmore').style.display = d.next != null ? '' : 'none';
+          browseLoaded = true;
+        } catch (e) { document.getElementById('bresults').innerHTML = '<p class="dim">Fehler: '+e.message+'</p>'; }
+      }
+      async function reindex(){
+        if (!confirm('Alle Messages, Memory-Einträge und Notes neu vektorisieren? (kann je nach Anzahl 1-5 Min dauern)')) return;
+        const el = document.getElementById('bresults');
+        el.innerHTML = '<p class="dim">⏳ re-indexing…</p>';
+        try {
+          const r = await fetch('/api/memory/vectors/reindex', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+          const d = await r.json();
+          alert('Re-Index abgeschlossen:\\n' + JSON.stringify(d.reindexed, null, 2));
+          loadStats(); loadBrowse(true);
+        } catch (e) { alert('Fehler: '+e.message); }
+      }
+      // ─── Render ──────────────────────────────
+      function renderPoint(p){
+        const pl = p.payload || {};
+        const t = pl.type || '?';
+        const score = (typeof p.score === 'number') ? '<span class="score">'+p.score.toFixed(3)+'</span><br>' : '';
+        const id = '#'+p.id;
+        const meta = pl.chat_id ? 'chat:'+pl.chat_id+(pl.role?' '+pl.role:'') : (pl.filename || (pl.category||''));
+        return \`<div class="row">
+          <div class="meta">\${score}\${id}<br>\${escapeHtml(meta)}</div>
+          <div class="content"><span class="badge \${t}">\${t}</span>\${escapeHtml((pl.text||'').substring(0, 400))}</div>
+        </div>\`;
+      }
+      function escapeHtml(s){return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+      // Init
+      loadStats(); loadMem();
+      document.getElementById('sq').addEventListener('keydown', e => { if (e.key==='Enter') doSearch(); });
     </script>`;
 }
 

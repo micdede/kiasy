@@ -132,3 +132,49 @@ async function qdrant(method, path, body) {
 export function getInfo() {
   return { enabled: ENABLED, initialized, collection: COLLECTION, dim: EMBED_DIM };
 }
+
+// ─── Stats: Anzahl Punkte gesamt + nach Typ ──────────────────
+export async function stats() {
+  if (!ENABLED) return { enabled: false };
+  try {
+    const c = await fetch(`${QDRANT_URL}/collections/${COLLECTION}`, { signal: AbortSignal.timeout(5000) });
+    if (!c.ok) return { enabled: true, initialized: false, error: `HTTP ${c.status}` };
+    const meta = (await c.json()).result;
+    const total = meta.points_count || 0;
+    const types = {};
+    for (const t of ["message", "memory", "note"]) {
+      try {
+        const r = await qdrant("POST", `/collections/${COLLECTION}/points/count`, {
+          filter: { must: [{ key: "type", match: { value: t } }] },
+          exact: true
+        });
+        types[t] = r?.result?.count ?? 0;
+      } catch { types[t] = null; }
+    }
+    return {
+      enabled: true,
+      initialized,
+      collection: COLLECTION,
+      dim: EMBED_DIM,
+      url: QDRANT_URL,
+      total,
+      types,
+      vectors_size: meta.vectors_count ?? null,
+      indexed_vectors_count: meta.indexed_vectors_count ?? null,
+      status: meta.status,
+      segments: meta.segments_count
+    };
+  } catch (err) {
+    return { enabled: true, initialized: false, error: err.message };
+  }
+}
+
+// ─── Scroll: Punkte auflisten (mit Pagination) ───────────────
+export async function scroll({ limit = 50, offset = null, type = null } = {}) {
+  if (!ENABLED || !initialized) return { points: [], next: null };
+  const body = { limit, with_payload: true, with_vector: false };
+  if (offset != null) body.offset = offset;
+  if (type) body.filter = { must: [{ key: "type", match: { value: type } }] };
+  const r = await qdrant("POST", `/collections/${COLLECTION}/points/scroll`, body);
+  return { points: r?.result?.points || [], next: r?.result?.next_page_offset ?? null };
+}
