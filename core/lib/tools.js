@@ -80,11 +80,11 @@ export async function getDefinitions() {
   return defs;
 }
 
-export async function execute(name, input) {
+export async function execute(name, input, ctx = {}) {
   const { execMap } = await load();
   const fn = execMap.get(name);
   if (!fn) throw new Error(`Tool nicht gefunden: ${name}`);
-  return fn(name, input || {});
+  return fn(name, input || {}, ctx);
 }
 
 export async function listInfo() {

@@ -19,16 +19,14 @@ function pickVoice(lang) {
 export const definitions = [{
   name: "translate_and_speak",
   description:
-    "PFLICHT-Tool für ALLE Übersetzungs-Anfragen in andere Sprachen. " +
-    "Übersetzt einen deutschen Satz und schickt das Ergebnis als Voice-Message in der ZIELSPRACHE-Stimme an Michael. " +
-    "MUSST du IMMER nutzen wenn der User folgendes fragt:\n" +
+    "Übersetzt einen deutschen Satz und liefert die Übersetzung + Stimm-Audio. " +
+    "NUR aufrufen wenn User EXPLIZIT um eine Übersetzung oder Aussprache bittet, z.B.:\n" +
     "  - 'Wie sagt man auf <Sprache>: ...'\n" +
     "  - 'Übersetz das ins <Sprache>'\n" +
-    "  - 'Auf <Sprache>: ...'\n" +
-    "  - 'Sag mir auf <Sprache> wie...'\n" +
     "  - 'Sprich mir das auf <Sprache> vor'\n" +
-    "Niemals nur Text antworten — IMMER dieses Tool aufrufen, damit der User die korrekte Aussprache hört. " +
-    "Sprachen: en (Englisch), fr (Französisch), es (Spanisch), it (Italienisch), de (Deutsch).",
+    "NICHT aufrufen für allgemeine Wissensfragen, auch wenn ein Land/Sprache im Satz vorkommt " +
+    "(z.B. 'Hauptstadt von Spanien' → KEINE Übersetzung, sondern normal antworten). " +
+    "Sprachen: en, fr, es, it, de.",
   input_schema: {
     type: "object",
     properties: {
@@ -40,11 +38,15 @@ export const definitions = [{
   }
 }];
 
-export async function execute(name, input) {
+export async function execute(name, input, ctx = {}) {
   if (name !== "translate_and_speak") throw new Error(`unknown: ${name}`);
   if (!input?.text)        throw new Error("text erforderlich");
   if (!input?.target_lang) throw new Error("target_lang erforderlich");
-  if (!TG_TOKEN || !TG_CHAT) throw new Error("TELEGRAM_TOKEN/CHAT_ID nicht gesetzt — Voice kann nicht geschickt werden");
+
+  // Nur an Telegram pushen, wenn der Aufruf wirklich aus dem Telegram-Chat kam.
+  // Sonst (iOS-App, Web-Chat etc.) liefern wir nur den übersetzten Text zurück
+  // und der Caller spricht es selbst.
+  const isTelegramSource = ctx.chatId && String(ctx.chatId) === String(TG_CHAT);
 
   const langName = LANG_NAMES[input.target_lang] || input.target_lang;
   const voice    = input.voice || pickVoice(input.target_lang);
@@ -66,6 +68,20 @@ export async function execute(name, input) {
       .replace(/^\*+|\*+$/g, "")
       .split("\n")[0].trim();
   }
+
+  // Wenn nicht aus Telegram → nur Text zurückgeben, der Caller (iOS, Web) sprechen lassen
+  if (!isTelegramSource) {
+    return {
+      sent: false,
+      original: input.text,
+      translated,
+      voice,
+      lang: input.target_lang,
+      note: "Quelle ist nicht Telegram — nur Text zurückgegeben (Caller spielt Audio selbst)."
+    };
+  }
+
+  if (!TG_TOKEN || !TG_CHAT) throw new Error("TELEGRAM_TOKEN/CHAT_ID nicht gesetzt — Voice kann nicht geschickt werden");
 
   // 2. Synthesize via Piper → WAV
   const wav = await piper.synthesize(translated, { voice, asWav: true });

@@ -89,7 +89,7 @@ export async function handle({ chatId, message, provider, role }) {
   const tr = detectTranslationRequest(message);
   if (tr) {
     try {
-      const result = await tools.execute("translate_and_speak", tr);
+      const result = await tools.execute("translate_and_speak", tr, { chatId });
       const flag = LANG_FLAG[tr.target_lang] || "🌐";
       const replyText = `${flag} ${result.translated || ""}\n\n_(Voice in ${result.voice} verschickt)_`;
       const messageId = db.saveMessage({
@@ -164,7 +164,7 @@ export async function handle({ chatId, message, provider, role }) {
       toolsUsed.push(tc.name);
       let result;
       try {
-        result = await tools.execute(tc.name, tc.input);
+        result = await tools.execute(tc.name, tc.input, { chatId });
       } catch (err) {
         result = { error: String(err.message || err) };
         console.error(`[agent] tool ${tc.name} failed:`, err.message);
@@ -259,7 +259,7 @@ export async function* streamHandle({ chatId, message, provider, role }) {
       yield { tool_use: { name: tc.name, input: tc.input } };
       let result;
       try {
-        result = await tools.execute(tc.name, tc.input);
+        result = await tools.execute(tc.name, tc.input, { chatId });
       } catch (err) {
         result = { error: String(err.message || err) };
       }
