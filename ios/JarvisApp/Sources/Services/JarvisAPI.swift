@@ -56,33 +56,37 @@ actor JarvisAPI {
                         }
                     }
 
+                    // SSE-Parser: Apples bytes.lines schluckt Blank-Lines, daher
+                    // dispatchen wir auch bei neuem "event:" (=Start nächster Block).
                     var currentEvent: String? = nil
                     var dataLines: [String] = []
                     var lineCount = 0
+
+                    func flush() {
+                        guard let ev = currentEvent else { return }
+                        let payload = dataLines.joined(separator: "\n")
+                        print("[SSE] dispatch event=\(ev) payload=\(payload.prefix(120))")
+                        if let parsed = parseEvent(name: ev, data: payload) {
+                            cont.yield(parsed)
+                        }
+                        currentEvent = nil
+                        dataLines = []
+                    }
+
                     for try await rawLine in bytes.lines {
                         let line = rawLine.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
                         lineCount += 1
                         print("[SSE] line[\(lineCount)]: '\(line)'")
                         if line.isEmpty {
-                            if let ev = currentEvent {
-                                let payload = dataLines.joined(separator: "\n")
-                                print("[SSE] dispatch event=\(ev) payload=\(payload.prefix(120))")
-                                if let parsed = parseEvent(name: ev, data: payload) {
-                                    cont.yield(parsed)
-                                } else {
-                                    print("[SSE] parseEvent returned nil for event=\(ev)")
-                                }
-                            }
-                            currentEvent = nil
-                            dataLines = []
-                            continue
-                        }
-                        if line.hasPrefix("event:") {
+                            flush()
+                        } else if line.hasPrefix("event:") {
+                            flush()  // vorhergehenden Event abschicken (Blank-Line ggf. geschluckt)
                             currentEvent = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
                         } else if line.hasPrefix("data:") {
                             dataLines.append(String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces))
                         }
                     }
+                    flush()  // letzten Event nach Stream-Ende
                     print("[SSE] stream ended after \(lineCount) lines")
                     cont.yield(.done)
                     cont.finish()
