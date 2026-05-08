@@ -10,14 +10,16 @@ enum SSEEvent {
 
 actor JarvisAPI {
     private let session: URLSession
+    private let trustDelegate = SelfSignedDelegate()
 
     init() {
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 600
         cfg.timeoutIntervalForResource = 600
-        // Self-signed cert: NSAllowsArbitraryLoads in Info.plist erlaubt das (Dev-Setup).
-        // Wenn du später Trusted Profile installierst, kann das raus.
-        self.session = URLSession(configuration: cfg, delegate: SelfSignedDelegate(), delegateQueue: nil)
+        // Self-signed cert: SelfSignedDelegate (URLSessionTaskDelegate) wird per
+        // bytes(for:delegate:) explizit übergeben, weil die Async-APIs den
+        // Session-Delegate nicht zuverlässig für Server-Trust-Challenges aufrufen.
+        self.session = URLSession(configuration: cfg, delegate: trustDelegate, delegateQueue: nil)
     }
 
     func sendStream(
@@ -46,7 +48,7 @@ actor JarvisAPI {
                         "message": message
                     ])
 
-                    let (bytes, response) = try await session.bytes(for: req)
+                    let (bytes, response) = try await session.bytes(for: req, delegate: trustDelegate)
                     if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
                         cont.finish(throwing: NSError(domain: "JarvisAPI", code: http.statusCode,
                             userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"]))
@@ -107,15 +109,27 @@ actor JarvisAPI {
     }
 }
 
-private final class SelfSignedDelegate: NSObject, URLSessionDelegate {
+private final class SelfSignedDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
+    // Session-level (für ältere Code-Pfade)
     func urlSession(_ session: URLSession,
                     didReceive challenge: URLAuthenticationChallenge,
                     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        handle(challenge, completionHandler)
+    }
+    // Task-level (für bytes(for:delegate:) / data(for:delegate:))
+    func urlSession(_ session: URLSession,
+                    task: URLSessionTask,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        handle(challenge, completionHandler)
+    }
+    private func handle(_ challenge: URLAuthenticationChallenge,
+                        _ completion: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
            let trust = challenge.protectionSpace.serverTrust {
-            completionHandler(.useCredential, URLCredential(trust: trust))
+            completion(.useCredential, URLCredential(trust: trust))
         } else {
-            completionHandler(.performDefaultHandling, nil)
+            completion(.performDefaultHandling, nil)
         }
     }
 }
