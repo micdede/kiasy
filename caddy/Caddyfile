@@ -25,9 +25,12 @@
     }
 }
 
-# Hostnames die Caddy bedient — Cert wird für jeden ausgestellt.
-# 192.168.178.50 = JARVIS LAN-IP, jarvis.local = mDNS, localhost für Tests vom Host.
-192.168.178.50, localhost, jarvis, jarvis.local {
+# Hostnames die Caddy bedient.
+# - 192.168.178.50 + LAN: tls internal (self-signed via Caddy-CA)
+# - jarvis.tailb8844c.ts.net: Caddy holt automatisch echtes LetsEncrypt-Cert
+#   via Tailscale-Socket (caddy/tls.handshake auto-detected) — getrustet von iOS
+#   out-of-the-box, kein Profile-Trust mehr nötig.
+192.168.178.50, 100.101.219.46, localhost, jarvis, jarvis.local, jarvis.tailb8844c.ts.net {
     tls internal
 
     # ─── API + SSE ───────────────────────────────

@@ -145,16 +145,80 @@ function chatBody() {
 
 function toolsBody() {
   return `
-    <div class="page-head"><h2>Tools</h2><button class="btn" onclick="reloadTools()">⟳ reload</button></div>
-    <div id="tools-list" class="list">lade…</div>
-    <h3 style="margin-top:32px">Tool direkt ausführen</h3>
-    <div class="exec-box">
-      <input id="exec-name" placeholder="Tool-Name (z.B. current_time)" class="input">
-      <textarea id="exec-input" placeholder='{"format":"both"}' rows="3" class="input mono"></textarea>
-      <button class="btn primary" onclick="execTool()">execute</button>
+    <div class="page-head"><h2>Tools</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="reloadTools()">⟳ reload</button>
+      </div>
     </div>
-    <pre id="exec-result" class="result"></pre>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="list" onclick="setTtab('list')">📋 Tool-Liste</button>
+      <button class="tab" data-tab="exec" onclick="setTtab('exec')">▶️ Direkt ausführen</button>
+      <button class="tab" data-tab="gen"  onclick="setTtab('gen')">🤖 KI-Generator</button>
+    </div>
+
+    <!-- Tab: Liste -->
+    <div class="tpane" id="tpane-list">
+      <div id="tools-list" class="list">lade…</div>
+    </div>
+
+    <!-- Tab: Exec -->
+    <div class="tpane" id="tpane-exec" style="display:none;">
+      <div class="exec-box">
+        <input id="exec-name" placeholder="Tool-Name (z.B. current_time)" class="input">
+        <textarea id="exec-input" placeholder='{"format":"both"}' rows="3" class="input mono"></textarea>
+        <button class="btn primary" onclick="execTool()">execute</button>
+      </div>
+      <pre id="exec-result" class="result"></pre>
+    </div>
+
+    <!-- Tab: KI-Generator -->
+    <div class="tpane" id="tpane-gen" style="display:none;">
+      <p class="dim" style="margin-bottom:12px;">Beschreibe was das Tool tun soll — die Coding-KI (<code id="gen-model">…</code>) generiert ein vollständiges Tool-File. Du kannst es testen, verfeinern, und speichern (geht direkt in <code>core/tools/</code>, sofort live).</p>
+
+      <div class="gen-row">
+        <label>Beschreibung</label>
+        <textarea id="gen-desc" rows="4" class="input" placeholder="z.B. Ein Tool das den BTC-Kurs in EUR von einer öffentlichen API holt"></textarea>
+        <button class="btn primary" onclick="genGenerate()">🤖 Generieren</button>
+        <span id="gen-status" class="dim mono" style="font-size:12px;"></span>
+      </div>
+
+      <div class="gen-row">
+        <label>Code (editierbar)</label>
+        <textarea id="gen-code" rows="20" class="input mono" spellcheck="false" style="font-size:12px;line-height:1.5;"></textarea>
+      </div>
+
+      <div class="gen-row two-cols">
+        <div>
+          <label>Verfeinern</label>
+          <input id="gen-refine" class="input" placeholder="z.B. dazu noch die 24h-Änderung in %">
+          <button class="btn" onclick="genRefine()">✨ Verfeinern</button>
+        </div>
+        <div>
+          <label>Test-Input (JSON)</label>
+          <textarea id="gen-test-input" rows="3" class="input mono" placeholder='{}'></textarea>
+          <button class="btn" onclick="genTest()">▶️ Test ausführen</button>
+        </div>
+      </div>
+
+      <pre id="gen-test-result" class="result"></pre>
+
+      <div class="gen-row save-row">
+        <label>Dateiname</label>
+        <input id="gen-filename" class="input mono" placeholder="z.B. btc-price.js" style="max-width:300px;">
+        <label class="overwrite-lbl"><input type="checkbox" id="gen-overwrite"> existierendes überschreiben</label>
+        <button class="btn primary" onclick="genSave()">💾 Speichern</button>
+        <span id="gen-save-status" class="dim mono" style="font-size:12px;"></span>
+      </div>
+    </div>
+
     <style>
+      .tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--border); }
+      .tab { background:none; border:none; padding:10px 16px; cursor:pointer; color:var(--text-dim); font-size:13px; border-bottom:2px solid transparent; }
+      .tab:hover { color:var(--text); }
+      .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+      .tpane { animation: fadeIn 0.15s; }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       .list { display:flex; flex-direction:column; gap:8px; }
       .row { display:flex; align-items:center; gap:12px; padding:12px 16px; background: var(--bg-card); border:1px solid var(--border); border-radius: var(--radius); }
       .row .name { font-family:var(--mono); font-weight:600; flex:0 0 200px; }
@@ -162,12 +226,29 @@ function toolsBody() {
       .row .toggle { padding:4px 10px; border-radius:6px; cursor:pointer; font-size:12px; border:1px solid var(--border); background:var(--bg-elevated); }
       .row .toggle.on { color: var(--ok); border-color: var(--ok); }
       .row .toggle.off { color: var(--err); border-color: var(--err); }
+      .row .src-btn { padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px; border:1px solid var(--border); background:var(--bg-elevated); color:var(--text-dim); }
+      .row .src-btn:hover { color:var(--accent); border-color:var(--accent); }
       .exec-box { display:flex; flex-direction:column; gap:8px; max-width:600px; }
       .input { padding:10px 14px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:var(--font); }
       .input.mono { font-family:var(--mono); font-size:13px; }
       .result { background:var(--bg-card); border:1px solid var(--border); padding:16px; border-radius:var(--radius); white-space:pre-wrap; word-wrap:break-word; max-height:400px; overflow:auto; font-size:12px; margin-top:12px; }
+      .gen-row { margin-bottom:18px; display:flex; flex-direction:column; gap:8px; }
+      .gen-row label { font-size:12px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; }
+      .gen-row.two-cols { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+      .gen-row.two-cols > div { display:flex; flex-direction:column; gap:8px; }
+      .save-row { flex-direction:row; align-items:center; flex-wrap:wrap; }
+      .save-row label { margin-bottom:0; }
+      .overwrite-lbl { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); cursor:pointer; }
     </style>
     <script>
+      // ─── Tabs ────────────────────────────────
+      function setTtab(t){
+        document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab===t));
+        document.querySelectorAll('.tpane').forEach(p => p.style.display = (p.id==='tpane-'+t) ? '' : 'none');
+        if (t==='gen') loadGenModel();
+      }
+
+      // ─── Tool-Liste ─────────────────────────
       async function loadTools(){
         const [defs, settings] = await Promise.all([
           fetch('/api/tools').then(r=>r.json()),
@@ -175,14 +256,13 @@ function toolsBody() {
         ]);
         const sMap = new Map(settings.settings.map(s => [s.filename, s]));
         document.getElementById('tools-list').innerHTML = defs.tools.map(t => {
-          // Tool-File ableiten ist nicht trivial — wir nehmen eine Heuristik (settings haben filename)
-          // Hier nur Darstellung mit Toggle erst wenn setting vorhanden ist
           const setting = [...sMap.values()].find(s => s.filename.includes(t.name.split('_')[0]));
           const enabled = setting ? setting.enabled : 1;
-          const fn = setting ? setting.filename : t.name + '.js';
+          const fn = setting ? setting.filename : t.name.replace(/_/g,'-') + '.js';
           return \`<div class="row">
             <span class="name">\${t.name}</span>
             <span class="desc">\${t.description.substring(0,150)}\${t.description.length>150?'…':''}</span>
+            <button class="src-btn" onclick="loadSourceForRefine('\${fn}','\${t.name}')">✏️ KI-Edit</button>
             <button class="toggle \${enabled?'on':'off'}" onclick="toggleTool('\${fn}',\${enabled?0:1},this)">\${enabled?'enabled':'disabled'}</button>
           </div>\`;
         }).join('');
@@ -204,6 +284,90 @@ function toolsBody() {
         const data = await r.json();
         document.getElementById('exec-result').textContent = JSON.stringify(data, null, 2);
       }
+
+      // ─── KI-Generator ───────────────────────
+      async function loadGenModel(){
+        try {
+          const s = await (await fetch('/api/settings')).json();
+          document.getElementById('gen-model').textContent = s.models?.ollama_code || 'qwen3-coder:480b-cloud (Default)';
+        } catch {}
+      }
+      async function genGenerate(){
+        const desc = document.getElementById('gen-desc').value.trim();
+        if (!desc) { alert('Beschreibung fehlt'); return; }
+        const status = document.getElementById('gen-status');
+        status.textContent = '⏳ KI generiert (kann 10-30s dauern)…';
+        try {
+          const t0 = Date.now();
+          const r = await fetch('/api/tools/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({description:desc})});
+          const d = await r.json();
+          if (!r.ok) { status.textContent = '✗ '+(d.error||'Fehler'); return; }
+          document.getElementById('gen-code').value = d.code || '';
+          document.getElementById('gen-filename').value = d.suggestedFilename || '';
+          status.textContent = '✓ generiert in '+((Date.now()-t0)/1000).toFixed(1)+'s';
+        } catch (e) { status.textContent = '✗ '+e.message; }
+      }
+      async function genRefine(){
+        const code = document.getElementById('gen-code').value.trim();
+        const instr = document.getElementById('gen-refine').value.trim();
+        if (!code || !instr) { alert('Code + Anweisung erforderlich'); return; }
+        const status = document.getElementById('gen-status');
+        status.textContent = '⏳ verfeinere…';
+        try {
+          const r = await fetch('/api/tools/refine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentCode:code, instruction:instr})});
+          const d = await r.json();
+          if (!r.ok) { status.textContent = '✗ '+(d.error||'Fehler'); return; }
+          document.getElementById('gen-code').value = d.code || code;
+          document.getElementById('gen-refine').value = '';
+          status.textContent = '✓ überarbeitet';
+        } catch (e) { status.textContent = '✗ '+e.message; }
+      }
+      async function genTest(){
+        const code = document.getElementById('gen-code').value.trim();
+        if (!code) { alert('Kein Code'); return; }
+        let input;
+        try { input = JSON.parse(document.getElementById('gen-test-input').value.trim() || '{}'); }
+        catch(e) { document.getElementById('gen-test-result').textContent = 'JSON-Fehler: '+e.message; return; }
+        document.getElementById('gen-test-result').textContent = '⏳ test läuft…';
+        try {
+          const r = await fetch('/api/tools/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code, input})});
+          const d = await r.json();
+          document.getElementById('gen-test-result').textContent = JSON.stringify(d, null, 2);
+        } catch (e) { document.getElementById('gen-test-result').textContent = 'Fehler: '+e.message; }
+      }
+      async function genSave(){
+        const code = document.getElementById('gen-code').value.trim();
+        const filename = document.getElementById('gen-filename').value.trim();
+        const overwrite = document.getElementById('gen-overwrite').checked;
+        if (!code || !filename) { alert('Code + Dateiname erforderlich'); return; }
+        const status = document.getElementById('gen-save-status');
+        status.textContent = '⏳ speichere…';
+        try {
+          const r = await fetch('/api/tools/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code, filename, overwrite})});
+          const d = await r.json();
+          if (!r.ok) { status.textContent = '✗ '+(d.error||'Fehler'); return; }
+          if (d.parsed) {
+            status.textContent = '✓ gespeichert + geladen — Tools verfügbar: ' + (d.defs?.map(x=>x.name).join(', ') || '?');
+          } else {
+            status.textContent = '⚠ gespeichert, aber Tool-Parsing fehlgeschlagen: ' + (d.error || '?');
+          }
+          loadTools();
+        } catch (e) { status.textContent = '✗ '+e.message; }
+      }
+      async function loadSourceForRefine(filename, name){
+        try {
+          const r = await fetch('/api/tools/source?filename='+encodeURIComponent(filename));
+          const d = await r.json();
+          if (!r.ok) { alert('Konnte Source nicht laden: '+(d.error||'?')); return; }
+          setTtab('gen');
+          document.getElementById('gen-code').value = d.code || '';
+          document.getElementById('gen-filename').value = d.filename || filename;
+          document.getElementById('gen-overwrite').checked = true;
+          document.getElementById('gen-status').textContent = '📂 '+filename+' geladen — verfeinere oder editiere';
+          document.getElementById('gen-desc').placeholder = '(Beschreibung nicht nötig — du editierst ein bestehendes Tool)';
+        } catch (e) { alert(e.message); }
+      }
+
       loadTools();
     </script>`;
 }
@@ -601,6 +765,7 @@ function settingsBody() {
           ['OLLAMA_MODEL', 'Chat-Modell (Hauptantworten)', 'text'],
           ['OLLAMA_MODEL_CHEAP', 'Cheap-Modell (Klassifikation, Routing)', 'text'],
           ['OLLAMA_MODEL_EMBED', 'Embedding-Modell (Vector-Memory)', 'text'],
+          ['OLLAMA_MODEL_CODE',  'Coding-Modell (Tool-Generator)', 'text'],
           ['ANTHROPIC_MODEL', 'Anthropic Model (Fallback)', 'text'],
           ['MAX_TOKENS', 'Max Tokens', 'text']
         ],
@@ -649,7 +814,7 @@ function settingsBody() {
           BOT_NAME: s.bot_name || 'JARVIS',
           OWNER_NAME: s.owner_name || '',
           LLM_PROVIDER: s.provider,
-          OLLAMA_MODEL: s.models.ollama, OLLAMA_MODEL_CHEAP: s.models.ollama_cheap, OLLAMA_MODEL_EMBED: s.models.ollama_embed,
+          OLLAMA_MODEL: s.models.ollama, OLLAMA_MODEL_CHEAP: s.models.ollama_cheap, OLLAMA_MODEL_EMBED: s.models.ollama_embed, OLLAMA_MODEL_CODE: s.models.ollama_code,
           ANTHROPIC_MODEL: s.models.anthropic,
           WHISPER_MODEL: s.stt.whisper_model, PIPER_VOICE: s.tts.piper_voice,
           TELEGRAM_ENABLED: s.flags.telegram_enabled, SCHEDULER_ENABLED: s.flags.scheduler_enabled,

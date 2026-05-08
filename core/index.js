@@ -14,6 +14,7 @@ import * as caldavWatcher from "./lib/caldav-watcher.js";
 import * as whisper from "./lib/whisper.js";
 import * as piper from "./lib/piper.js";
 import * as edge  from "./lib/edge-tts.js";
+import * as toolGen from "./lib/tool-generator.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const STARTED = Date.now();
@@ -191,6 +192,38 @@ const server = http.createServer(async (req, res) => {
       tools.reload();
       const info = await tools.listInfo();
       return sendJson(200, { reloaded: true, ...info });
+    }
+
+    // ─── Tool-Generator (KI-gestützt) ────────────────────────
+    if (url.pathname === "/api/tools/generate" && req.method === "POST") {
+      const body = await readJson(req);
+      try { return sendJson(200, await toolGen.generate(body.description)); }
+      catch (err) { return sendJson(500, { error: String(err.message || err) }); }
+    }
+    if (url.pathname === "/api/tools/refine" && req.method === "POST") {
+      const body = await readJson(req);
+      try { return sendJson(200, await toolGen.refine(body.currentCode, body.instruction)); }
+      catch (err) { return sendJson(500, { error: String(err.message || err) }); }
+    }
+    if (url.pathname === "/api/tools/test" && req.method === "POST") {
+      const body = await readJson(req);
+      try { return sendJson(200, await toolGen.testRun(body.code, body.input || {})); }
+      catch (err) { return sendJson(500, { error: String(err.message || err) }); }
+    }
+    if (url.pathname === "/api/tools/save" && req.method === "POST") {
+      const body = await readJson(req);
+      try { return sendJson(200, await toolGen.save(body.filename, body.code, { overwrite: !!body.overwrite })); }
+      catch (err) { return sendJson(400, { error: String(err.message || err) }); }
+    }
+    if (url.pathname === "/api/tools/source" && req.method === "GET") {
+      const filename = url.searchParams.get("filename");
+      try { return sendJson(200, toolGen.read(filename)); }
+      catch (err) { return sendJson(404, { error: String(err.message || err) }); }
+    }
+    if (url.pathname === "/api/tools/source" && req.method === "DELETE") {
+      const filename = url.searchParams.get("filename");
+      try { return sendJson(200, toolGen.remove(filename)); }
+      catch (err) { return sendJson(404, { error: String(err.message || err) }); }
     }
 
     // ─── Chat ────────────────────────────────────────────────
@@ -830,6 +863,7 @@ function currentSettings() {
       ollama:        process.env.OLLAMA_MODEL,
       ollama_cheap:  process.env.OLLAMA_MODEL_CHEAP,
       ollama_embed:  process.env.OLLAMA_MODEL_EMBED,
+      ollama_code:   process.env.OLLAMA_MODEL_CODE || "qwen3-coder:480b-cloud",
       anthropic:     process.env.ANTHROPIC_MODEL
     },
     flags: {

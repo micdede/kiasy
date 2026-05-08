@@ -31,6 +31,8 @@ function modelForRole(role) {
       return process.env.OLLAMA_MODEL_EMBED || "bge-m3";
     case "cheap":
       return process.env.OLLAMA_MODEL_CHEAP || process.env.OLLAMA_MODEL || "qwen2.5:1.5b";
+    case "code":
+      return process.env.OLLAMA_MODEL_CODE || "qwen3-coder:480b-cloud";
     case "chat":
     default:
       return process.env.OLLAMA_MODEL || "qwen2.5:1.5b";
@@ -209,9 +211,10 @@ export function getProvider(roleOrName = "chat") {
   } else if (roleOrName === "ollama") {
     providerName = "ollama"; model = modelForRole("chat");
   } else {
-    // role="chat"|"cheap"|"embed" → folge DEFAULT_PROVIDER (außer embed → immer ollama)
-    if (roleOrName === "embed") {
-      providerName = "ollama"; model = modelForRole("embed");
+    // role="chat"|"cheap"|"embed"|"code" → folge DEFAULT_PROVIDER
+    // Ausnahmen: embed + code laufen immer über Ollama (Cloud-Coding-Modell)
+    if (roleOrName === "embed" || roleOrName === "code") {
+      providerName = "ollama"; model = modelForRole(roleOrName);
     } else {
       providerName = DEFAULT_PROVIDER; model = modelForRole(roleOrName);
     }

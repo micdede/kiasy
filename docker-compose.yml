@@ -55,6 +55,9 @@ services:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      # Tailscale-Socket → Caddy holt automatisch echtes LetsEncrypt-Cert
+      # für *.ts.net Hostnames via Tailscale-API.
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
     depends_on:
       - kiasy-monitor
       - kiasy-core
@@ -82,6 +85,7 @@ services:
       - ./notes:/data/notes
       - ./db:/db:ro             # Migration-Files
       - ./:/host:rw             # editable .env, backups, recreate-Trigger
+      - ./core/tools:/app/tools:rw   # Tool-Generator schreibt hier hin (persistent)
     expose:
       - "8080"           # API + SSE
       - "8081"           # WebSocket (Echtdialog Phase 3)
