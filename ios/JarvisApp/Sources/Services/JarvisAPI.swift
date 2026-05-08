@@ -47,32 +47,43 @@ actor JarvisAPI {
                     ])
 
                     let (bytes, response) = try await session.bytes(for: req)
-                    if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-                        cont.finish(throwing: NSError(domain: "JarvisAPI", code: http.statusCode,
-                            userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"]))
-                        return
+                    if let http = response as? HTTPURLResponse {
+                        print("[SSE] HTTP \(http.statusCode), Content-Type=\(http.value(forHTTPHeaderField: "Content-Type") ?? "?")")
+                        if http.statusCode >= 400 {
+                            cont.finish(throwing: NSError(domain: "JarvisAPI", code: http.statusCode,
+                                userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"]))
+                            return
+                        }
                     }
 
                     var currentEvent: String? = nil
                     var dataLines: [String] = []
-                    for try await line in bytes.lines {
+                    var lineCount = 0
+                    for try await rawLine in bytes.lines {
+                        let line = rawLine.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+                        lineCount += 1
+                        print("[SSE] line[\(lineCount)]: '\(line)'")
                         if line.isEmpty {
                             if let ev = currentEvent {
                                 let payload = dataLines.joined(separator: "\n")
+                                print("[SSE] dispatch event=\(ev) payload=\(payload.prefix(120))")
                                 if let parsed = parseEvent(name: ev, data: payload) {
                                     cont.yield(parsed)
+                                } else {
+                                    print("[SSE] parseEvent returned nil for event=\(ev)")
                                 }
                             }
                             currentEvent = nil
                             dataLines = []
                             continue
                         }
-                        if line.hasPrefix("event: ") {
-                            currentEvent = String(line.dropFirst(7))
-                        } else if line.hasPrefix("data: ") {
-                            dataLines.append(String(line.dropFirst(6)))
+                        if line.hasPrefix("event:") {
+                            currentEvent = String(line.dropFirst(6)).trimmingCharacters(in: .whitespaces)
+                        } else if line.hasPrefix("data:") {
+                            dataLines.append(String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces))
                         }
                     }
+                    print("[SSE] stream ended after \(lineCount) lines")
                     cont.yield(.done)
                     cont.finish()
                 } catch {
