@@ -7,6 +7,7 @@ final class AppSettings: ObservableObject {
     @AppStorage("authPass")      var authPass: String     = ""
     @AppStorage("chatId")        var chatId: String       = "ios-app"
     @AppStorage("speakReplies")  var speakReplies: Bool   = true
-    @AppStorage("ttsVoice")      var ttsVoice: String     = "de-DE"
+    /// AVSpeechSynthesisVoice.identifier (leer = beste verfügbare de-DE)
+    @AppStorage("ttsVoiceID")    var ttsVoiceID: String   = ""
     @AppStorage("speakStreaming") var speakStreaming: Bool = false  // true = während Tokens, false = am Ende
 }

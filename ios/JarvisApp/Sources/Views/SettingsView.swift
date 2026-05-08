@@ -36,10 +36,10 @@ struct SettingsView: View {
                     Toggle("Antworten vorlesen", isOn: $settings.speakReplies)
                     Toggle("Streaming-Vorlesen (Phase 2)", isOn: $settings.speakStreaming)
                         .disabled(true)
-                    Picker("Stimme", selection: $settings.ttsVoice) {
-                        Text("System (de-DE)").tag("de-DE")
+                    Picker("Stimme", selection: $settings.ttsVoiceID) {
+                        Text("Auto (beste de-DE)").tag("")
                         ForEach(availableVoices, id: \.identifier) { v in
-                            Text("\(v.name) — \(v.language) [\(qualityLabel(v.quality))]").tag(v.language)
+                            Text("\(v.name) — \(qualityLabel(v.quality))").tag(v.identifier)
                         }
                     }
                 }

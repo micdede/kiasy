@@ -6,46 +6,47 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
     @Published var isSpeaking: Bool = false
 
     private let synthesizer = AVSpeechSynthesizer()
-    private var voiceIdentifier: String?
 
     override init() {
         super.init()
         synthesizer.delegate = self
     }
 
-    func setVoice(language: String) {
-        // bevorzugt eine "enhanced" oder "premium" deutsche Stimme, sonst Default
+    /// Findet die beste deutsche Stimme als Fallback wenn keine ID gesetzt ist.
+    private func defaultVoice(language: String) -> AVSpeechSynthesisVoice? {
         let voices = AVSpeechSynthesisVoice.speechVoices()
             .filter { $0.language.hasPrefix(language) }
-        let preferred = voices.first(where: { $0.quality == .premium })
-                     ?? voices.first(where: { $0.quality == .enhanced })
-                     ?? voices.first
-        voiceIdentifier = preferred?.identifier
+        return voices.first(where: { $0.quality == .premium })
+            ?? voices.first(where: { $0.quality == .enhanced })
+            ?? voices.first
+            ?? AVSpeechSynthesisVoice(language: language)
     }
 
-    func speak(_ text: String, language: String = "de-DE") {
+    /// voiceID = AVSpeechSynthesisVoice.identifier, leer/nil → Default-Stimme.
+    func speak(_ text: String, voiceID: String? = nil, language: String = "de-DE") {
         let cleaned = stripMarkdown(text)
         guard !cleaned.isEmpty else { return }
-        // Frische Playback-Session — minimal, ohne Mode/Options, vermeidet
-        // IPCAUClient-Konflikt mit der vorher aktiven Record-Session.
+        // .voicePrompt-Mode optimiert für Sprachausgabe + Speaker-Override
+        // gegen das Earpiece-Routing nach .measurement-Aufnahme.
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback)
+            try session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
             try session.setActive(true)
+            try session.overrideOutputAudioPort(.speaker)
         } catch {
             print("[TTS] AudioSession-Setup fehlgeschlagen: \(error)")
         }
 
-        if voiceIdentifier == nil { setVoice(language: language) }
+        let voice: AVSpeechSynthesisVoice? = {
+            if let id = voiceID, !id.isEmpty, let v = AVSpeechSynthesisVoice(identifier: id) { return v }
+            return defaultVoice(language: language)
+        }()
+
         let utterance = AVSpeechUtterance(string: cleaned)
-        if let id = voiceIdentifier, let v = AVSpeechSynthesisVoice(identifier: id) {
-            utterance.voice = v
-        } else {
-            utterance.voice = AVSpeechSynthesisVoice(language: language)
-        }
+        utterance.voice = voice
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.pitchMultiplier = 1.0
-        print("[TTS] speaking \(text.count) chars, voice=\(utterance.voice?.identifier ?? "default")")
+        print("[TTS] speaking \(cleaned.count) chars, voice=\(voice?.identifier ?? "nil") name=\(voice?.name ?? "?")")
         synthesizer.speak(utterance)
     }
 
