@@ -13,6 +13,7 @@ import * as mailWatcher from "./lib/mail-watcher.js";
 import * as caldavWatcher from "./lib/caldav-watcher.js";
 import * as whisper from "./lib/whisper.js";
 import * as piper from "./lib/piper.js";
+import * as edge  from "./lib/edge-tts.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const STARTED = Date.now();
@@ -674,9 +675,13 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, { items, dir });
     }
 
-    // ─── Voice: Liste der konfigurierten Piper-Stimmen ──────
+    // ─── Voice: Liste der Stimmen (engine=piper|edge) ───────
     if (url.pathname === "/api/voice/voices" && req.method === "GET") {
-      return sendJson(200, { default: process.env.PIPER_VOICE, voices: piper.VOICES });
+      const engine = (url.searchParams.get("engine") || "piper").toLowerCase();
+      if (engine === "edge") {
+        return sendJson(200, { engine, default: process.env.EDGE_VOICE || "de-DE-KillianNeural", voices: edge.VOICES });
+      }
+      return sendJson(200, { engine: "piper", default: process.env.PIPER_VOICE, voices: piper.VOICES });
     }
 
     // ─── Voice: Übersetzen (DE → ZIEL) + TTS in einem Call ──
@@ -719,10 +724,16 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, result);
     }
 
-    // ─── Voice: Synthesize (Text → Audio) ────────────────────
+    // ─── Voice: Synthesize (Text → Audio, engine=piper|edge) ─
     if (url.pathname === "/api/voice/synth" && req.method === "POST") {
       const body = await readJson(req);
       if (!body.text) return sendJson(400, { error: "text fehlt" });
+      const engine = (body.engine || "piper").toLowerCase();
+      if (engine === "edge") {
+        const { audio, mime } = await edge.synthesize(body.text, { voice: body.voice });
+        res.writeHead(200, { "Content-Type": mime, "Content-Length": audio.length });
+        return res.end(audio);
+      }
       const wav = await piper.synthesize(body.text, { voice: body.voice, asWav: true });
       res.writeHead(200, { "Content-Type": "audio/wav", "Content-Length": wav.length });
       return res.end(wav);

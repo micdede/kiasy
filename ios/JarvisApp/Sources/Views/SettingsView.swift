@@ -19,6 +19,9 @@ struct SettingsView: View {
     @State private var piperVoices: [PiperVoice] = []
     @State private var piperLoading = false
     @State private var piperError: String?
+    @State private var edgeVoices: [PiperVoice] = []
+    @State private var edgeLoading = false
+    @State private var edgeError: String?
 
     private var availableVoices: [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("de") }
@@ -51,7 +54,8 @@ struct SettingsView: View {
                         .disabled(true)
                     Picker("Backend", selection: $settings.ttsBackend) {
                         Text("iOS (on-device)").tag("ios")
-                        Text("Piper (Server)").tag("piper")
+                        Text("Piper (Server, lokal)").tag("piper")
+                        Text("Edge (Server, MS Cloud)").tag("edge")
                     }
                     if settings.ttsBackend == "ios" {
                         Picker("iOS-Stimme", selection: $settings.ttsVoiceID) {
@@ -60,7 +64,7 @@ struct SettingsView: View {
                                 Text("\(v.name) — \(qualityLabel(v.quality))").tag(v.identifier)
                             }
                         }
-                    } else {
+                    } else if settings.ttsBackend == "piper" {
                         Picker("Piper-Stimme", selection: $settings.piperVoice) {
                             Text("Server-Default").tag("")
                             ForEach(piperVoices) { pv in
@@ -69,11 +73,25 @@ struct SettingsView: View {
                         }
                         if piperLoading { Text("lade Stimmen…").font(.caption).foregroundStyle(.secondary) }
                         if let err = piperError { Text(err).font(.caption).foregroundStyle(.red) }
-                        Button("Stimmen vom Server laden") { Task { await loadPiperVoices() } }
+                        Button("Stimmen laden") { Task { await loadVoices(engine: "piper") } }
                             .disabled(piperLoading)
+                    } else {  // "edge"
+                        Picker("Edge-Stimme", selection: $settings.edgeVoice) {
+                            Text("Server-Default").tag("")
+                            ForEach(edgeVoices) { ev in
+                                Text("\(ev.flag) \(ev.name)").tag(ev.voice)
+                            }
+                        }
+                        if edgeLoading { Text("lade Stimmen…").font(.caption).foregroundStyle(.secondary) }
+                        if let err = edgeError { Text(err).font(.caption).foregroundStyle(.red) }
+                        Button("Stimmen laden") { Task { await loadVoices(engine: "edge") } }
+                            .disabled(edgeLoading)
                     }
                 }
-                .task { if settings.ttsBackend == "piper" && piperVoices.isEmpty { await loadPiperVoices() } }
+                .task {
+                    if settings.ttsBackend == "piper" && piperVoices.isEmpty { await loadVoices(engine: "piper") }
+                    if settings.ttsBackend == "edge"  && edgeVoices.isEmpty  { await loadVoices(engine: "edge") }
+                }
                 Section("Über") {
                     LabeledContent("Bundle", value: Bundle.main.bundleIdentifier ?? "?")
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
@@ -89,12 +107,12 @@ struct SettingsView: View {
         }
     }
 
-    private func loadPiperVoices() async {
-        piperLoading = true
-        piperError = nil
-        defer { piperLoading = false }
-        guard let url = URL(string: "\(settings.backendURL)/api/voice/voices") else {
-            piperError = "URL ungültig"; return
+    private func loadVoices(engine: String) async {
+        if engine == "piper" { piperLoading = true; piperError = nil } else { edgeLoading = true; edgeError = nil }
+        defer { if engine == "piper" { piperLoading = false } else { edgeLoading = false } }
+        guard let url = URL(string: "\(settings.backendURL)/api/voice/voices?engine=\(engine)") else {
+            if engine == "piper" { piperError = "URL ungültig" } else { edgeError = "URL ungültig" }
+            return
         }
         var req = URLRequest(url: url)
         if !settings.authUser.isEmpty {
@@ -104,11 +122,12 @@ struct SettingsView: View {
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
-                piperError = "HTTP-Fehler"; return
+                if engine == "piper" { piperError = "HTTP-Fehler" } else { edgeError = "HTTP-Fehler" }
+                return
             }
             let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
             let arr = (obj["voices"] as? [[String: Any]]) ?? []
-            piperVoices = arr.compactMap { v in
+            let voices = arr.compactMap { v -> PiperVoice? in
                 guard let voice = v["voice"] as? String, let name = v["name"] as? String else { return nil }
                 return PiperVoice(
                     voice: voice,
@@ -119,15 +138,20 @@ struct SettingsView: View {
                     gender: v["gender"] as? String ?? ""
                 )
             }
-            // Falls die gespeicherte Stimme nicht (mehr) in der Liste ist → leeren
-            if !settings.piperVoice.isEmpty,
-               !piperVoices.contains(where: { $0.voice == settings.piperVoice }) {
-                settings.piperVoice = ""
+            if engine == "piper" {
+                piperVoices = voices
+                if !settings.piperVoice.isEmpty, !voices.contains(where: { $0.voice == settings.piperVoice }) {
+                    settings.piperVoice = ""
+                }
+            } else {
+                edgeVoices = voices
+                if !settings.edgeVoice.isEmpty, !voices.contains(where: { $0.voice == settings.edgeVoice }) {
+                    settings.edgeVoice = ""
+                }
             }
-            // Auto-Default NICHT setzen — sonst rendert der Picker "tag invalid"
-            // bevor die Liste da ist. "Server-Default" (leer) bleibt der Initial-Wert.
         } catch {
-            piperError = "Fehler: \(error.localizedDescription)"
+            let msg = "Fehler: \(error.localizedDescription)"
+            if engine == "piper" { piperError = msg } else { edgeError = msg }
         }
     }
 

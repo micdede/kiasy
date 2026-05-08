@@ -15,15 +15,15 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
     }
 
     // ─── Public API ──────────────────────────────────────────
-    /// Routet je nach settings.ttsBackend → iOS-Voice oder Piper-Server.
+    /// Routet je nach settings.ttsBackend → iOS-Voice / Piper / Edge.
     func speak(_ text: String, settings: AppSettings) {
         let cleaned = stripMarkdown(text)
         guard !cleaned.isEmpty else { return }
         configurePlaybackSession()
-        if settings.ttsBackend == "piper" {
-            speakPiper(cleaned, settings: settings)
-        } else {
-            speakIOS(cleaned, voiceID: settings.ttsVoiceID)
+        switch settings.ttsBackend {
+        case "piper": speakServer(cleaned, engine: "piper", voice: settings.piperVoice, settings: settings)
+        case "edge":  speakServer(cleaned, engine: "edge",  voice: settings.edgeVoice,  settings: settings)
+        default:      speakIOS(cleaned, voiceID: settings.ttsVoiceID)
         }
     }
 
@@ -70,24 +70,24 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
         synthesizer.speak(utterance)
     }
 
-    // ─── Piper Server ────────────────────────────────────────
-    private func speakPiper(_ text: String, settings: AppSettings) {
+    // ─── Server-TTS (engine = piper | edge) ──────────────────
+    private func speakServer(_ text: String, engine: String, voice: String, settings: AppSettings) {
         piperTask?.cancel()
         piperTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let wav = try await self.fetchPiperWAV(text: text, settings: settings)
+                let audio = try await self.fetchServerAudio(text: text, engine: engine, voice: voice, settings: settings)
                 guard !Task.isCancelled else { return }
                 try await MainActor.run {
-                    let player = try AVAudioPlayer(data: wav)
+                    let player = try AVAudioPlayer(data: audio)
                     player.delegate = self
                     self.audioPlayer = player
                     self.isSpeaking = true
-                    print("[TTS-Piper] play \(wav.count) bytes")
+                    print("[TTS-\(engine)] play \(audio.count) bytes")
                     player.play()
                 }
             } catch {
-                print("[TTS-Piper] Fehler: \(error.localizedDescription) — Fallback auf iOS-Stimme")
+                print("[TTS-\(engine)] Fehler: \(error.localizedDescription) — Fallback auf iOS-Stimme")
                 await MainActor.run {
                     self.speakIOS(text, voiceID: settings.ttsVoiceID)
                 }
@@ -95,7 +95,7 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
         }
     }
 
-    private func fetchPiperWAV(text: String, settings: AppSettings) async throws -> Data {
+    private func fetchServerAudio(text: String, engine: String, voice: String, settings: AppSettings) async throws -> Data {
         guard let url = URL(string: "\(settings.backendURL)/api/voice/synth") else {
             throw URLError(.badURL)
         }
@@ -106,12 +106,12 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
             let token = "\(settings.authUser):\(settings.authPass)".data(using: .utf8)!.base64EncodedString()
             req.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
         }
-        var body: [String: Any] = ["text": text]
-        if !settings.piperVoice.isEmpty { body["voice"] = settings.piperVoice }
+        var body: [String: Any] = ["text": text, "engine": engine]
+        if !voice.isEmpty { body["voice"] = voice }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, resp) = try await URLSession.shared.data(for: req)
         if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
-            throw NSError(domain: "PiperTTS", code: http.statusCode,
+            throw NSError(domain: "ServerTTS", code: http.statusCode,
                           userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"])
         }
         return data

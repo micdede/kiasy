@@ -7,11 +7,13 @@ final class AppSettings: ObservableObject {
     @AppStorage("authPass")      var authPass: String     = ""
     @AppStorage("chatId")        var chatId: String       = "ios-app"
     @AppStorage("speakReplies")  var speakReplies: Bool   = true
-    /// "ios" = on-device AVSpeechSynthesizer, "piper" = Server-Piper via /api/voice/synth
+    /// "ios" = on-device AVSpeechSynthesizer, "piper" = Server-Piper, "edge" = Server-Edge-TTS
     @AppStorage("ttsBackend")    var ttsBackend: String   = "ios"
     /// AVSpeechSynthesisVoice.identifier (leer = beste verfügbare de-DE)
     @AppStorage("ttsVoiceID")    var ttsVoiceID: String   = ""
     /// Piper-Stimme (z.B. "de_DE-thorsten-high"); leer = Server-Default
     @AppStorage("piperVoice")    var piperVoice: String   = ""
+    /// Edge-Stimme (z.B. "de-DE-KillianNeural"); leer = Server-Default
+    @AppStorage("edgeVoice")     var edgeVoice: String    = ""
     @AppStorage("speakStreaming") var speakStreaming: Bool = false  // true = während Tokens, false = am Ende
 }

@@ -1,10 +1,12 @@
 FROM node:24-alpine
 
 # Build-Tools für native Module (better-sqlite3) + ffmpeg für Audio
+# + py3-pip für edge-tts CLI (Microsoft Edge Read-Aloud)
 RUN apk add --no-cache \
-      python3 make g++ \
+      python3 py3-pip make g++ \
       ffmpeg curl tini \
-      git openssh-client
+      git openssh-client \
+ && pip3 install --break-system-packages --no-cache-dir edge-tts
 
 WORKDIR /app
 
