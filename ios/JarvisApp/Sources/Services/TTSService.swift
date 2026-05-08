@@ -25,6 +25,17 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
 
     func speak(_ text: String, language: String = "de-DE") {
         guard !text.isEmpty else { return }
+        // AudioSession nach Sprachaufnahme oft noch in .playAndRecord (Earpiece-
+        // Routing). Für TTS auf .playback umschalten, damit es laut über
+        // Lautsprecher kommt.
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try session.setActive(true, options: [])
+        } catch {
+            print("[TTS] AudioSession-Setup fehlgeschlagen: \(error)")
+        }
+
         if voiceIdentifier == nil { setVoice(language: language) }
         let utterance = AVSpeechUtterance(string: text)
         if let id = voiceIdentifier, let v = AVSpeechSynthesisVoice(identifier: id) {
@@ -34,6 +45,7 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
         }
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.pitchMultiplier = 1.0
+        print("[TTS] speaking \(text.count) chars, voice=\(utterance.voice?.identifier ?? "default")")
         synthesizer.speak(utterance)
     }
 
