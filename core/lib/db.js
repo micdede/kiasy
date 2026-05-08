@@ -105,6 +105,11 @@ export function getRecentMessages(chatId, limit = 30) {
   }));
 }
 
+export function deleteMessagesByChatId(chatId) {
+  const info = db.prepare(`DELETE FROM messages WHERE chat_id = ?`).run(String(chatId));
+  return info.changes;
+}
+
 export function countMessages(chatId = null) {
   if (chatId) {
     return db.prepare("SELECT COUNT(*) c FROM messages WHERE chat_id = ?")

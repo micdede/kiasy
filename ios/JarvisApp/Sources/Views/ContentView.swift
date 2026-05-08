@@ -13,57 +13,63 @@ struct ContentView: View {
     private let api = JarvisAPI()
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Theme.bgDeep.ignoresSafeArea()
-                VStack(spacing: 0) {
-                    statusBar
-                    messagesList
-                    inputBar
-                }
+        ZStack {
+            Theme.bgDeep.ignoresSafeArea()
+            VStack(spacing: 0) {
+                customHeader
+                messagesList
+                inputBar
             }
-            .navigationTitle("JARVIS")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbarBackground(Theme.bgDeep, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(Theme.accent)
-                    }
-                }
-            }
-            .sheet(isPresented: $showSettings) { SettingsView() }
-            .task { _ = await speech.requestPermissions() }
         }
-        .tint(Theme.accent)
+        .preferredColorScheme(.dark)
+        .sheet(isPresented: $showSettings) { SettingsView(messages: $messages) }
+        .task { _ = await speech.requestPermissions() }
     }
 
     // MARK: - Subviews
 
-    private var statusBar: some View {
-        HStack(spacing: 8) {
+    private var customHeader: some View {
+        HStack(spacing: 10) {
+            // Status-LED
             Circle()
                 .fill(statusColor)
-                .frame(width: 10, height: 10)
-                .shadow(color: statusColor.opacity(0.7), radius: 6)
-            Text(statusText)
-                .font(.caption.monospaced())
-                .foregroundStyle(Theme.textDim)
-            Spacer()
-            if speech.isListening {
-                Text(speech.transcript.isEmpty ? "höre zu…" : speech.transcript)
-                    .font(.caption)
-                    .lineLimit(1)
+                .frame(width: 8, height: 8)
+                .shadow(color: statusColor.opacity(0.85), radius: 5)
+
+            // Wordmark
+            Text("J A R V I S")
+                .font(.system(size: 18, weight: .heavy, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(
+                    LinearGradient(colors: [Theme.accent, Theme.text],
+                                   startPoint: .leading, endPoint: .trailing)
+                )
+                .shadow(color: Theme.accent.opacity(0.6), radius: 4)
+
+            // Status-Text klein dahinter
+            Text(speech.isListening
+                 ? (speech.transcript.isEmpty ? "höre zu…" : speech.transcript)
+                 : statusText)
+                .font(.caption2.monospaced())
+                .foregroundStyle(speech.isListening ? Theme.accent : Theme.textDim)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 4)
+
+            Button { showSettings = true } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.accent)
+                    .padding(8)
+                    .background(Theme.accentSoft)
+                    .clipShape(Circle())
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(Theme.bgCard)
-        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.bgHairline), alignment: .bottom)
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.accent.opacity(0.25)), alignment: .bottom)
     }
 
     private var messagesList: some View {
@@ -88,42 +94,49 @@ struct ContentView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
+            if tts.isSpeaking {
+                Button { tts.stop() } label: {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Theme.warn)
+                        .frame(width: 36, height: 36)
+                        .background(Theme.warn.opacity(0.15))
+                        .clipShape(Circle())
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+
+            Spacer(minLength: 0)
+
             Button {
                 Task { @MainActor in await toggleListening() }
             } label: {
                 ZStack {
                     Circle()
-                        .fill(speech.isListening ? Theme.err.opacity(0.15) : Theme.accentSoft)
-                        .frame(width: 68, height: 68)
-                    Image(systemName: speech.isListening ? "stop.circle.fill" : "mic.circle.fill")
-                        .resizable()
-                        .frame(width: 60, height: 60)
+                        .fill(speech.isListening ? Theme.err.opacity(0.18) : Theme.accentSoft)
+                        .frame(width: 52, height: 52)
+                    Image(systemName: speech.isListening ? "stop.fill" : "mic.fill")
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundStyle(speech.isListening ? Theme.err : Theme.accent)
-                        .shadow(color: (speech.isListening ? Theme.err : Theme.accent).opacity(0.6), radius: 12)
+                        .shadow(color: (speech.isListening ? Theme.err : Theme.accent).opacity(0.7), radius: 10)
                 }
             }
             .disabled(sending)
+            .scaleEffect(speech.isListening ? 1.05 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: speech.isListening)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(speech.isListening ? "Loslassen / Stop drücken" : "Halte zum Sprechen")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.text)
-                Text(sending ? "JARVIS denkt…" : (tts.isSpeaking ? "spricht…" : "tippe oder sprich"))
-                    .font(.caption)
-                    .foregroundStyle(Theme.textDim)
-            }
-            Spacer()
-            if tts.isSpeaking {
-                Button { tts.stop() } label: {
-                    Image(systemName: "speaker.slash.fill")
-                        .foregroundStyle(Theme.warn)
-                }
+            Spacer(minLength: 0)
+
+            // Platzhalter rechts für visuelle Symmetrie wenn kein Stop-Button da ist
+            if !tts.isSpeaking {
+                Color.clear.frame(width: 36, height: 36)
             }
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .background(Theme.bgCard)
-        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.bgHairline), alignment: .top)
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.accent.opacity(0.2)), alignment: .top)
     }
 
     private var statusColor: Color {

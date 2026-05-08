@@ -199,6 +199,12 @@ const server = http.createServer(async (req, res) => {
       const limit  = Number(url.searchParams.get("limit") || 30);
       return sendJson(200, { chatId, messages: db.getRecentMessages(chatId, limit) });
     }
+    if (url.pathname === "/api/chat/history" && req.method === "DELETE") {
+      const chatId = url.searchParams.get("chatId");
+      if (!chatId) return sendJson(400, { error: "chatId fehlt" });
+      const deleted = db.deleteMessagesByChatId(chatId);
+      return sendJson(200, { chatId, deleted });
+    }
     if (url.pathname === "/api/chat/send" && req.method === "POST") {
       const body = await readJson(req);
       if (!body.message) return sendJson(400, { error: "message fehlt" });

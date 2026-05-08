@@ -14,6 +14,7 @@ struct PiperVoice: Identifiable, Hashable {
 struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
+    @Binding var messages: [ChatMessage]
     @State private var probeResult: String = ""
     @State private var probing = false
     @State private var piperVoices: [PiperVoice] = []
@@ -22,6 +23,8 @@ struct SettingsView: View {
     @State private var edgeVoices: [PiperVoice] = []
     @State private var edgeLoading = false
     @State private var edgeError: String?
+    @State private var clearStatus: String?
+    @State private var showClearConfirm = false
 
     private var availableVoices: [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("de") }
@@ -92,6 +95,16 @@ struct SettingsView: View {
                     if settings.ttsBackend == "piper" && piperVoices.isEmpty { await loadVoices(engine: "piper") }
                     if settings.ttsBackend == "edge"  && edgeVoices.isEmpty  { await loadVoices(engine: "edge") }
                 }
+                Section("Aktionen") {
+                    Button(role: .destructive) {
+                        showClearConfirm = true
+                    } label: {
+                        Label("Chat-Verlauf leeren", systemImage: "trash")
+                    }
+                    if let s = clearStatus {
+                        Text(s).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Section("Über") {
                     LabeledContent("Bundle", value: Bundle.main.bundleIdentifier ?? "?")
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
@@ -110,8 +123,47 @@ struct SettingsView: View {
                         .foregroundStyle(Theme.accent)
                 }
             }
+            .confirmationDialog("Chat-Verlauf wirklich leeren?",
+                                isPresented: $showClearConfirm,
+                                titleVisibility: .visible) {
+                Button("Lokal nur", role: .destructive) { clearLocal() }
+                Button("Lokal + Server", role: .destructive) { Task { await clearAll() } }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("‚Lokal' leert nur die Bubbles in der App. ‚Lokal + Server' löscht zusätzlich den Verlauf in der JARVIS-Datenbank für diese Chat-ID.")
+            }
         }
         .tint(Theme.accent)
+    }
+
+    private func clearLocal() {
+        messages.removeAll()
+        clearStatus = "App-Verlauf geleert"
+    }
+
+    private func clearAll() async {
+        clearLocal()
+        guard let url = URL(string: "\(settings.backendURL)/api/chat/history?chatId=\(settings.chatId)") else {
+            clearStatus = "URL ungültig"; return
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        if !settings.authUser.isEmpty {
+            let token = "\(settings.authUser):\(settings.authPass)".data(using: .utf8)!.base64EncodedString()
+            req.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
+        }
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200,
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let n = obj["deleted"] as? Int ?? 0
+                clearStatus = "App geleert + \(n) Server-Einträge gelöscht"
+            } else {
+                clearStatus = "App geleert (Server-Reset fehlgeschlagen)"
+            }
+        } catch {
+            clearStatus = "App geleert (Server-Fehler: \(error.localizedDescription))"
+        }
     }
 
     private func loadVoices(engine: String) async {
@@ -196,5 +248,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView().environmentObject(AppSettings())
+    SettingsView(messages: .constant([])).environmentObject(AppSettings())
 }

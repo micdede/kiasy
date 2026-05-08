@@ -20,7 +20,10 @@ targets:
     sources:
       - path: JarvisApp/Sources
     resources:
-      - path: JarvisApp/Resources
+      # Asset-Catalog explizit (sonst behandelt XcodeGen die internen .json
+      # als einzelne Resources statt als compilable .xcassets)
+      - path: JarvisApp/Resources/Assets.xcassets
+        type: folder.assetcatalog
     info:
       path: JarvisApp/Resources/Info.plist
       properties:
