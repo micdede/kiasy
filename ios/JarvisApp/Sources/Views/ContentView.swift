@@ -46,7 +46,7 @@ struct ContentView: View {
                 Text(speech.transcript.isEmpty ? "höre zu…" : speech.transcript)
                     .font(.caption)
                     .lineLimit(1)
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(Color.accentColor)
             }
         }
         .padding(.horizontal, 12)
@@ -81,7 +81,7 @@ struct ContentView: View {
                 Image(systemName: speech.isListening ? "stop.circle.fill" : "mic.circle.fill")
                     .resizable()
                     .frame(width: 64, height: 64)
-                    .foregroundStyle(speech.isListening ? .red : .tint)
+                    .foregroundStyle(speech.isListening ? Color.red : Color.accentColor)
             }
             .disabled(sending)
 
