@@ -783,6 +783,8 @@ function readJson(req) {
 
 function currentSettings() {
   return {
+    bot_name: process.env.BOT_NAME || "JARVIS",
+    owner_name: process.env.OWNER_NAME || "",
     provider: process.env.LLM_PROVIDER,
     models: {
       ollama:        process.env.OLLAMA_MODEL,

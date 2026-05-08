@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 
 const PORT = Number(process.env.PORT || 3000);
 const CORE_URL = process.env.CORE_URL || "http://kiasy-core:8080";
+const BOT_NAME = process.env.BOT_NAME || "kiasy";
 const STARTED = Date.now();
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url)));
 
@@ -51,9 +52,9 @@ app.get("/", async (req, res) => {
     const r = await fetch(`${CORE_URL}/health`, { signal: AbortSignal.timeout(2000) });
     coreStatus = r.ok ? "online" : `HTTP ${r.status}`;
   } catch { coreStatus = "offline"; }
-  res.send(layout("dashboard", "kiasy", `
+  res.send(layout("dashboard", BOT_NAME, `
     <section class="hero">
-      <h1>kiasy</h1>
+      <h1>${BOT_NAME}</h1>
       <p class="tag">v${pkg.version} · Phase 3 · core ${coreStatus}</p>
     </section>
     <section class="cards">
@@ -591,6 +592,10 @@ function settingsBody() {
     </style>
     <script>
       const FIELDS = {
+        'Allgemein': [
+          ['BOT_NAME', 'Assistenten-Name (Header, Titel, Agent-Prompt)', 'text'],
+          ['OWNER_NAME', 'Dein Name', 'text']
+        ],
         'LLM-Modelle (3 Rollen)': [
           ['LLM_PROVIDER', 'Default-Provider', 'select', ['ollama','anthropic']],
           ['OLLAMA_MODEL', 'Chat-Modell (Hauptantworten)', 'text'],
@@ -641,6 +646,8 @@ function settingsBody() {
       async function load(){
         const s = await (await fetch('/api/settings')).json();
         current = {
+          BOT_NAME: s.bot_name || 'JARVIS',
+          OWNER_NAME: s.owner_name || '',
           LLM_PROVIDER: s.provider,
           OLLAMA_MODEL: s.models.ollama, OLLAMA_MODEL_CHEAP: s.models.ollama_cheap, OLLAMA_MODEL_EMBED: s.models.ollama_embed,
           ANTHROPIC_MODEL: s.models.anthropic,
@@ -704,6 +711,10 @@ function settingsBody() {
         }
         msg.innerHTML = '<div class="save-msg ok">✓ '+data.saved+' gespeichert. ⏳ Recreate-Trigger gesetzt…</div>';
         await fetch('/api/restart', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:'kiasy-core'})});
+        // Wenn BOT_NAME geändert wurde → auch Monitor neu starten (Layout cached den Namen beim Start)
+        if (updates.BOT_NAME && updates.BOT_NAME !== current.BOT_NAME) {
+          await fetch('/api/restart', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service:'kiasy-monitor'})});
+        }
         // Jetzt poll /health bis core wieder antwortet (max 30s)
         msg.innerHTML = '<div class="save-msg">⏳ warte auf kiasy-core…</div>';
         const t0 = Date.now();
@@ -1333,7 +1344,7 @@ function layout(active, title, body) {
   return `<!doctype html>
 <html lang="de" data-theme="dark"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${title} — kiasy</title>
+  <title>${title} — ${BOT_NAME}</title>
   <style>
     :root {
       --bg:#0b0d12; --bg-card:#131722; --bg-elevated:#1a1f2e; --border:#232938;
@@ -1373,7 +1384,7 @@ function layout(active, title, body) {
   </style>
 </head><body>
   <nav class="topnav">
-    <span class="brand">kiasy</span>
+    <span class="brand">${BOT_NAME}</span>
     ${navItems.map(([id, href, label]) => `<a href="${href}" class="${id===active?'active':''}">${label}</a>`).join("")}
   </nav>
   <div class="container">${body}</div>

@@ -303,7 +303,7 @@ function buildRecallSystem(recall) {
     const score = (r.score || 0).toFixed(2);
     return `- [${score}] ${p.type || "?"}${p.role ? "/" + p.role : ""}: ${p.text}`;
   }).join("\n");
-  return `Du bist JARVIS. Antworte direkt, kurz, deutsch. Nutze Tools wo sinnvoll.
+  return `Du bist ${process.env.BOT_NAME || "JARVIS"}. Antworte direkt, kurz, deutsch. Nutze Tools wo sinnvoll.
 
 Relevante frühere Inhalte aus dem Memory (Score = Cosine-Similarity):
 ${items}`;
