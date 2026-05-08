@@ -24,20 +24,20 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
     }
 
     func speak(_ text: String, language: String = "de-DE") {
-        guard !text.isEmpty else { return }
-        // AudioSession nach Sprachaufnahme oft noch in .playAndRecord (Earpiece-
-        // Routing). Für TTS auf .playback umschalten, damit es laut über
-        // Lautsprecher kommt.
+        let cleaned = stripMarkdown(text)
+        guard !cleaned.isEmpty else { return }
+        // Frische Playback-Session — minimal, ohne Mode/Options, vermeidet
+        // IPCAUClient-Konflikt mit der vorher aktiven Record-Session.
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-            try session.setActive(true, options: [])
+            try session.setCategory(.playback)
+            try session.setActive(true)
         } catch {
             print("[TTS] AudioSession-Setup fehlgeschlagen: \(error)")
         }
 
         if voiceIdentifier == nil { setVoice(language: language) }
-        let utterance = AVSpeechUtterance(string: text)
+        let utterance = AVSpeechUtterance(string: cleaned)
         if let id = voiceIdentifier, let v = AVSpeechSynthesisVoice(identifier: id) {
             utterance.voice = v
         } else {
@@ -52,6 +52,25 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate 
     func stop() {
         synthesizer.stopSpeaking(at: .immediate)
         isSpeaking = false
+    }
+
+    private func stripMarkdown(_ s: String) -> String {
+        var t = s
+        // Code-Blöcke ``` und Inline-Code `…`
+        t = t.replacingOccurrences(of: "```[\\s\\S]*?```", with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: "`([^`]*)`", with: "$1", options: .regularExpression)
+        // Bold/italic ** __ * _
+        t = t.replacingOccurrences(of: "\\*\\*([^*]+)\\*\\*", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: "__([^_]+)__", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: "\\*([^*]+)\\*", with: "$1", options: .regularExpression)
+        t = t.replacingOccurrences(of: "_([^_]+)_", with: "$1", options: .regularExpression)
+        // Links [text](url) → text
+        t = t.replacingOccurrences(of: "\\[([^\\]]+)\\]\\([^)]+\\)", with: "$1", options: .regularExpression)
+        // Headings # ## ###
+        t = t.replacingOccurrences(of: "(?m)^#+\\s*", with: "", options: .regularExpression)
+        // Mehrere Whitespaces zusammenfassen
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        return t.trimmingCharacters(in: .whitespaces)
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {

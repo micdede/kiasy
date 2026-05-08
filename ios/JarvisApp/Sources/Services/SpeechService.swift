@@ -85,5 +85,7 @@ final class SpeechService: NSObject, ObservableObject {
         request = nil
         task = nil
         isListening = false
+        // AudioSession deaktivieren, sonst blockiert sie TTS
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
