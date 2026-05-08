@@ -9,6 +9,8 @@ struct ContentView: View {
     @State private var sending = false
     @State private var showSettings = false
     @State private var statusText = "bereit"
+    @State private var inputText = ""
+    @FocusState private var inputFocused: Bool
 
     private let api = JarvisAPI()
 
@@ -94,49 +96,97 @@ struct ContentView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
+            // Stop-TTS-Pill (nur sichtbar während TTS läuft)
             if tts.isSpeaking {
                 Button { tts.stop() } label: {
                     Image(systemName: "speaker.slash.fill")
-                        .font(.system(size: 18))
+                        .font(.system(size: 14))
                         .foregroundStyle(Theme.warn)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 32, height: 32)
                         .background(Theme.warn.opacity(0.15))
                         .clipShape(Circle())
                 }
                 .transition(.scale.combined(with: .opacity))
             }
 
-            Spacer(minLength: 0)
-
-            Button {
-                Task { @MainActor in await toggleListening() }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(speech.isListening ? Theme.err.opacity(0.18) : Theme.accentSoft)
-                        .frame(width: 52, height: 52)
-                    Image(systemName: speech.isListening ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(speech.isListening ? Theme.err : Theme.accent)
-                        .shadow(color: (speech.isListening ? Theme.err : Theme.accent).opacity(0.7), radius: 10)
-                }
+            // Textfeld
+            HStack(spacing: 6) {
+                TextField("", text: $inputText, axis: .vertical)
+                    .placeholder(when: inputText.isEmpty) {
+                        Text(speech.isListening
+                             ? (speech.transcript.isEmpty ? "höre zu…" : speech.transcript)
+                             : "Nachricht…")
+                            .foregroundStyle(speech.isListening ? Theme.accent : Theme.textDim)
+                    }
+                    .foregroundStyle(Theme.text)
+                    .tint(Theme.accent)
+                    .focused($inputFocused)
+                    .lineLimit(1...4)
+                    .submitLabel(.send)
+                    .onSubmit { Task { await sendTyped() } }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
             }
-            .disabled(sending)
-            .scaleEffect(speech.isListening ? 1.05 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: speech.isListening)
+            .background(Theme.bgElevated)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().strokeBorder(
+                    speech.isListening ? Theme.accent.opacity(0.6) : Theme.bgHairline,
+                    lineWidth: 0.8
+                )
+            )
 
-            Spacer(minLength: 0)
-
-            // Platzhalter rechts für visuelle Symmetrie wenn kein Stop-Button da ist
-            if !tts.isSpeaking {
-                Color.clear.frame(width: 36, height: 36)
+            // Send wenn Text → Send, sonst Mic
+            if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button { Task { await sendTyped() } } label: {
+                    iconCircle(name: "arrow.up", tint: Theme.accent, size: 38)
+                }
+                .disabled(sending)
+                .transition(.scale.combined(with: .opacity))
+            } else {
+                Button {
+                    Task { @MainActor in await toggleListening() }
+                } label: {
+                    iconCircle(
+                        name: speech.isListening ? "stop.fill" : "mic.fill",
+                        tint: speech.isListening ? Theme.err : Theme.accent,
+                        size: 38
+                    )
+                    .scaleEffect(speech.isListening ? 1.08 : 1.0)
+                }
+                .disabled(sending)
+                .animation(.easeInOut(duration: 0.15), value: speech.isListening)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(Theme.bgCard)
         .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.accent.opacity(0.2)), alignment: .top)
+        .animation(.easeInOut(duration: 0.18), value: inputText.isEmpty)
+        .animation(.easeInOut(duration: 0.18), value: tts.isSpeaking)
+    }
+
+    @ViewBuilder
+    private func iconCircle(name: String, tint: Color, size: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .fill(tint.opacity(0.18))
+                .frame(width: size, height: size)
+            Image(systemName: name)
+                .font(.system(size: size * 0.42, weight: .bold))
+                .foregroundStyle(tint)
+                .shadow(color: tint.opacity(0.7), radius: 6)
+        }
+    }
+
+    @MainActor
+    private func sendTyped() async {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        inputText = ""
+        inputFocused = false
+        await sendMessage(text)
     }
 
     private var statusColor: Color {

@@ -27,3 +27,15 @@ enum Theme {
     static let bubbleUser  = Color(red: 0.305, green: 0.831, blue: 1.000).opacity(0.22)
     static let bubbleAssist = Color(red: 0.060, green: 0.105, blue: 0.180)  // = bgElevated
 }
+
+// SwiftUI hat keinen nativen Placeholder für TextField im dunklen Theme,
+// daher der klassische Overlay-Trick.
+extension View {
+    @ViewBuilder
+    func placeholder<P: View>(when shouldShow: Bool, @ViewBuilder _ placeholder: () -> P) -> some View {
+        ZStack(alignment: .leading) {
+            if shouldShow { placeholder() }
+            self
+        }
+    }
+}
