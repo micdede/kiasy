@@ -134,7 +134,7 @@ struct ContentView: View {
         statusText = "sende…"
 
         var assistantText = ""
-        var assistantMsg = ChatMessage(role: .assistant, text: "", isStreaming: true)
+        let assistantMsg = ChatMessage(role: .assistant, text: "", isStreaming: true)
         messages.append(assistantMsg)
         let assistantID = assistantMsg.id
 
