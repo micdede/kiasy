@@ -32,8 +32,6 @@ targets:
           - UIInterfaceOrientationPortrait
         NSMicrophoneUsageDescription: "JARVIS braucht Zugriff aufs Mikrofon, um deine Sprachbefehle aufzunehmen."
         NSSpeechRecognitionUsageDescription: "JARVIS wandelt deine Sprache lokal in Text um, bevor er sie ans Backend schickt."
-        NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
         UIBackgroundModes:
           - audio
     settings:

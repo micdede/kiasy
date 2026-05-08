@@ -78,10 +78,9 @@ struct SettingsView: View {
             let token = "\(settings.authUser):\(settings.authPass)".data(using: .utf8)!.base64EncodedString()
             req.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
         }
-        let trust = TrustAllDelegate()
-        let session = URLSession(configuration: .default, delegate: trust, delegateQueue: nil)
+        let session = URLSession.shared
         do {
-            let (data, resp) = try await session.data(for: req, delegate: trust)
+            let (data, resp) = try await session.data(for: req)
             if let http = resp as? HTTPURLResponse {
                 let body = String(data: data, encoding: .utf8) ?? ""
                 probeResult = "HTTP \(http.statusCode)\n\(body.prefix(200))"
@@ -89,24 +88,6 @@ struct SettingsView: View {
         } catch {
             probeResult = "Fehler: \(error.localizedDescription)"
         }
-    }
-}
-
-private final class TrustAllDelegate: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
-    func urlSession(_ s: URLSession, didReceive c: URLAuthenticationChallenge,
-                    completionHandler h: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        accept(c, h)
-    }
-    func urlSession(_ s: URLSession, task: URLSessionTask, didReceive c: URLAuthenticationChallenge,
-                    completionHandler h: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        accept(c, h)
-    }
-    private func accept(_ c: URLAuthenticationChallenge,
-                        _ h: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        if c.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-           let trust = c.protectionSpace.serverTrust {
-            h(.useCredential, URLCredential(trust: trust))
-        } else { h(.performDefaultHandling, nil) }
     }
 }
 
