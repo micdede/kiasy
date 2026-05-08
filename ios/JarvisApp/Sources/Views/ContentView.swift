@@ -76,7 +76,7 @@ struct ContentView: View {
     private var inputBar: some View {
         HStack(spacing: 12) {
             Button {
-                Task { await toggleListening() }
+                Task { @MainActor in await toggleListening() }
             } label: {
                 Image(systemName: speech.isListening ? "stop.circle.fill" : "mic.circle.fill")
                     .resizable()
@@ -110,6 +110,7 @@ struct ContentView: View {
 
     // MARK: - Actions
 
+    @MainActor
     private func toggleListening() async {
         if speech.isListening {
             speech.stop()
@@ -127,6 +128,7 @@ struct ContentView: View {
         }
     }
 
+    @MainActor
     private func sendMessage(_ text: String) async {
         let userMsg = ChatMessage(role: .user, text: text)
         messages.append(userMsg)
@@ -139,6 +141,7 @@ struct ContentView: View {
         let assistantID = assistantMsg.id
 
         do {
+            statusText = "verbinde…"
             let stream = await api.sendStream(
                 baseURL: settings.backendURL,
                 user: settings.authUser,
@@ -146,6 +149,7 @@ struct ContentView: View {
                 chatId: settings.chatId,
                 message: text
             )
+            statusText = "warte auf Antwort…"
             for try await ev in stream {
                 switch ev {
                 case .delta(let chunk):
