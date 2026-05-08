@@ -176,7 +176,7 @@ struct ContentView: View {
                 messages[idx].isStreaming = false
             }
             if settings.speakReplies && !settings.speakStreaming, !assistantText.isEmpty {
-                tts.speak(assistantText, voiceID: settings.ttsVoiceID)
+                tts.speak(assistantText, settings: settings)
             }
         } catch {
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
