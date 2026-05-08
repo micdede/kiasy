@@ -1,0 +1,44 @@
+name: JarvisApp
+options:
+  bundleIdPrefix: de.dedecke
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: "" # in Xcode: Signing & Capabilities → Team auswählen
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  JarvisApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: JarvisApp/Sources
+    resources:
+      - path: JarvisApp/Resources
+    info:
+      path: JarvisApp/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: JARVIS
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSMicrophoneUsageDescription: "JARVIS braucht Zugriff aufs Mikrofon, um deine Sprachbefehle aufzunehmen."
+        NSSpeechRecognitionUsageDescription: "JARVIS wandelt deine Sprache lokal in Text um, bevor er sie ans Backend schickt."
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        UIBackgroundModes:
+          - audio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.dedecke.jarvis
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_PREVIEWS: "YES"
+        CODE_SIGN_STYLE: Automatic
