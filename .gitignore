@@ -31,4 +31,7 @@ setup.sh
 *.db
 *.db-shm
 *.db-wal
+
+# Generierte Bilder (image_generate Tool)
+data/images/
 tools/btc-price.js
