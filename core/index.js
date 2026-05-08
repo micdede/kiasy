@@ -681,6 +681,29 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, { items, dir });
     }
 
+    // ─── Static: Generierte Bilder (von image_generate Tool) ─
+    if (url.pathname.startsWith("/api/images/") && req.method === "GET") {
+      const filename = url.pathname.replace("/api/images/", "");
+      // Whitelist gegen Path-Traversal: nur img-*.png/jpg/webp
+      if (!/^img-[A-Za-z0-9_-]+\.(png|jpe?g|webp)$/.test(filename)) {
+        return sendJson(404, { error: "not found" });
+      }
+      const fs = await import("node:fs");
+      const filepath = `${process.env.IMAGES_DIR || "/data/images"}/${filename}`;
+      if (!fs.existsSync(filepath)) return sendJson(404, { error: "image not found" });
+      const ext = filename.split(".").pop().toLowerCase();
+      const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg"
+                 : ext === "webp" ? "image/webp" : "image/png";
+      const stat = fs.statSync(filepath);
+      res.writeHead(200, {
+        "Content-Type":   mime,
+        "Content-Length": stat.size,
+        "Cache-Control":  "public, max-age=31536000"
+      });
+      fs.createReadStream(filepath).pipe(res);
+      return;
+    }
+
     // ─── Voice: Liste der Stimmen (engine=piper|edge) ───────
     if (url.pathname === "/api/voice/voices" && req.method === "GET") {
       const engine = (url.searchParams.get("engine") || "piper").toLowerCase();

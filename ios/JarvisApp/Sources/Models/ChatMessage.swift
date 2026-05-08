@@ -8,4 +8,6 @@ struct ChatMessage: Identifiable, Equatable {
     var text: String
     let timestamp = Date()
     var isStreaming: Bool = false
+    /// optional vollständige URL (mit Backend-Prefix) — wird gerendert als Inline-Image
+    var imageURL: String? = nil
 }

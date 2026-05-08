@@ -250,8 +250,16 @@ struct ContentView: View {
                     }
                 case .toolUse(let name, _):
                     statusText = "Tool: \(name)"
-                case .toolResult:
-                    break
+                case .toolResult(let any):
+                    // Wenn das Tool eine /api/images/... URL liefert, an die laufende
+                    // Assistant-Bubble hängen — MessageBubble rendert sie dann als Bild.
+                    if let dict = any as? [String: Any], let path = dict["url"] as? String,
+                       path.hasPrefix("/api/images/") {
+                        let full = "\(settings.backendURL)\(path)"
+                        if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                            messages[idx].imageURL = full
+                        }
+                    }
                 case .done:
                     statusText = "fertig"
                 case .error(let err):
@@ -278,30 +286,66 @@ struct ContentView: View {
 }
 
 private struct MessageBubble: View {
+    @EnvironmentObject var settings: AppSettings
     let msg: ChatMessage
 
     var body: some View {
         HStack {
             if msg.role == .user { Spacer(minLength: 40) }
-            VStack(alignment: msg.role == .user ? .trailing : .leading, spacing: 3) {
+            VStack(alignment: msg.role == .user ? .trailing : .leading, spacing: 6) {
                 Text(msg.role.rawValue.uppercased())
                     .font(.caption2.monospaced())
                     .foregroundStyle(Theme.textDim)
                     .tracking(0.8)
-                Text(msg.text.isEmpty && msg.isStreaming ? "…" : msg.text)
-                    .foregroundStyle(textColor)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(bg)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(borderColor, lineWidth: 0.8)
-                    )
-                    .textSelection(.enabled)
+                if !msg.text.isEmpty || msg.isStreaming {
+                    Text(msg.text.isEmpty && msg.isStreaming ? "…" : msg.text)
+                        .foregroundStyle(textColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(bg)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .strokeBorder(borderColor, lineWidth: 0.8)
+                        )
+                        .textSelection(.enabled)
+                }
+                if let urlString = msg.imageURL, let url = authedURL(urlString) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 14).fill(Theme.bgElevated)
+                                ProgressView().tint(Theme.accent)
+                            }.frame(width: 240, height: 240)
+                        case .success(let img):
+                            img.resizable().scaledToFit()
+                                .frame(maxWidth: 320)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.8))
+                        case .failure:
+                            Text("⚠ Bild nicht ladbar")
+                                .font(.caption).foregroundStyle(Theme.err)
+                                .padding(10).background(Theme.err.opacity(0.15))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
             }
             if msg.role != .user { Spacer(minLength: 40) }
         }
+    }
+
+    /// Embeddet Basic-Auth in die URL (URLSession akzeptiert https://user:pass@host).
+    private func authedURL(_ s: String) -> URL? {
+        guard !settings.authUser.isEmpty,
+              var comps = URLComponents(string: s) else { return URL(string: s) }
+        comps.user = settings.authUser
+        comps.password = settings.authPass
+        return comps.url
     }
 
     private var bg: Color {
