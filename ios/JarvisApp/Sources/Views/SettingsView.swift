@@ -119,9 +119,13 @@ struct SettingsView: View {
                     gender: v["gender"] as? String ?? ""
                 )
             }
-            if settings.piperVoice.isEmpty, let def = obj["default"] as? String, !def.isEmpty {
-                settings.piperVoice = def
+            // Falls die gespeicherte Stimme nicht (mehr) in der Liste ist → leeren
+            if !settings.piperVoice.isEmpty,
+               !piperVoices.contains(where: { $0.voice == settings.piperVoice }) {
+                settings.piperVoice = ""
             }
+            // Auto-Default NICHT setzen — sonst rendert der Picker "tag invalid"
+            // bevor die Liste da ist. "Server-Default" (leer) bleibt der Initial-Wert.
         } catch {
             piperError = "Fehler: \(error.localizedDescription)"
         }
