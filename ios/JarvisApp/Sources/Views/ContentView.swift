@@ -14,21 +14,31 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                statusBar
-                messagesList
-                inputBar
+            ZStack {
+                Theme.bgDeep.ignoresSafeArea()
+                VStack(spacing: 0) {
+                    statusBar
+                    messagesList
+                    inputBar
+                }
             }
             .navigationTitle("JARVIS")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Theme.bgDeep, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(Theme.accent)
+                    }
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .task { _ = await speech.requestPermissions() }
         }
+        .tint(Theme.accent)
     }
 
     // MARK: - Subviews
@@ -38,20 +48,22 @@ struct ContentView: View {
             Circle()
                 .fill(statusColor)
                 .frame(width: 10, height: 10)
+                .shadow(color: statusColor.opacity(0.7), radius: 6)
             Text(statusText)
                 .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.textDim)
             Spacer()
             if speech.isListening {
                 Text(speech.transcript.isEmpty ? "höre zu…" : speech.transcript)
                     .font(.caption)
                     .lineLimit(1)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Theme.accent)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Theme.bgCard)
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.bgHairline), alignment: .bottom)
     }
 
     private var messagesList: some View {
@@ -65,6 +77,8 @@ struct ContentView: View {
                 }
                 .padding(12)
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.bgDeep)
             .onChange(of: messages.count) { _, _ in
                 if let last = messages.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -74,38 +88,49 @@ struct ContentView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Button {
                 Task { @MainActor in await toggleListening() }
             } label: {
-                Image(systemName: speech.isListening ? "stop.circle.fill" : "mic.circle.fill")
-                    .resizable()
-                    .frame(width: 64, height: 64)
-                    .foregroundStyle(speech.isListening ? Color.red : Color.accentColor)
+                ZStack {
+                    Circle()
+                        .fill(speech.isListening ? Theme.err.opacity(0.15) : Theme.accentSoft)
+                        .frame(width: 68, height: 68)
+                    Image(systemName: speech.isListening ? "stop.circle.fill" : "mic.circle.fill")
+                        .resizable()
+                        .frame(width: 60, height: 60)
+                        .foregroundStyle(speech.isListening ? Theme.err : Theme.accent)
+                        .shadow(color: (speech.isListening ? Theme.err : Theme.accent).opacity(0.6), radius: 12)
+                }
             }
             .disabled(sending)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(speech.isListening ? "Loslassen / Stop drücken" : "Halte zum Sprechen")
                     .font(.subheadline)
+                    .foregroundStyle(Theme.text)
                 Text(sending ? "JARVIS denkt…" : (tts.isSpeaking ? "spricht…" : "tippe oder sprich"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.textDim)
             }
             Spacer()
             if tts.isSpeaking {
-                Button { tts.stop() } label: { Image(systemName: "speaker.slash.fill").foregroundStyle(.orange) }
+                Button { tts.stop() } label: {
+                    Image(systemName: "speaker.slash.fill")
+                        .foregroundStyle(Theme.warn)
+                }
             }
         }
-        .padding(12)
-        .background(.ultraThinMaterial)
+        .padding(14)
+        .background(Theme.bgCard)
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.bgHairline), alignment: .top)
     }
 
     private var statusColor: Color {
-        if sending { return .orange }
-        if tts.isSpeaking { return .blue }
-        if speech.isListening { return .red }
-        return .green
+        if sending { return Theme.warn }
+        if tts.isSpeaking { return Theme.accent }
+        if speech.isListening { return Theme.err }
+        return Theme.ok
     }
 
     // MARK: - Actions
@@ -195,15 +220,21 @@ private struct MessageBubble: View {
     var body: some View {
         HStack {
             if msg.role == .user { Spacer(minLength: 40) }
-            VStack(alignment: msg.role == .user ? .trailing : .leading, spacing: 2) {
+            VStack(alignment: msg.role == .user ? .trailing : .leading, spacing: 3) {
                 Text(msg.role.rawValue.uppercased())
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(Theme.textDim)
+                    .tracking(0.8)
                 Text(msg.text.isEmpty && msg.isStreaming ? "…" : msg.text)
-                    .padding(10)
+                    .foregroundStyle(textColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
                     .background(bg)
-                    .foregroundStyle(.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(borderColor, lineWidth: 0.8)
+                    )
                     .textSelection(.enabled)
             }
             if msg.role != .user { Spacer(minLength: 40) }
@@ -212,11 +243,29 @@ private struct MessageBubble: View {
 
     private var bg: Color {
         switch msg.role {
-        case .user: return .accentColor.opacity(0.25)
-        case .assistant: return Color(.secondarySystemBackground)
-        case .tool: return Color(.tertiarySystemBackground)
-        case .error: return .red.opacity(0.2)
-        case .system: return .gray.opacity(0.2)
+        case .user:      return Theme.bubbleUser
+        case .assistant: return Theme.bubbleAssist
+        case .tool:      return Theme.bgCard
+        case .error:     return Theme.err.opacity(0.18)
+        case .system:    return Theme.bgCard
+        }
+    }
+
+    private var borderColor: Color {
+        switch msg.role {
+        case .user:      return Theme.accent.opacity(0.5)
+        case .assistant: return Theme.bgHairline
+        case .tool:      return Theme.bgHairline.opacity(0.7)
+        case .error:     return Theme.err.opacity(0.6)
+        case .system:    return Theme.bgHairline
+        }
+    }
+
+    private var textColor: Color {
+        switch msg.role {
+        case .error: return Theme.err
+        case .tool:  return Theme.textDim
+        default:     return Theme.text
         }
     }
 }

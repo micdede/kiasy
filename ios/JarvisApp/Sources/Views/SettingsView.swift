@@ -97,14 +97,21 @@ struct SettingsView: View {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Theme.bgDeep)
             .navigationTitle("Einstellungen")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Theme.bgDeep, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Fertig") { dismiss() }
+                        .foregroundStyle(Theme.accent)
                 }
             }
         }
+        .tint(Theme.accent)
     }
 
     private func loadVoices(engine: String) async {
