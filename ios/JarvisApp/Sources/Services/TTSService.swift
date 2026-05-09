@@ -13,6 +13,9 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
     private var audioPlayer: AVAudioPlayer?
     private var piperTask: Task<Void, Never>?
     private var meterTask: Task<Void, Never>?
+    /// Queue für sequentielle Speak-Aufrufe (für Streaming-TTS — Satz für Satz).
+    /// `isSpeaking` bleibt true solange noch was in der Queue ist.
+    private var speechQueue: [(text: String, settings: AppSettings)] = []
 
     override init() {
         super.init()
@@ -24,11 +27,43 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
     func speak(_ text: String, settings: AppSettings) {
         let cleaned = stripMarkdown(text)
         guard !cleaned.isEmpty else { return }
+        // Single-shot: bricht laufende Wiedergabe + Queue ab und spielt nur diesen Text
+        speechQueue.removeAll()
+        startSpeaking(cleaned, settings: settings)
+    }
+
+    /// Reiht einen Text in die Wiedergabe-Queue ein. Wenn nichts läuft, startet
+    /// sofort. Sonst wird der Text nach dem aktuellen abgespielt. `isSpeaking`
+    /// bleibt true bis die ganze Queue durch ist (wichtig für Konversations-Modus
+    /// Auto-Continue-Trigger).
+    func enqueueSpeak(_ text: String, settings: AppSettings) {
+        let cleaned = stripMarkdown(text)
+        guard !cleaned.isEmpty else { return }
+        if isSpeaking {
+            speechQueue.append((cleaned, settings))
+        } else {
+            startSpeaking(cleaned, settings: settings)
+        }
+    }
+
+    private func startSpeaking(_ text: String, settings: AppSettings) {
         configurePlaybackSession()
         switch settings.ttsBackend {
-        case "piper": speakServer(cleaned, engine: "piper", voice: settings.piperVoice, settings: settings)
-        case "edge":  speakServer(cleaned, engine: "edge",  voice: settings.edgeVoice,  settings: settings)
-        default:      speakIOS(cleaned, voiceID: settings.ttsVoiceID)
+        case "piper": speakServer(text, engine: "piper", voice: settings.piperVoice, settings: settings)
+        case "edge":  speakServer(text, engine: "edge",  voice: settings.edgeVoice,  settings: settings)
+        default:      speakIOS(text, voiceID: settings.ttsVoiceID)
+        }
+    }
+
+    /// Vom Delegate aufgerufen wenn ein Audio-Item fertig ist. Spielt den nächsten
+    /// Eintrag aus der Queue oder beendet `isSpeaking`.
+    private func processNextOrFinish() {
+        if let next = speechQueue.first {
+            speechQueue.removeFirst()
+            startSpeaking(next.text, settings: next.settings)
+        } else {
+            isSpeaking = false
+            stopMetering()
         }
     }
 
@@ -38,6 +73,7 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
         audioPlayer = nil
         piperTask?.cancel()
         piperTask = nil
+        speechQueue.removeAll()
         stopMetering()
         isSpeaking = false
     }
@@ -186,21 +222,20 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
         Task { @MainActor in self.isSpeaking = true }
     }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            self.isSpeaking = false
-            self.stopMetering()
-        }
+        Task { @MainActor in self.processNextOrFinish() }
     }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        // Cancel = User-Stop: nicht weiter mit Queue (die ist eh schon gecleart in stop())
         Task { @MainActor in
-            self.isSpeaking = false
-            self.stopMetering()
+            if self.speechQueue.isEmpty {
+                self.isSpeaking = false
+                self.stopMetering()
+            } else {
+                self.processNextOrFinish()
+            }
         }
     }
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in
-            self.isSpeaking = false
-            self.stopMetering()
-        }
+        Task { @MainActor in self.processNextOrFinish() }
     }
 }

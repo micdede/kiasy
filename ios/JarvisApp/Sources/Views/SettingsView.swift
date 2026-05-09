@@ -51,10 +51,10 @@ struct SettingsView: View {
                         Text(probeResult).font(.caption.monospaced()).foregroundStyle(.secondary)
                     }
                 }
-                Section("Sprachausgabe") {
+                Section {
                     Toggle("Antworten vorlesen", isOn: $settings.speakReplies)
-                    Toggle("Streaming-Vorlesen (Phase 2)", isOn: $settings.speakStreaming)
-                        .disabled(true)
+                    Toggle("Streaming-Vorlesen (Satz für Satz)", isOn: $settings.speakStreaming)
+                        .disabled(!settings.speakReplies)
                     Toggle("Konversations-Modus", isOn: $settings.conversationMode)
                     if settings.conversationMode {
                         Text("Nach jeder Antwort geht das Mikrofon automatisch wieder auf. Beendet sich nach 6 Sekunden Stille oder durch Mic-Stop-Button.")
@@ -106,6 +106,11 @@ struct SettingsView: View {
                         Button("Stimmen laden") { Task { await loadVoices(engine: "edge") } }
                             .disabled(edgeLoading)
                     }
+                } header: {
+                    Text("Sprachausgabe")
+                } footer: {
+                    Text("Streaming-Vorlesen: JARVIS fängt schon mit dem ersten fertigen Satz an zu sprechen während die Antwort noch generiert wird — fühlt sich deutlich schneller an, kostet aber kleine Pausen zwischen Sätzen (jeder Satz braucht eine eigene TTS-Anfrage).")
+                        .font(.caption2)
                 }
                 .task {
                     if settings.ttsBackend == "piper" && piperVoices.isEmpty { await loadVoices(engine: "piper") }

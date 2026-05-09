@@ -483,6 +483,12 @@ struct ContentView: View {
         messages.append(assistantMsg)
         let assistantID = assistantMsg.id
 
+        // Streaming-TTS: Buffer für noch-nicht-gesprochene Token. Bei Satz-Ende
+        // wird das Stück abgeschnitten und in die TTS-Queue gehängt.
+        let useStreamingTTS = settings.speakReplies && settings.speakStreaming
+        var ttsBuffer = ""
+        let minChunkLen = 30  // sehr kurze Sätze sammeln statt einzeln zu sprechen
+
         do {
             statusText = "verbinde…"
             let stream = await api.sendStream(
@@ -501,8 +507,14 @@ struct ContentView: View {
                     if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                         messages[idx].text = assistantText
                     }
-                    if settings.speakReplies && settings.speakStreaming, chunk.contains(where: { ".!?\n".contains($0) }) {
-                        // optional: streaming TTS pro Satz — Phase 2
+                    if useStreamingTTS {
+                        ttsBuffer += chunk
+                        // Auf Satz-Ende-Marker prüfen — ab minChunkLen sprechen
+                        if ttsBuffer.count >= minChunkLen,
+                           let split = sentenceSplit(ttsBuffer) {
+                            tts.enqueueSpeak(split.spoken, settings: settings)
+                            ttsBuffer = split.remainder
+                        }
                     }
                 case .toolUse(let name, _):
                     statusText = "Tool: \(name)"
@@ -539,7 +551,14 @@ struct ContentView: View {
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
             }
-            if settings.speakReplies && !settings.speakStreaming, !assistantText.isEmpty {
+            if useStreamingTTS {
+                // Rest aus dem Buffer noch sprechen (letzter Satz hatte vielleicht
+                // kein Satzzeichen am Ende)
+                let remaining = ttsBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !remaining.isEmpty {
+                    tts.enqueueSpeak(remaining, settings: settings)
+                }
+            } else if settings.speakReplies, !assistantText.isEmpty {
                 tts.speak(assistantText, settings: settings)
             }
         } catch {
@@ -550,6 +569,35 @@ struct ContentView: View {
             statusText = "Fehler"
         }
         sending = false
+    }
+
+    /// Findet das LETZTE Satz-Ende-Zeichen (.!?) bzw. Doppel-Newline im Buffer.
+    /// Splittet dort und liefert (gesprochener Teil, Rest) — oder nil wenn kein
+    /// Satz-Ende drin ist (dann Buffer weiterwachsen lassen).
+    /// Reagiert nicht auf Punkte mitten in Wörtern (Abkürzungen wie z.B.) — danach
+    /// muss ein Whitespace folgen damit's als Satz-Ende zählt.
+    private func sentenceSplit(_ buffer: String) -> (spoken: String, remainder: String)? {
+        let chars = Array(buffer)
+        var lastSentenceEnd: Int? = nil
+        for i in stride(from: chars.count - 1, through: 1, by: -1) {
+            let c = chars[i]
+            // Doppelte Newline = Absatz-Ende
+            if c == "\n", i > 0, chars[i - 1] == "\n" {
+                lastSentenceEnd = i + 1; break
+            }
+            // .!? gefolgt von Whitespace oder Newline
+            if (c == " " || c == "\n"), i > 0 {
+                let prev = chars[i - 1]
+                if ".!?".contains(prev) {
+                    lastSentenceEnd = i + 1; break
+                }
+            }
+        }
+        guard let split = lastSentenceEnd else { return nil }
+        let spoken = String(chars[0..<split]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let remainder = String(chars[split..<chars.count])
+        guard !spoken.isEmpty else { return nil }
+        return (spoken, remainder)
     }
 
     /// Extrahiert reinen Text aus einem PDF (PDFKit). Liefert nil wenn das PDF
