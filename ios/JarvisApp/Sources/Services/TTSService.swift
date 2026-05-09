@@ -78,13 +78,22 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
 
     // ─── Audio-Session ───────────────────────────────────────
     private func configurePlaybackSession() {
+        let session = AVAudioSession.sharedInstance()
+        // Category + Mode setzen (idempotent, schnell)
         do {
-            let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .voicePrompt, options: [.duckOthers])
-            try session.setActive(true)
-            try session.overrideOutputAudioPort(.speaker)
         } catch {
-            print("[TTS] AudioSession-Setup fehlgeschlagen: \(error)")
+            print("[TTS] setCategory fehlgeschlagen: \(error)")
+        }
+        // Aktivieren (kann -50 werfen wenn STT-Session noch nicht released — egal, Audio spielt)
+        do {
+            try session.setActive(true)
+        } catch {
+            print("[TTS] setActive fehlgeschlagen (harmlos, Player spielt trotzdem): \(error.localizedDescription)")
+        }
+        // Speaker-Override nur wenn Category .playback ist (sonst wirft's -50)
+        if session.category == .playback {
+            try? session.overrideOutputAudioPort(.speaker)
         }
     }
 

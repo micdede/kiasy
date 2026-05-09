@@ -855,6 +855,17 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[kiasy-core] v${pkg.version} listening on :${PORT}`);
   console.log(`[kiasy-core] provider: ${process.env.LLM_PROVIDER || "ollama"}`);
+  // Piper-Warmup: Modell beim Start in den Memory laden, damit der erste
+  // echte Request nicht 5s wartet. Async, blockiert den Listen nicht.
+  setTimeout(async () => {
+    try {
+      const t0 = Date.now();
+      await piper.synthesize("Bereit.", { asWav: true });
+      console.log(`[piper] warmup done in ${Date.now() - t0}ms`);
+    } catch (e) {
+      console.log(`[piper] warmup failed (nicht fatal): ${e.message}`);
+    }
+  }, 2000);
 });
 
 // ─── Helpers ─────────────────────────────────────────────────
