@@ -22,8 +22,12 @@ struct ChatMessage: Identifiable, Equatable {
     var imageURL: String? = nil
     /// vom User in der App angehängte Files — nur lokal sichtbar, nicht im Server-History
     var localAttachments: [LocalAttachment] = []
+    /// Server-erzeugte Datei zum Download (Tool-Result mit download_url, z.B. CSV/JSON/etc.)
+    var downloadURL: String? = nil
+    /// Original-Dateiname (für Anzeige + Share-Sheet)
+    var downloadFilename: String? = nil
 
-    init(role: Role, text: String, isStreaming: Bool = false, imageURL: String? = nil, localAttachments: [LocalAttachment] = []) {
+    init(role: Role, text: String, isStreaming: Bool = false, imageURL: String? = nil, localAttachments: [LocalAttachment] = [], downloadURL: String? = nil, downloadFilename: String? = nil) {
         self.id = UUID()
         self.role = role
         self.text = text
@@ -31,6 +35,8 @@ struct ChatMessage: Identifiable, Equatable {
         self.isStreaming = isStreaming
         self.imageURL = imageURL
         self.localAttachments = localAttachments
+        self.downloadURL = downloadURL
+        self.downloadFilename = downloadFilename
     }
 
     /// Mappt eine Server-History-Zeile (`{role, content, msg_type, meta, created_at}`)

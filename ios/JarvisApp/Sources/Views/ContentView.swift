@@ -507,13 +507,25 @@ struct ContentView: View {
                 case .toolUse(let name, _):
                     statusText = "Tool: \(name)"
                 case .toolResult(let any):
-                    // Wenn das Tool eine /api/images/... URL liefert, an die laufende
-                    // Assistant-Bubble hängen — MessageBubble rendert sie dann als Bild.
-                    if let dict = any as? [String: Any], let path = dict["url"] as? String,
-                       path.hasPrefix("/api/images/") {
-                        let full = "\(settings.backendURL)\(path)"
-                        if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
-                            messages[idx].imageURL = full
+                    // Wenn das Tool eine /api/images/... URL liefert → Inline-Image.
+                    // Wenn ein Tool eine download_url (z.B. /api/files/...) liefert →
+                    // als Datei-Card mit ShareLink rendern.
+                    if let dict = any as? [String: Any] {
+                        if let path = dict["url"] as? String, path.hasPrefix("/api/images/") {
+                            let full = "\(settings.backendURL)\(path)"
+                            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                                messages[idx].imageURL = full
+                            }
+                        }
+                        if let path = dict["download_url"] as? String {
+                            let full = "\(settings.backendURL)\(path)"
+                            let name = (dict["filename"] as? String)
+                                ?? URL(string: full)?.lastPathComponent
+                                ?? "Datei"
+                            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                                messages[idx].downloadURL = full
+                                messages[idx].downloadFilename = name
+                            }
                         }
                     }
                 case .done:
@@ -589,6 +601,11 @@ private struct MessageBubble: View {
                         )
                         .textSelection(.enabled)
                 }
+                // Server-erzeugte Datei (Tool-Result mit download_url) als Card
+                if let urlString = msg.downloadURL,
+                   let url = authedURL(urlString) {
+                    serverFileCard(url: url, filename: msg.downloadFilename ?? "Datei")
+                }
                 if let urlString = msg.imageURL, let url = authedURL(urlString) {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -629,6 +646,52 @@ private struct MessageBubble: View {
         }
         .sheet(item: $pdfPreview) { att in
             PDFPreview(data: att.data, title: att.filename)
+        }
+    }
+
+    /// Server-erzeugte Datei (z.B. CSV-Export) — Card mit ShareLink.
+    /// Tap auf Share öffnet das System-Sheet (In Files speichern, Mail, ...).
+    @ViewBuilder
+    private func serverFileCard(url: URL, filename: String) -> some View {
+        ShareLink(item: url, preview: SharePreview(filename)) {
+            HStack(spacing: 10) {
+                Image(systemName: iconForFilename(filename))
+                    .font(.system(size: 22))
+                    .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(filename)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text("Tippen zum Speichern/Teilen")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textDim)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.accent)
+            }
+            .padding(10)
+            .background(Theme.bgElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.8))
+            .frame(maxWidth: 280)
+        }
+    }
+
+    private func iconForFilename(_ name: String) -> String {
+        let ext = (name as NSString).pathExtension.lowercased()
+        switch ext {
+        case "csv":            return "tablecells"
+        case "json", "xml":    return "curlybraces"
+        case "pdf":            return "doc.richtext"
+        case "txt", "md":      return "doc.text"
+        case "zip":            return "doc.zipper"
+        case "png", "jpg", "jpeg", "svg": return "photo"
+        default:               return "doc"
         }
     }
 

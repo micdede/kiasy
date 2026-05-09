@@ -458,6 +458,41 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ─── Files: Download von Server-erzeugten Files (/data/exports/) ────
+    // Tools wie file_write koennen in /data/exports/ schreiben und liefern
+    // dann eine download_url zurueck. Hier wird die ausgeliefert.
+    {
+      const m = url.pathname.match(/^\/api\/files\/(.+)$/);
+      if (m && req.method === "GET") {
+        const fs = await import("node:fs");
+        const path = await import("node:path");
+        const filename = decodeURIComponent(m[1]);
+        // Nur einfache Dateinamen erlauben (keine Path-Traversal)
+        if (filename.includes("/") || filename.includes("\\") || filename.includes("..")) {
+          return sendJson(400, { error: "ungültiger Dateiname" });
+        }
+        const filepath = path.resolve("/data/exports", filename);
+        if (!filepath.startsWith("/data/exports/") || !fs.existsSync(filepath)) {
+          return sendJson(404, { error: "nicht gefunden" });
+        }
+        const stat = fs.statSync(filepath);
+        // einfache MIME-Detection — kein magic, nur Endung
+        const ext = filename.toLowerCase().split(".").pop() || "";
+        const mime = {
+          csv: "text/csv", json: "application/json", txt: "text/plain",
+          md: "text/markdown", html: "text/html", xml: "application/xml",
+          pdf: "application/pdf", png: "image/png", jpg: "image/jpeg",
+          jpeg: "image/jpeg", svg: "image/svg+xml", zip: "application/zip"
+        }[ext] || "application/octet-stream";
+        res.writeHead(200, {
+          "Content-Type": mime,
+          "Content-Length": stat.size,
+          "Content-Disposition": `attachment; filename="${filename}"`
+        });
+        return fs.createReadStream(filepath).pipe(res);
+      }
+    }
+
     // ─── Mail-Signatur (Datei: /data/mail-signature.txt) ────
     if (url.pathname === "/api/mail/signature" && req.method === "GET") {
       const fs = await import("node:fs");
