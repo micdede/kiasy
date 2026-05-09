@@ -163,7 +163,7 @@ struct SettingsView: View {
                 }
                 Button("Abbrechen", role: .cancel) {}
             } message: {
-                Text("Löscht den Chat-Verlauf in der App UND in der JARVIS-Datenbank für Chat-ID „\(settings.chatId)".")
+                Text("Löscht den Chat-Verlauf in der App UND in der JARVIS-Datenbank für Chat-ID \"\(settings.chatId)\".")
             }
         }
         .tint(Theme.accent)
