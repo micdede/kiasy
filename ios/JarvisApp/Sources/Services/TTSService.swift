@@ -4,10 +4,15 @@ import AVFoundation
 @MainActor
 final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
     @Published var isSpeaking: Bool = false
+    /// 0...1 — TTS-Lautstärke für Visualisierung. Bei AVAudioPlayer (Piper/Edge) aus
+    /// averagePower ermittelt, beim AVSpeechSynthesizer (iOS-Voice) ein synthetischer
+    /// Sinus-Puls (kein direkter Pegel verfügbar).
+    @Published var outputLevel: Float = 0
 
     private let synthesizer = AVSpeechSynthesizer()
     private var audioPlayer: AVAudioPlayer?
     private var piperTask: Task<Void, Never>?
+    private var meterTask: Task<Void, Never>?
 
     override init() {
         super.init()
@@ -33,7 +38,39 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
         audioPlayer = nil
         piperTask?.cancel()
         piperTask = nil
+        stopMetering()
         isSpeaking = false
+    }
+
+    // ─── Audio-Level-Metering (für OrbView) ──────────────────
+    private func startMetering() {
+        meterTask?.cancel()
+        meterTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 50_000_000)  // 20 Hz
+                await MainActor.run {
+                    guard let self else { return }
+                    if let p = self.audioPlayer, p.isPlaying {
+                        p.updateMeters()
+                        let dB = p.averagePower(forChannel: 0)  // -160 ... 0 dBFS
+                        // Nutzbarer Bereich ab ~-50 dB (alles darunter ist Stille)
+                        self.outputLevel = max(0, min(1, (dB + 50) / 50))
+                    } else if self.synthesizer.isSpeaking {
+                        // AVSpeechSynthesizer liefert keine Pegel — synthetischer Puls
+                        let t = Date().timeIntervalSinceReferenceDate
+                        self.outputLevel = Float((sin(t * 4) + 1) * 0.3 + 0.2)
+                    } else {
+                        self.outputLevel = 0
+                    }
+                }
+            }
+        }
+    }
+
+    private func stopMetering() {
+        meterTask?.cancel()
+        meterTask = nil
+        outputLevel = 0
     }
 
     // ─── Audio-Session ───────────────────────────────────────
@@ -68,6 +105,7 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
         utterance.pitchMultiplier = 1.0
         print("[TTS-iOS] speaking, voice=\(voice?.name ?? "?")")
         synthesizer.speak(utterance)
+        startMetering()
     }
 
     // ─── Server-TTS (engine = piper | edge) ──────────────────
@@ -81,10 +119,12 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
                 try await MainActor.run {
                     let player = try AVAudioPlayer(data: audio)
                     player.delegate = self
+                    player.isMeteringEnabled = true
                     self.audioPlayer = player
                     self.isSpeaking = true
                     print("[TTS-\(engine)] play \(audio.count) bytes")
                     player.play()
+                    self.startMetering()
                 }
             } catch {
                 print("[TTS-\(engine)] Fehler: \(error.localizedDescription) — Fallback auf iOS-Stimme")
@@ -137,12 +177,21 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
         Task { @MainActor in self.isSpeaking = true }
     }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.isSpeaking = false }
+        Task { @MainActor in
+            self.isSpeaking = false
+            self.stopMetering()
+        }
     }
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in self.isSpeaking = false }
+        Task { @MainActor in
+            self.isSpeaking = false
+            self.stopMetering()
+        }
     }
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in self.isSpeaking = false }
+        Task { @MainActor in
+            self.isSpeaking = false
+            self.stopMetering()
+        }
     }
 }

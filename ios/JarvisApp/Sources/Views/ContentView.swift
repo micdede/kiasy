@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var pending: ChatMessage? = nil
     @State private var sending = false
     @State private var showSettings = false
+    @State private var showConversation = false
     @State private var statusText = "bereit"
     @State private var inputText = ""
     @FocusState private var inputFocused: Bool
@@ -26,6 +27,10 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { SettingsView(messages: $messages, wake: wake) }
+        .fullScreenCover(isPresented: $showConversation) {
+            ConversationView(speech: speech, tts: tts)
+                .environmentObject(settings)
+        }
         .task {
             _ = await speech.requestPermissions()
             await loadHistoryIfEmpty()
@@ -263,7 +268,7 @@ struct ContentView: View {
                 )
             )
 
-            // Send wenn Text → Send, sonst Mic
+            // Send wenn Text → Send, sonst Mic + Voice-Mode-Button
             if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
                 Button { Task { await sendTyped() } } label: {
                     iconCircle(name: "arrow.up", tint: Theme.accent, size: 38)
@@ -283,6 +288,12 @@ struct ContentView: View {
                 }
                 .disabled(sending)
                 .animation(.easeInOut(duration: 0.15), value: speech.isListening)
+                // Voice-Mode-Button (Sprechblase)
+                Button { showConversation = true } label: {
+                    iconCircle(name: "waveform.circle.fill", tint: Theme.accent, size: 38)
+                }
+                .disabled(sending || speech.isListening)
+                .transition(.scale.combined(with: .opacity))
             }
         }
         .padding(.horizontal, 12)

@@ -75,12 +75,23 @@ ios/
     │   │   └── JarvisAPI.swift       — actor mit sendStream() + loadHistory()
     │   └── Views/
     │       ├── ContentView.swift     — Haupt-UI (Header, MessagesList, InputBar)
+    │       ├── ConversationView.swift — Voice-Mode-Vollbild
+    │       ├── OrbView.swift         — animierter Orb mit Audio-Level-Coupling
     │       └── SettingsView.swift
     └── Resources/
         ├── Info.plist                — Privacy-Strings, Bonjour, Background Audio
         ├── JarvisApp.entitlements    — iCloud KV-Store
         └── Assets.xcassets/          — AppIcon + AccentColor
 ```
+
+## Voice-Mode (Vollbild-Konversation mit Orb)
+Sprechblase/Waveform-Icon im Input-Bar (rechts neben dem Mic) öffnet einen Vollbild-Voice-Mode:
+- kein Chat sichtbar, stattdessen ein animierter Orb in der Mitte
+- Orb pulsiert mit dem **echten Audio-Pegel** (Mic beim Listening, TTS-averagePower beim Speaking)
+- Cyan beim Hören, leicht violett-blau beim Sprechen, gedämpft beim Warten
+- Status-Text + Live-Transkript darunter
+- Konversations-Modus wird beim Öffnen automatisch aktiviert (am Mic geht sofort an)
+- Schließen-Button oben rechts → Modus zurück, alles stoppt
 
 ## Quick-Trigger (immer verfügbar, kein Wake-Word nötig)
 Über das App-Intent **„Mit JARVIS sprechen"** kann die Aufnahme aus dem ganzen System ausgelöst werden — App kommt vorne und nimmt sofort auf. Einmal in der App gestartet, taucht das Intent überall auf wo iOS Shortcuts entgegennimmt:

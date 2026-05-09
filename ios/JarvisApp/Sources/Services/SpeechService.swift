@@ -8,6 +8,8 @@ final class SpeechService: NSObject, ObservableObject {
     @Published var isListening: Bool = false
     @Published var permissionDenied: Bool = false
     @Published var lastError: String?
+    /// 0...1 — Mic-Pegel (RMS, geboostet) für Visualisierung. Wird ~50× pro Sekunde aktualisiert.
+    @Published var inputLevel: Float = 0
 
     private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "de-DE"))
     private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -57,8 +59,10 @@ final class SpeechService: NSObject, ObservableObject {
             let input = audioEngine.inputNode
             let format = input.outputFormat(forBus: 0)
             input.removeTap(onBus: 0)
-            input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 req.append(buffer)
+                let lvl = Self.peakLevel(buffer)
+                Task { @MainActor in self?.inputLevel = lvl }
             }
 
             audioEngine.prepare()
@@ -91,6 +95,22 @@ final class SpeechService: NSObject, ObservableObject {
         }
     }
 
+    /// RMS des PCM-Buffers, geboostet auf wahrnehmbare 0...1-Skala.
+    /// Genauer als peak (peak ist zackig), bewertet die durchschnittliche Energie.
+    nonisolated private static func peakLevel(_ buffer: AVAudioPCMBuffer) -> Float {
+        guard let data = buffer.floatChannelData?[0] else { return 0 }
+        let count = Int(buffer.frameLength)
+        guard count > 0 else { return 0 }
+        var sum: Float = 0
+        for i in 0..<count {
+            let s = data[i]
+            sum += s * s
+        }
+        let rms = sqrtf(sum / Float(count))
+        // RMS ist meist <0.1 bei normaler Sprache → boost ×8 für Visualisierungs-Range
+        return min(1.0, rms * 8)
+    }
+
     private func scheduleSilenceTimeout(_ seconds: TimeInterval) {
         silenceTask?.cancel()
         silenceTask = Task { [weak self] in
@@ -112,6 +132,7 @@ final class SpeechService: NSObject, ObservableObject {
         request = nil
         task = nil
         isListening = false
+        inputLevel = 0
         // AudioSession deaktivieren, sonst blockiert sie TTS
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
