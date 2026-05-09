@@ -32,6 +32,6 @@ setup.sh
 *.db-shm
 *.db-wal
 
-# Generierte Bilder (image_generate Tool)
-data/images/
+# User-Daten / Volume-Mount (DB, Notes, Mail-Sig, system-prompt.txt, Images, ...)
+data/
 tools/btc-price.js
