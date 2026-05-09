@@ -44,6 +44,20 @@ struct ContentView: View {
                 wake.start()
             }
         }
+        // Trigger via AppIntent (Action-Button, Siri, Back-Tap, Widget, Watch …)
+        .onReceive(NotificationCenter.default.publisher(for: .startListeningTrigger)) { _ in
+            triggerListeningExplicit()
+        }
+    }
+
+    /// Expliziter User-Trigger (Action-Button, Doppel-Tap auf Header, Siri, …).
+    /// Anders als Wake-Word: ignoriert das Barge-In-Setting — wer einen Knopf
+    /// drückt, will reden, also wird TTS immer abgewürgt.
+    @MainActor
+    private func triggerListeningExplicit() {
+        if speech.isListening { return }
+        tts.stop()
+        Task { @MainActor in await toggleListening() }
     }
 
     /// Bringt den Wake-Service in den von den Settings gewünschten Zustand.
@@ -109,7 +123,7 @@ struct ContentView: View {
                 .frame(width: 8, height: 8)
                 .shadow(color: statusColor.opacity(0.85), radius: 5)
 
-            // Wordmark
+            // Wordmark — Doppel-Tap startet Aufnahme (Quick-Trigger)
             Text("J A R V I S")
                 .font(.system(size: 18, weight: .heavy, design: .monospaced))
                 .tracking(1.5)
@@ -118,6 +132,8 @@ struct ContentView: View {
                                    startPoint: .leading, endPoint: .trailing)
                 )
                 .shadow(color: Theme.accent.opacity(0.6), radius: 4)
+                .contentShape(Rectangle())  // gesamten Wordmark-Bereich tappable
+                .onTapGesture(count: 2) { triggerListeningExplicit() }
 
             // Status-Text klein dahinter
             Text(speech.isListening

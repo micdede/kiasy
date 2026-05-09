@@ -71,6 +71,7 @@ ios/
     │   │   ├── SpeechService.swift   — SFSpeechRecognizer
     │   │   ├── TTSService.swift      — iOS / Piper / Edge-Routing
     │   │   ├── WakeWordService.swift — Picovoice Porcupine (Built-in Keyword .jarvis)
+    │   │   ├── StartListeningIntent.swift — AppIntent + AppShortcuts (Action-Button/Siri/…)
     │   │   └── JarvisAPI.swift       — actor mit sendStream() + loadHistory()
     │   └── Views/
     │       ├── ContentView.swift     — Haupt-UI (Header, MessagesList, InputBar)
@@ -80,6 +81,17 @@ ios/
         ├── JarvisApp.entitlements    — iCloud KV-Store
         └── Assets.xcassets/          — AppIcon + AccentColor
 ```
+
+## Quick-Trigger (immer verfügbar, kein Wake-Word nötig)
+Über das App-Intent **„Mit JARVIS sprechen"** kann die Aufnahme aus dem ganzen System ausgelöst werden — App kommt vorne und nimmt sofort auf. Einmal in der App gestartet, taucht das Intent überall auf wo iOS Shortcuts entgegennimmt:
+- **Action-Button** (iPhone 15 Pro / 16) — Settings → Aktion → Shortcut → JARVIS „Sprechen"
+- **„Auf Rückseite tippen"** — Settings → Bedienungshilfen → Tippen → Auf Rückseite tippen → Shortcut auswählen
+- **Lock-Screen-Widget** (iOS 16+) und **Control-Center-Custom-Control** (iOS 18+)
+- **Siri** — „Hey Siri, sprich mit JARVIS" / „Hey Siri, JARVIS hör zu"
+- **Apple Watch Shortcut**
+- **Shortcuts-App** für eigene Automationen
+
+Zusätzlich in der App selbst: **Doppel-Tap auf den J A R V I S-Wordmark** im Header startet die Aufnahme.
 
 ## Wake-Word „Jarvis" (Picovoice Porcupine)
 Always-On Hot-Word-Detection via Built-in Keyword `.jarvis` — kein eigenes Training nötig, ca. 5% CPU.
