@@ -1,29 +1,41 @@
 import SwiftUI
 
 /// Voice-Mode-Vollbild — kein Chat sichtbar, nur ein animierter Orb der auf
-/// Listening/Speaking reagiert. Konversations-Modus wird beim Öffnen aktiviert
-/// und beim Schließen auf den vorherigen Wert zurückgesetzt.
+/// Listening / Thinking / Speaking reagiert. Konversations-Modus wird beim
+/// Öffnen aktiviert und beim Schließen auf den vorherigen Wert zurückgesetzt.
 struct ConversationView: View {
     @EnvironmentObject var settings: AppSettings
     @ObservedObject var speech: SpeechService
     @ObservedObject var tts: TTSService
+    /// Vom Parent (ContentView) durchgereicht — true zwischen Mic-Stop und
+    /// TTS-Start, das ist die "Thinking"-Phase
+    @Binding var sending: Bool
     @Environment(\.dismiss) private var dismiss
 
     /// Vorheriger Conversation-Mode-State, damit das Verlassen das Setting
     /// nicht permanent verändert.
     @State private var previousConversationMode: Bool = false
 
+    /// State-Maschine: bestimmt Farbe/Animation des Orbs + Status-Text
+    private var orbState: OrbState {
+        if speech.isListening { return .listening }
+        if tts.isSpeaking     { return .speaking }
+        if sending            { return .thinking }
+        return .idle
+    }
+
     var body: some View {
         ZStack {
-            // ─── Background mit dezentem Vignette ───────────────
+            // ─── Background mit dezentem Vignette in State-Farbe ───
             Theme.bgDeep.ignoresSafeArea()
             RadialGradient(
-                colors: [orbTint.opacity(0.08), .clear],
+                colors: [orbState.primaryColor.opacity(0.10), .clear],
                 center: .center,
                 startRadius: 50,
                 endRadius: 400
             )
             .ignoresSafeArea()
+            .animation(.easeInOut(duration: 0.5), value: orbState)
 
             VStack(spacing: 0) {
                 // Top-Bar
@@ -45,17 +57,17 @@ struct ConversationView: View {
                 Spacer()
 
                 // ─── Orb ──────────────────────────────────────────
-                OrbView(level: orbLevel, tint: orbTint)
+                OrbView(level: orbLevel, state: orbState)
                     .frame(width: 360, height: 360)
 
                 // ─── Status-Text ──────────────────────────────────
                 Text(statusText)
                     .font(.system(size: 18, weight: .medium, design: .monospaced))
                     .tracking(0.5)
-                    .foregroundStyle(statusColor)
-                    .shadow(color: statusColor.opacity(0.5), radius: 6)
+                    .foregroundStyle(orbState.primaryColor)
+                    .shadow(color: orbState.primaryColor.opacity(0.5), radius: 6)
                     .padding(.top, 24)
-                    .animation(.easeInOut(duration: 0.2), value: statusText)
+                    .animation(.easeInOut(duration: 0.3), value: statusText)
 
                 // Live-Transkript klein darunter (während Listening)
                 if speech.isListening, !speech.transcript.isEmpty {
@@ -82,8 +94,7 @@ struct ConversationView: View {
                         .shadow(color: mainActionColor.opacity(0.7), radius: 16)
                 }
                 .padding(.bottom, 50)
-                .animation(.easeInOut(duration: 0.2), value: speech.isListening)
-                .animation(.easeInOut(duration: 0.2), value: tts.isSpeaking)
+                .animation(.easeInOut(duration: 0.2), value: orbState)
             }
         }
         .preferredColorScheme(.dark)
@@ -111,35 +122,27 @@ struct ConversationView: View {
         return 0
     }
 
-    /// Cyan beim Listening, leicht violett-blau beim Speaking, gedämpftes Cyan idle.
-    private var orbTint: Color {
-        if speech.isListening { return Theme.accent }
-        if tts.isSpeaking     { return Color(hue: 0.62, saturation: 0.78, brightness: 1.0) }
-        return Theme.accent.opacity(0.55)
-    }
-
     private var statusText: String {
-        if speech.isListening { return "ich höre…" }
-        if tts.isSpeaking     { return "ich spreche…" }
-        return "warte auf dich…"
-    }
-
-    private var statusColor: Color {
-        if speech.isListening { return Theme.accent }
-        if tts.isSpeaking     { return Color(hue: 0.62, saturation: 0.7, brightness: 1.0) }
-        return Theme.textDim
+        switch orbState {
+        case .idle:      return "warte auf dich…"
+        case .listening: return "ich höre…"
+        case .thinking:  return "ich denke nach…"
+        case .speaking:  return "ich spreche…"
+        }
     }
 
     // ─── Main Action Button ───────────────────────────────────
     private var mainActionIcon: String {
         if speech.isListening { return "stop.fill" }
         if tts.isSpeaking     { return "speaker.slash.fill" }
+        if sending            { return "ellipsis" }
         return "mic.fill"
     }
 
     private var mainActionColor: Color {
         if speech.isListening { return Theme.err }
         if tts.isSpeaking     { return Theme.warn }
+        if sending            { return orbState.primaryColor.opacity(0.6) }
         return Theme.accent
     }
 
@@ -148,6 +151,9 @@ struct ConversationView: View {
             speech.stop()  // löst Auto-Send via Observer im Parent aus
         } else if tts.isSpeaking {
             tts.stop()  // Konversations-Modus startet das Mic dann automatisch
+        } else if sending {
+            // im Thinking-State Tap = nichts (Anfrage läuft)
+            return
         } else {
             // Idle → Mic manuell triggern
             Task { @MainActor in
@@ -160,6 +166,6 @@ struct ConversationView: View {
 }
 
 #Preview {
-    ConversationView(speech: SpeechService(), tts: TTSService())
+    ConversationView(speech: SpeechService(), tts: TTSService(), sending: .constant(false))
         .environmentObject(AppSettings())
 }

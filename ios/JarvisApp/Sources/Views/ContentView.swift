@@ -28,7 +28,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { SettingsView(messages: $messages, wake: wake) }
         .fullScreenCover(isPresented: $showConversation) {
-            ConversationView(speech: speech, tts: tts)
+            ConversationView(speech: speech, tts: tts, sending: $sending)
                 .environmentObject(settings)
         }
         .task {
