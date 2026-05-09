@@ -22,9 +22,12 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
     // ─── Public API ──────────────────────────────────────────
     /// Routet je nach settings.ttsBackend → iOS-Voice / Piper / Edge.
     func speak(_ text: String, settings: AppSettings) {
+        let t0 = Date()
         let cleaned = stripMarkdown(text)
         guard !cleaned.isEmpty else { return }
+        print("[TIMING] TTS.speak entry, backend=\(settings.ttsBackend), len=\(cleaned.count)")
         configurePlaybackSession()
+        print("[TIMING] AudioSession configured Δ\(Int(Date().timeIntervalSince(t0)*1000))ms")
         switch settings.ttsBackend {
         case "piper": speakServer(cleaned, engine: "piper", voice: settings.piperVoice, settings: settings)
         case "edge":  speakServer(cleaned, engine: "edge",  voice: settings.edgeVoice,  settings: settings)
@@ -111,18 +114,22 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
     // ─── Server-TTS (engine = piper | edge) ──────────────────
     private func speakServer(_ text: String, engine: String, voice: String, settings: AppSettings) {
         piperTask?.cancel()
+        let tStart = Date()
         piperTask = Task { [weak self] in
             guard let self else { return }
             do {
+                let tFetch = Date()
                 let audio = try await self.fetchServerAudio(text: text, engine: engine, voice: voice, settings: settings)
+                print("[TIMING] \(engine) fetch Δ\(Int(Date().timeIntervalSince(tFetch)*1000))ms (\(audio.count) bytes)")
                 guard !Task.isCancelled else { return }
                 try await MainActor.run {
+                    let tPlayer = Date()
                     let player = try AVAudioPlayer(data: audio)
                     player.delegate = self
                     player.isMeteringEnabled = true
                     self.audioPlayer = player
                     self.isSpeaking = true
-                    print("[TTS-\(engine)] play \(audio.count) bytes")
+                    print("[TIMING] AVAudioPlayer init Δ\(Int(Date().timeIntervalSince(tPlayer)*1000))ms, total since speak() Δ\(Int(Date().timeIntervalSince(tStart)*1000))ms")
                     player.play()
                     self.startMetering()
                 }

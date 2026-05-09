@@ -133,7 +133,10 @@ final class SpeechService: NSObject, ObservableObject {
         task = nil
         isListening = false
         inputLevel = 0
-        // AudioSession deaktivieren, sonst blockiert sie TTS
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // AudioSession nicht mehr explizit deaktivieren — der TTSService
+        // konfiguriert sie bei Bedarf um (.playback/.voicePrompt). Das alte
+        // setActive(false, .notifyOthersOnDeactivation) blockierte iOS bis
+        // zu mehrere Sekunden weil es andere Audio-Apps befragte, was den
+        // Wechsel STT→TTS extrem verzögert hat.
     }
 }
