@@ -48,6 +48,24 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .startListeningTrigger)) { _ in
             triggerListeningExplicit()
         }
+        // Konversations-Modus: nach TTS automatisch wieder Mic auf
+        .onChange(of: tts.isSpeaking) { _, speaking in
+            guard !speaking, settings.conversationMode else { return }
+            guard !speech.isListening, !sending else { return }
+            // Kurz warten dass die Audio-Session frei ist
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard settings.conversationMode, !speech.isListening, !sending else { return }
+                speech.start(silenceTimeout: 6)
+                statusText = "höre zu…"
+            }
+        }
+    }
+
+    /// Silence-Timeout für Aufnahmen — nur im Konversations-Modus aktiv,
+    /// damit das Mic nicht ewig offen bleibt wenn der User nichts sagt.
+    private var silenceTimeoutForStart: TimeInterval? {
+        settings.conversationMode ? 6 : nil
     }
 
     /// Expliziter User-Trigger (Action-Button, Doppel-Tap auf Header, Siri, …).
@@ -298,7 +316,7 @@ struct ContentView: View {
                 statusText = "Mikrofon/Spracherkennung verweigert"
                 return
             }
-            speech.start()
+            speech.start(silenceTimeout: silenceTimeoutForStart)
             statusText = "höre zu…"
         }
     }

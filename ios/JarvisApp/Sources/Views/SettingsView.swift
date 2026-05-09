@@ -56,6 +56,12 @@ struct SettingsView: View {
                     Toggle("Antworten vorlesen", isOn: $settings.speakReplies)
                     Toggle("Streaming-Vorlesen (Phase 2)", isOn: $settings.speakStreaming)
                         .disabled(true)
+                    Toggle("Konversations-Modus", isOn: $settings.conversationMode)
+                    if settings.conversationMode {
+                        Text("Nach jeder Antwort geht das Mikrofon automatisch wieder auf. Beendet sich nach 6 Sekunden Stille oder durch Mic-Stop-Button.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     Picker("Backend", selection: $settings.ttsBackend) {
                         Text("iOS (on-device)").tag("ios")
                         Text("Piper (Server, lokal)").tag("piper")

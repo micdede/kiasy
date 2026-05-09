@@ -13,6 +13,10 @@ final class SpeechService: NSObject, ObservableObject {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    /// Timer der nach silenceTimeout Sekunden ohne neuen Recognizer-Output stop() ruft.
+    /// Wird bei jedem Recognizer-Update reset. Genutzt im Konversations-Modus damit
+    /// das Mic nicht ewig offen bleibt wenn der User nichts sagt.
+    private var silenceTask: Task<Void, Never>?
 
     func requestPermissions() async -> Bool {
         let speechStatus = await withCheckedContinuation { (cont: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
@@ -26,7 +30,10 @@ final class SpeechService: NSObject, ObservableObject {
         return ok
     }
 
-    func start() {
+    /// Startet die Aufnahme. `silenceTimeout` (in Sekunden) stoppt das Mic automatisch wenn
+    /// der Recognizer für so lange keinen neuen Output liefert (für Konversations-Modus).
+    /// `nil` = kein Auto-Stop, manuell oder via isFinal vom Recognizer.
+    func start(silenceTimeout: TimeInterval? = nil) {
         guard !isListening else { return }
         guard let recognizer, recognizer.isAvailable else {
             lastError = "Recognizer nicht verfügbar"
@@ -58,11 +65,20 @@ final class SpeechService: NSObject, ObservableObject {
             try audioEngine.start()
             isListening = true
 
+            // Silence-Timer: feuert wenn so lange kein Recognizer-Update kommt
+            if let timeout = silenceTimeout {
+                scheduleSilenceTimeout(timeout)
+            }
+
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
                 guard let self else { return }
                 Task { @MainActor in
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
+                        // Recognizer hat geliefert → Silence-Timer reset
+                        if let timeout = silenceTimeout {
+                            self.scheduleSilenceTimeout(timeout)
+                        }
                     }
                     if error != nil || (result?.isFinal ?? false) {
                         self.stop()
@@ -75,7 +91,18 @@ final class SpeechService: NSObject, ObservableObject {
         }
     }
 
+    private func scheduleSilenceTimeout(_ seconds: TimeInterval) {
+        silenceTask?.cancel()
+        silenceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.stop() }
+        }
+    }
+
     func stop() {
+        silenceTask?.cancel()
+        silenceTask = nil
         if audioEngine.isRunning {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)

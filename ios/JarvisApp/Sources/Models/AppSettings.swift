@@ -37,6 +37,8 @@ final class AppSettings: ObservableObject {
     @Published var wakeWordEnabled: Bool { didSet { sync("wakeWordEnabled", wakeWordEnabled) } }
     /// Barge-In: während TTS spricht "Jarvis" sagen → TTS abbrechen + neue Aufnahme
     @Published var bargeInEnabled: Bool { didSet { sync("bargeInEnabled", bargeInEnabled) } }
+    /// Konversations-Modus: nach TTS automatisch wieder Mic auf für Folgefrage. Stoppt nach 6s Stille.
+    @Published var conversationMode: Bool { didSet { sync("conversationMode", conversationMode) } }
 
     // ─── Internal ────────────────────────────────────────────
     private let kv = NSUbiquitousKeyValueStore.default
@@ -63,6 +65,7 @@ final class AppSettings: ObservableObject {
         self.picovoiceAccessKey = Self.read("picovoiceAccessKey", kv: kv, ud: ud, default: "")
         self.wakeWordEnabled    = Self.readBool("wakeWordEnabled", kv: kv, ud: ud, default: false)
         self.bargeInEnabled     = Self.readBool("bargeInEnabled",  kv: kv, ud: ud, default: true)
+        self.conversationMode   = Self.readBool("conversationMode", kv: kv, ud: ud, default: false)
 
         // Initial-Sync triggern
         kv.synchronize()
@@ -118,6 +121,7 @@ final class AppSettings: ObservableObject {
                 case "picovoiceAccessKey": if let v = kv.string(forKey: key) { picovoiceAccessKey = v }
                 case "wakeWordEnabled": wakeWordEnabled = kv.bool(forKey: key)
                 case "bargeInEnabled":  bargeInEnabled  = kv.bool(forKey: key)
+                case "conversationMode": conversationMode = kv.bool(forKey: key)
                 default: break
                 }
                 // UserDefaults parallel aktualisieren
