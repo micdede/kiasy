@@ -158,25 +158,24 @@ struct SettingsView: View {
             .confirmationDialog("Chat-Verlauf wirklich leeren?",
                                 isPresented: $showClearConfirm,
                                 titleVisibility: .visible) {
-                Button("Lokal nur", role: .destructive) { clearLocal() }
-                Button("Lokal + Server", role: .destructive) { Task { await clearAll() } }
+                Button("Leeren", role: .destructive) {
+                    Task { @MainActor in await clearAll() }
+                }
                 Button("Abbrechen", role: .cancel) {}
             } message: {
-                Text("‚Lokal' leert nur die Bubbles in der App. ‚Lokal + Server' löscht zusätzlich den Verlauf in der JARVIS-Datenbank für diese Chat-ID.")
+                Text("Löscht den Chat-Verlauf in der App UND in der JARVIS-Datenbank für Chat-ID „\(settings.chatId)".")
             }
         }
         .tint(Theme.accent)
     }
 
-    private func clearLocal() {
-        messages.removeAll()
-        clearStatus = "App-Verlauf geleert"
-    }
-
+    @MainActor
     private func clearAll() async {
-        clearLocal()
+        // Erst Server-DELETE, DANN lokale Bubbles leeren — sonst könnte
+        // die nächste loadHistory-Welle den geleerten Zustand überschreiben
+        clearStatus = "lösche…"
         guard let url = URL(string: "\(settings.backendURL)/api/chat/history?chatId=\(settings.chatId)") else {
-            clearStatus = "URL ungültig"; return
+            clearStatus = "✗ URL ungültig"; return
         }
         var req = URLRequest(url: url)
         req.httpMethod = "DELETE"
@@ -189,12 +188,14 @@ struct SettingsView: View {
             if let http = resp as? HTTPURLResponse, http.statusCode == 200,
                let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 let n = obj["deleted"] as? Int ?? 0
-                clearStatus = "App geleert + \(n) Server-Einträge gelöscht"
+                messages.removeAll()
+                clearStatus = "✓ \(n) Einträge gelöscht"
             } else {
-                clearStatus = "App geleert (Server-Reset fehlgeschlagen)"
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                clearStatus = "✗ Server-Fehler (HTTP \(code))"
             }
         } catch {
-            clearStatus = "App geleert (Server-Fehler: \(error.localizedDescription))"
+            clearStatus = "✗ Netzwerk-Fehler: \(error.localizedDescription)"
         }
     }
 
