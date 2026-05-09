@@ -19,13 +19,12 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: JarvisApp/Sources
-    resources:
-      # Asset-Catalog: KEIN `type: folder.assetcatalog` — das macht eine
-      # blaue Folder-Reference und landet NICHT in der Resources-Build-Phase.
-      # XcodeGen erkennt .xcassets automatisch korrekt; `buildPhase: resources`
-      # erzwingt explizit das Anlegen der PBXResourcesBuildPhase.
+      # .xcassets MUSS unter sources stehen (nicht resources!) — XcodeGen
+      # erkennt die Endung und sortiert es automatisch in die korrekte
+      # Resources-Build-Phase. Unter resources: würde es als File-Reference
+      # angelegt aber nicht kompiliert (kein PBXResourcesBuildPhase).
       - path: JarvisApp/Resources/Assets.xcassets
-        buildPhase: resources
+    # resources: leer — Asset-Catalog liegt unter sources (siehe oben)
     info:
       path: JarvisApp/Resources/Info.plist
       properties:
