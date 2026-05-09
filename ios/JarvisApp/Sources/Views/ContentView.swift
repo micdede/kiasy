@@ -409,8 +409,6 @@ struct ContentView: View {
                 messages[idx].isStreaming = false
             }
             if settings.speakReplies && !settings.speakStreaming, !assistantText.isEmpty {
-                let t0 = Date()
-                print("[TIMING] stream-done → tts.speak() at \(t0)")
                 tts.speak(assistantText, settings: settings)
             }
         } catch {
