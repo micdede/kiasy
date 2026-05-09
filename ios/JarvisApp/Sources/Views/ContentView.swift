@@ -4,6 +4,7 @@ struct ContentView: View {
     @EnvironmentObject var settings: AppSettings
     @StateObject private var speech = SpeechService()
     @StateObject private var tts = TTSService()
+    @StateObject private var wake = WakeWordService()
     @State private var messages: [ChatMessage] = []
     @State private var pending: ChatMessage? = nil
     @State private var sending = false
@@ -24,11 +25,56 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showSettings) { SettingsView(messages: $messages) }
+        .sheet(isPresented: $showSettings) { SettingsView(messages: $messages, wake: wake) }
         .task {
             _ = await speech.requestPermissions()
             await loadHistoryIfEmpty()
+            // Wake-Word: Detection-Handler setzen, dann initial konfigurieren+starten
+            wake.onDetected = { Task { @MainActor in handleWakeDetection() } }
+            applyWakeSettings()
         }
+        // AccessKey oder Enable-Toggle geändert → neu konfigurieren
+        .onChange(of: settings.picovoiceAccessKey) { _, _ in applyWakeSettings() }
+        .onChange(of: settings.wakeWordEnabled)    { _, _ in applyWakeSettings() }
+        // Mic-Konflikt: Wake muss pausieren wenn SpeechService das Mikro übernimmt
+        .onChange(of: speech.isListening) { _, listening in
+            if listening {
+                wake.stop()
+            } else if settings.wakeWordEnabled {
+                wake.start()
+            }
+        }
+    }
+
+    /// Bringt den Wake-Service in den von den Settings gewünschten Zustand.
+    /// Idempotent — bei gleichem Key + Enable-Status passiert nichts.
+    @MainActor
+    private func applyWakeSettings() {
+        guard settings.wakeWordEnabled, !settings.picovoiceAccessKey.isEmpty else {
+            wake.shutdown()
+            return
+        }
+        wake.configure(accessKey: settings.picovoiceAccessKey)
+        // Nicht starten wenn gerade SpeechService läuft — sonst Mic-Konflikt
+        if !speech.isListening { wake.start() }
+    }
+
+    /// "Jarvis" wurde erkannt. Strategie:
+    /// - schon am Aufnehmen → ignorieren
+    /// - TTS spricht + Barge-In an → TTS abwürgen, dann starten
+    /// - TTS spricht + Barge-In aus → ignorieren (User soll Antwort zu Ende hören)
+    /// - sonst → Aufnahme starten
+    @MainActor
+    private func handleWakeDetection() {
+        if speech.isListening { return }
+        if tts.isSpeaking {
+            if settings.bargeInEnabled {
+                tts.stop()
+            } else {
+                return
+            }
+        }
+        Task { @MainActor in await toggleListening() }
     }
 
     /// Lädt den Chat-Verlauf vom Server beim ersten View-Mount.

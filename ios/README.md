@@ -70,6 +70,7 @@ ios/
     │   ├── Services/
     │   │   ├── SpeechService.swift   — SFSpeechRecognizer
     │   │   ├── TTSService.swift      — iOS / Piper / Edge-Routing
+    │   │   ├── WakeWordService.swift — Picovoice Porcupine (Built-in Keyword .jarvis)
     │   │   └── JarvisAPI.swift       — actor mit sendStream() + loadHistory()
     │   └── Views/
     │       ├── ContentView.swift     — Haupt-UI (Header, MessagesList, InputBar)
@@ -80,8 +81,23 @@ ios/
         └── Assets.xcassets/          — AppIcon + AccentColor
 ```
 
+## Wake-Word „Jarvis" (Picovoice Porcupine)
+Always-On Hot-Word-Detection via Built-in Keyword `.jarvis` — kein eigenes Training nötig, ca. 5% CPU.
+
+**Setup:**
+1. Account auf https://console.picovoice.ai (kostenlos, max 3 Geräte/Free-Plan)
+2. AccessKey aus Dashboard kopieren
+3. App → Einstellungen → Wake-Word → Key einfügen + Toggle „Wake-Word aktiv" + optional „Barge-In"
+
+**Verhalten:**
+- Wake-Word erkannt + Aufnahme nicht aktiv → startet sofort Aufnahme
+- Wake-Word erkannt während TTS spricht + Barge-In an → TTS wird abgebrochen, Aufnahme startet
+- Wake-Word erkannt während Aufnahme → ignoriert
+- Wake-Service pausiert automatisch wenn das Mikrofon für STT gebraucht wird
+
+**Status sehen:** Settings-Sheet zeigt Live-Status (idle/ready/lauscht/Fehler) + Zeitpunkt der letzten Detection.
+
 ## Roadmap
-- **Wake-Word + Barge-In** (nächste Session) — Picovoice Porcupine, Built-in keyword `.jarvis`. ~5% CPU für Always-On. Toggle in Settings + AccessKey-Feld
 - Streaming-TTS satzweise während Tokens
 - Background-Audio + Lock-Screen-Controls
 - Push-Notifications für proaktive JARVIS-Meldungen
