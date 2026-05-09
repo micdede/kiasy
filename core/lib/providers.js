@@ -11,18 +11,50 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { readFileSync, existsSync, statSync } from "node:fs";
 
 const DEFAULT_PROVIDER = process.env.LLM_PROVIDER || "ollama";
 
-const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || `\
+// Default-Prompt — kann via Datei (/data/system-prompt.txt) oder
+// ENV (SYSTEM_PROMPT) überschrieben werden, siehe getSystemPrompt().
+const DEFAULT_SYSTEM_PROMPT = `\
 Du bist JARVIS, Michaels persönlicher KI-Assistent.
 Sprichst Deutsch (technische Begriffe englisch). Direkt, kurz, kein Geschwätz.
+
+ANTWORT-FORMAT (wichtig!):
+- Reintext, KEINE Markdown-Formatierung (kein **fett**, _kursiv_, # Überschriften, \`code\`, Listen-Striche)
+- KEINE Emojis
+- Antworten werden vorgelesen — schreib so wie du sprechen würdest
+
 Wenn ein Tool helfen würde, nutze es ohne Rückfrage. Bei mehreren möglichen
 Tools: nimm das passendste, nicht alle.
 
 WICHTIG — Übersetzungs-Anfragen ("wie sagt man auf X", "übersetz das ins X",
 "auf X:") MUSST du IMMER mit dem Tool translate_and_speak beantworten,
 NIEMALS nur als Text. Der User will die korrekte Aussprache hören.`;
+
+// Hot-Reload-Cache: bei jeder Änderung der Datei (mtime) neu lesen.
+const PROMPT_FILE = "/data/system-prompt.txt";
+let _promptCache = { mtime: 0, value: null };
+
+export function getSystemPrompt() {
+  // Datei → ENV → Default (in dieser Priorität)
+  try {
+    if (existsSync(PROMPT_FILE)) {
+      const m = statSync(PROMPT_FILE).mtimeMs;
+      if (m !== _promptCache.mtime) {
+        const v = readFileSync(PROMPT_FILE, "utf8").trim();
+        _promptCache = { mtime: m, value: v.length ? v : null };
+      }
+      if (_promptCache.value) return _promptCache.value;
+    } else {
+      _promptCache = { mtime: 0, value: null };
+    }
+  } catch (e) {
+    console.warn("[providers] system-prompt.txt read failed:", e.message);
+  }
+  return process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT;
+}
 
 // ─── Role → Model-Mapping ───────────────────────────────────
 function modelForRole(role) {
@@ -51,7 +83,7 @@ class AnthropicProvider {
     const params = {
       model: this.model,
       max_tokens: Number(process.env.MAX_TOKENS) || 4096,
-      system: system || SYSTEM_PROMPT,
+      system: system || getSystemPrompt(),
       messages: toAnthropicMessages(messages)
     };
     if (tools.length) params.tools = tools.map(toAnthropicTool);
@@ -63,7 +95,7 @@ class AnthropicProvider {
     const params = {
       model: this.model,
       max_tokens: Number(process.env.MAX_TOKENS) || 4096,
-      system: system || SYSTEM_PROMPT,
+      system: system || getSystemPrompt(),
       messages: toAnthropicMessages(messages)
     };
     if (tools.length) params.tools = tools.map(toAnthropicTool);
@@ -125,7 +157,7 @@ class OllamaProvider {
     const params = {
       model: this.model,
       max_tokens: Number(process.env.MAX_TOKENS) || 4096,
-      messages: toOpenAIMessages(messages, system || SYSTEM_PROMPT)
+      messages: toOpenAIMessages(messages, system || getSystemPrompt())
     };
     if (tools.length) params.tools = tools.map(toOpenAITool);
     const res = await this.client.chat.completions.create(params);
@@ -136,7 +168,7 @@ class OllamaProvider {
     const params = {
       model: this.model,
       max_tokens: Number(process.env.MAX_TOKENS) || 4096,
-      messages: toOpenAIMessages(messages, system || SYSTEM_PROMPT),
+      messages: toOpenAIMessages(messages, system || getSystemPrompt()),
       stream: true
     };
     if (tools.length) params.tools = tools.map(toOpenAITool);

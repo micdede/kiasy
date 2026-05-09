@@ -470,6 +470,29 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, { saved: true, bytes: Buffer.byteLength(body.content || "") });
     }
 
+    // ─── System-Prompt (Datei: /data/system-prompt.txt, hot-reload) ────
+    if (url.pathname === "/api/system-prompt" && req.method === "GET") {
+      const fs = await import("node:fs");
+      const path = "/data/system-prompt.txt";
+      const custom = fs.existsSync(path) ? fs.readFileSync(path, "utf8") : "";
+      // Default zum Vergleich/Reset mitliefern
+      const { getSystemPrompt } = await import("./lib/providers.js");
+      return sendJson(200, { content: custom, active: getSystemPrompt() });
+    }
+    if (url.pathname === "/api/system-prompt" && req.method === "PUT") {
+      const body = await readJson(req);
+      const fs = await import("node:fs");
+      const path = "/data/system-prompt.txt";
+      const content = String(body.content ?? "");
+      if (content.trim() === "") {
+        // Leer = Default benutzen → Datei löschen
+        if (fs.existsSync(path)) fs.unlinkSync(path);
+        return sendJson(200, { saved: true, mode: "default", bytes: 0 });
+      }
+      fs.writeFileSync(path, content);
+      return sendJson(200, { saved: true, mode: "custom", bytes: Buffer.byteLength(content) });
+    }
+
     // ─── Logs (Ring-Buffer + Live-SSE) ──────────────────────
     if (url.pathname === "/api/logs" && req.method === "GET") {
       const n = Math.min(Number(url.searchParams.get("n")) || 200, LOG_MAX);

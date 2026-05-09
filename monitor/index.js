@@ -729,6 +729,20 @@ function settingsBody() {
       <pre id="cal-probe" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;margin-top:8px;display:none;white-space:pre-wrap;"></pre>
     </div>
     <div class="sec" style="margin-top:12px;">
+      <h3>System-Prompt (Agent-Persönlichkeit)</h3>
+      <p class="dim" style="font-size:12px;margin-bottom:8px;">Wird bei jeder Anfrage als <code>system</code>-Message ans LLM geschickt. <b>Hot-Reload:</b> Speichern reicht — kein Container-Recreate. Leeres Feld = Default-Prompt (siehe Platzhalter im Textarea unten).</p>
+      <textarea id="sys-prompt" rows="14" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);font-size:13px;padding:10px;" placeholder="(leer = Default — siehe unten)"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+        <button class="btn primary" onclick="savePrompt()">💾 Prompt speichern</button>
+        <button class="btn" onclick="resetPrompt()">↺ Auf Default zurücksetzen</button>
+        <span id="prompt-msg" class="dim" style="font-size:12px;"></span>
+      </div>
+      <details style="margin-top:10px;">
+        <summary class="dim" style="cursor:pointer;font-size:12px;">Aktuell aktiver Prompt anzeigen (Default oder Custom)</summary>
+        <pre id="prompt-active" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;margin-top:8px;white-space:pre-wrap;max-height:400px;overflow:auto;"></pre>
+      </details>
+    </div>
+    <div class="sec" style="margin-top:12px;">
       <h3>Mail-Signatur</h3>
       <p class="dim" style="font-size:12px;margin-bottom:8px;">Wird an jede via <code>mail_send</code> verschickte Mail angehängt (Standard-Trenner <code>-- </code>). Datei: <code>/data/mail-signature.txt</code>.</p>
       <textarea id="mail-sig" rows="8" style="width:100%;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);font-size:13px;padding:10px;" placeholder="Viele Grüße&#10;Michael Dedecke&#10;..."></textarea>
@@ -924,8 +938,37 @@ function settingsBody() {
           m.textContent = r.ok ? '✓ gespeichert ('+d.bytes+' Bytes) — sofort aktiv' : '✗ '+(d.error||'Fehler');
         } catch (e) { m.textContent = '✗ '+e.message; }
       }
+      async function loadPrompt(){
+        try {
+          const r = await fetch('/api/system-prompt');
+          const d = await r.json();
+          document.getElementById('sys-prompt').value = d.content || '';
+          document.getElementById('prompt-active').textContent = d.active || '';
+        } catch {}
+      }
+      async function savePrompt(){
+        const content = document.getElementById('sys-prompt').value;
+        const m = document.getElementById('prompt-msg');
+        m.textContent = 'speichere…';
+        try {
+          const r = await fetch('/api/system-prompt', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})});
+          const d = await r.json();
+          if (r.ok) {
+            m.textContent = '✓ gespeichert ('+d.mode+', '+d.bytes+' Bytes) — sofort aktiv beim nächsten Chat';
+            loadPrompt();
+          } else {
+            m.textContent = '✗ '+(d.error||'Fehler');
+          }
+        } catch (e) { m.textContent = '✗ '+e.message; }
+      }
+      async function resetPrompt(){
+        if (!confirm('Custom-Prompt löschen und auf Default zurücksetzen?')) return;
+        document.getElementById('sys-prompt').value = '';
+        await savePrompt();
+      }
       load();
       loadSig();
+      loadPrompt();
     </script>`;
 }
 
