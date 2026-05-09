@@ -509,9 +509,11 @@ struct ContentView: View {
                     }
                     if useStreamingTTS {
                         ttsBuffer += chunk
-                        // Auf Satz-Ende-Marker prüfen — ab minChunkLen sprechen
-                        if ttsBuffer.count >= minChunkLen,
-                           let split = sentenceSplit(ttsBuffer) {
+                        // Mehrere Sätze in einem großen Chunk: solange splitten
+                        // bis nichts mehr geht. Backend streamt manchmal in
+                        // grossen Brocken (minimax-cloud) statt token-by-token.
+                        while ttsBuffer.count >= minChunkLen,
+                              let split = sentenceSplit(ttsBuffer) {
                             tts.enqueueSpeak(split.spoken, settings: settings)
                             ttsBuffer = split.remainder
                         }
