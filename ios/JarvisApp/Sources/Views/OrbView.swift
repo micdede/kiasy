@@ -19,8 +19,8 @@ enum OrbState {
 
 /// Visualisierungs-Stil — wird über Settings gewählt.
 enum OrbStyle: String {
-    case sphere    // Fibonacci-Sphere die rotiert + atmet
-    case blackHole // Akkretionsscheibe mit Event-Horizon, State-spezifischer Fluss
+    case sphere    = "sphere"     // Fibonacci-Sphere die rotiert + atmet
+    case blackHole = "blackhole"  // Akkretionsscheibe mit Event-Horizon
 }
 
 /// Particle-Form — wird über Settings gewählt.
