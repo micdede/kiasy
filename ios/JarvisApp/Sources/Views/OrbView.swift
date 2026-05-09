@@ -84,6 +84,8 @@ struct OrbView: View {
     let shape: ParticleShape
 
     private let particleCount = 400
+    /// Globale Skalierung der Particle-Größe — gilt für alle States/Stile.
+    private let sizeScale: CGFloat = 1.5
 
     private var particleColor: Color { state.primaryColor }
     private var haloColor: Color { Theme.accent }
@@ -106,7 +108,7 @@ struct OrbView: View {
                     let center = CGPoint(x: size.width / 2, y: size.height / 2)
                     for i in 0..<particleCount {
                         let p = particle(index: i, now: now, center: center)
-                        let path = shape.path(at: p.position, size: p.size)
+                        let path = shape.path(at: p.position, size: p.size * sizeScale)
                         gctx.fill(path, with: .color(particleColor.opacity(p.opacity)))
                     }
                 }
