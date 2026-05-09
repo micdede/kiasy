@@ -26,16 +26,15 @@ struct ConversationView: View {
 
     var body: some View {
         ZStack {
-            // ─── Background mit dezentem Vignette in State-Farbe ───
+            // ─── Background — Cyan-Vignette, state-unabhängig ──────
             Theme.bgDeep.ignoresSafeArea()
             RadialGradient(
-                colors: [orbState.primaryColor.opacity(0.10), .clear],
+                colors: [Theme.accent.opacity(0.10), .clear],
                 center: .center,
                 startRadius: 50,
                 endRadius: 400
             )
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.5), value: orbState)
 
             VStack(spacing: 0) {
                 // Top-Bar
