@@ -47,6 +47,11 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
     }
 
     private func startSpeaking(_ text: String, settings: AppSettings) {
+        // SOFORT isSpeaking=true — sonst läuft der nächste enqueueSpeak direkt
+        // wieder in startSpeaking statt in die Queue (während die async Synth
+        // noch ~1s läuft, isSpeaking erst spät true wird). Race-Condition,
+        // die zu parallelen TTS-Calls + Cancellation-Chaos geführt hat.
+        isSpeaking = true
         configurePlaybackSession()
         switch settings.ttsBackend {
         case "piper": speakServer(text, engine: "piper", voice: settings.piperVoice, settings: settings)
@@ -155,7 +160,9 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
 
     // ─── Server-TTS (engine = piper | edge) ──────────────────
     private func speakServer(_ text: String, engine: String, voice: String, settings: AppSettings) {
-        piperTask?.cancel()
+        // KEIN piperTask?.cancel() hier — die Queue-Logik garantiert dass
+        // startSpeaking nur dann läuft wenn nichts anderes läuft. Cancellation
+        // kommt nur durch User-Stop (stop() macht das selbst).
         piperTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -166,11 +173,14 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
                     player.delegate = self
                     player.isMeteringEnabled = true
                     self.audioPlayer = player
-                    self.isSpeaking = true
                     print("[TTS-\(engine)] play \(audio.count) bytes")
                     player.play()
                     self.startMetering()
                 }
+            } catch is CancellationError {
+                return  // User-Stop, stop() hat aufgeräumt
+            } catch let error as URLError where error.code == .cancelled {
+                return
             } catch {
                 print("[TTS-\(engine)] Fehler: \(error.localizedDescription) — Fallback auf iOS-Stimme")
                 await MainActor.run {
