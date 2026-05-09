@@ -36,12 +36,22 @@ struct ContentView: View {
         // AccessKey oder Enable-Toggle geändert → neu konfigurieren
         .onChange(of: settings.picovoiceAccessKey) { _, _ in applyWakeSettings() }
         .onChange(of: settings.wakeWordEnabled)    { _, _ in applyWakeSettings() }
-        // Mic-Konflikt: Wake muss pausieren wenn SpeechService das Mikro übernimmt
-        .onChange(of: speech.isListening) { _, listening in
+        // Mic-Konflikt + zentrales Auto-Send beim Stop
+        .onChange(of: speech.isListening) { wasListening, listening in
+            // Wake-Word-Mic-Konflikt
             if listening {
                 wake.stop()
             } else if settings.wakeWordEnabled {
                 wake.start()
+            }
+            // Auto-Send: wenn das Mic gerade aus ging und Transcript da ist
+            // → senden. Greift egal ob User-Stop, isFinal vom Recognizer oder
+            // Silence-Timeout im Konversations-Modus.
+            if wasListening && !listening {
+                let text = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty {
+                    Task { @MainActor in await sendMessage(text) }
+                }
             }
         }
         // Trigger via AppIntent (Action-Button, Siri, Back-Tap, Widget, Watch …)
@@ -317,9 +327,9 @@ struct ContentView: View {
     @MainActor
     private func toggleListening() async {
         if speech.isListening {
+            // Send wird im onChange(of: speech.isListening)-Observer ausgelöst —
+            // greift dann sowohl bei User-Stop hier als auch bei Silence-Timeout
             speech.stop()
-            let text = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty { await sendMessage(text) }
         } else {
             tts.stop()
             let ok = await speech.requestPermissions()
