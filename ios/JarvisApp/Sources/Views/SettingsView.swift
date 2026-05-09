@@ -77,6 +77,12 @@ struct SettingsView: View {
                     } else if settings.ttsBackend == "piper" {
                         Picker("Piper-Stimme", selection: $settings.piperVoice) {
                             Text("Server-Default").tag("")
+                            // Ghost-Option für die aktuelle Selection wenn die Voice-Liste
+                            // noch nicht geladen ist (sonst Picker-Tag-Warning)
+                            if !settings.piperVoice.isEmpty,
+                               !piperVoices.contains(where: { $0.voice == settings.piperVoice }) {
+                                Text(settings.piperVoice).tag(settings.piperVoice)
+                            }
                             ForEach(piperVoices) { pv in
                                 Text("\(pv.flag) \(pv.name) — \(pv.quality)").tag(pv.voice)
                             }
@@ -88,6 +94,10 @@ struct SettingsView: View {
                     } else {  // "edge"
                         Picker("Edge-Stimme", selection: $settings.edgeVoice) {
                             Text("Server-Default").tag("")
+                            if !settings.edgeVoice.isEmpty,
+                               !edgeVoices.contains(where: { $0.voice == settings.edgeVoice }) {
+                                Text(settings.edgeVoice).tag(settings.edgeVoice)
+                            }
                             ForEach(edgeVoices) { ev in
                                 Text("\(ev.flag) \(ev.name)").tag(ev.voice)
                             }

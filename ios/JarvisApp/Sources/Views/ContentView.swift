@@ -48,17 +48,28 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .startListeningTrigger)) { _ in
             triggerListeningExplicit()
         }
-        // Konversations-Modus: nach TTS automatisch wieder Mic auf
+        // Konversations-Modus: nach TTS-Ende Mic wieder auf (TTS-Pfad)
         .onChange(of: tts.isSpeaking) { _, speaking in
-            guard !speaking, settings.conversationMode else { return }
-            guard !speech.isListening, !sending else { return }
-            // Kurz warten dass die Audio-Session frei ist
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                guard settings.conversationMode, !speech.isListening, !sending else { return }
-                speech.start(silenceTimeout: 6)
-                statusText = "höre zu…"
-            }
+            if !speaking { maybeAutoContinue() }
+        }
+        // Konversations-Modus: wenn TTS aus ist, am Ende des Sendens triggern
+        // (sonst gibt's kein TTS-Event auf das wir warten könnten)
+        .onChange(of: sending) { _, isSending in
+            if !isSending && !settings.speakReplies { maybeAutoContinue() }
+        }
+    }
+
+    /// Startet das Mic erneut wenn Konversations-Modus aktiv ist und nichts
+    /// anderes gerade läuft. 250 ms Delay damit die Audio-Session frei wird.
+    @MainActor
+    private func maybeAutoContinue() {
+        guard settings.conversationMode else { return }
+        guard !speech.isListening, !sending, !tts.isSpeaking else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard settings.conversationMode, !speech.isListening, !sending, !tts.isSpeaking else { return }
+            speech.start(silenceTimeout: 6)
+            statusText = "höre zu…"
         }
     }
 
