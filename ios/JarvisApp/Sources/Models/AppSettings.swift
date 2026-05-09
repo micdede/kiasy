@@ -39,6 +39,10 @@ final class AppSettings: ObservableObject {
     @Published var bargeInEnabled: Bool { didSet { sync("bargeInEnabled", bargeInEnabled) } }
     /// Konversations-Modus: nach TTS automatisch wieder Mic auf für Folgefrage. Stoppt nach 6s Stille.
     @Published var conversationMode: Bool { didSet { sync("conversationMode", conversationMode) } }
+    /// Voice-Mode Visualisierung: "sphere" (Default) oder "blackhole"
+    @Published var orbStyle: String { didSet { sync("orbStyle", orbStyle) } }
+    /// Particle-Form: "circle" (Default), "square", "diamond", "star"
+    @Published var particleShape: String { didSet { sync("particleShape", particleShape) } }
 
     // ─── Internal ────────────────────────────────────────────
     private let kv = NSUbiquitousKeyValueStore.default
@@ -66,6 +70,8 @@ final class AppSettings: ObservableObject {
         self.wakeWordEnabled    = Self.readBool("wakeWordEnabled", kv: kv, ud: ud, default: false)
         self.bargeInEnabled     = Self.readBool("bargeInEnabled",  kv: kv, ud: ud, default: true)
         self.conversationMode   = Self.readBool("conversationMode", kv: kv, ud: ud, default: false)
+        self.orbStyle           = Self.read("orbStyle",      kv: kv, ud: ud, default: "sphere")
+        self.particleShape      = Self.read("particleShape", kv: kv, ud: ud, default: "circle")
 
         // Initial-Sync triggern
         kv.synchronize()
@@ -122,6 +128,8 @@ final class AppSettings: ObservableObject {
                 case "wakeWordEnabled": wakeWordEnabled = kv.bool(forKey: key)
                 case "bargeInEnabled":  bargeInEnabled  = kv.bool(forKey: key)
                 case "conversationMode": conversationMode = kv.bool(forKey: key)
+                case "orbStyle":      if let v = kv.string(forKey: key) { orbStyle = v }
+                case "particleShape": if let v = kv.string(forKey: key) { particleShape = v }
                 default: break
                 }
                 // UserDefaults parallel aktualisieren

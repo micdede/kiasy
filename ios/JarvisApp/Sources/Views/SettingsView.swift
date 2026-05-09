@@ -113,6 +113,22 @@ struct SettingsView: View {
                     if settings.ttsBackend == "edge"  && edgeVoices.isEmpty  { await loadVoices(engine: "edge") }
                 }
                 Section {
+                    Picker("Stil", selection: $settings.orbStyle) {
+                        Text("Sphere").tag("sphere")
+                        Text("Schwarzes Loch").tag("blackhole")
+                    }
+                    Picker("Particle-Form", selection: $settings.particleShape) {
+                        ForEach(ParticleShape.allCases, id: \.rawValue) { s in
+                            Text(s.label).tag(s.rawValue)
+                        }
+                    }
+                } header: {
+                    Text("Voice-Mode-Visualisierung")
+                } footer: {
+                    Text("Sphere: rotierende Punktwolke. Schwarzes Loch: Akkretionsscheibe — beim Hören laufen Punkte rein, beim Denken rotieren sie nur, beim Sprechen kommen sie raus.")
+                        .font(.caption2)
+                }
+                Section {
                     SecureField("Picovoice AccessKey", text: $settings.picovoiceAccessKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()

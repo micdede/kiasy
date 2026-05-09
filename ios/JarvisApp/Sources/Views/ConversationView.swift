@@ -56,8 +56,13 @@ struct ConversationView: View {
                 Spacer()
 
                 // ─── Orb ──────────────────────────────────────────
-                OrbView(level: orbLevel, state: orbState)
-                    .frame(width: 360, height: 360)
+                OrbView(
+                    level: orbLevel,
+                    state: orbState,
+                    style: OrbStyle(rawValue: settings.orbStyle) ?? .sphere,
+                    shape: ParticleShape(rawValue: settings.particleShape) ?? .circle
+                )
+                .frame(width: 360, height: 360)
 
                 // ─── Status-Text ──────────────────────────────────
                 Text(statusText)
