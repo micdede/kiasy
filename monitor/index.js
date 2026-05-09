@@ -1,4 +1,4 @@
-// kiasy-monitor — Web-UI mit Pages für tools/memory/reminders/news/health/settings/chat
+// kiasy-monitor — Web-UI mit Pages für tools/memory/reminders/news/health/settings
 
 import express from "express";
 import { readFileSync } from "node:fs";
@@ -59,7 +59,7 @@ app.get("/", async (req, res) => {
     </section>
     <section class="cards">
       ${[
-        ["chat","Chat","💬","Web-Chat mit Agent"],
+        // ["chat","Chat","💬","Web-Chat mit Agent"],  // DEPRECATED: iOS-App + Telegram als Chat-Interfaces, Web-Chat ungenutzt
         // ["notes","Notes","📝","Markdown-Wissensbasis"],  // DEPRECATED: nach Kerio migriert (siehe note_* Tools)
         ["memory","Memory","🧠","Facts/Todos + Vector-Suche"],
         ["reminders","Reminders","⏰","Erinnerungen"],
@@ -79,7 +79,7 @@ app.get("/", async (req, res) => {
   `));
 });
 
-app.get("/chat", (req, res) => res.send(layout("chat", "Chat", chatBody())));
+// app.get("/chat", (req, res) => res.send(layout("chat", "Chat", chatBody())));  // DEPRECATED: Web-Chat ungenutzt
 app.get("/tools", (req, res) => res.send(layout("tools", "Tools", toolsBody())));
 app.get("/memory", (req, res) => res.send(layout("memory", "Memory", memoryBody())));
 app.get("/reminders", (req, res) => res.send(layout("reminders", "Reminders", remindersBody())));
@@ -103,45 +103,11 @@ app.listen(PORT, "0.0.0.0", () => console.log(`[kiasy-monitor] v${pkg.version} l
 // Page Bodies
 // ═════════════════════════════════════════════════════════════
 
-function chatBody() {
-  return `
-    <div class="page-head"><h2>Chat</h2><button class="btn" onclick="if(confirm('Verlauf leeren?')){location.reload()}">leeren</button></div>
-    <div class="chat-wrap">
-      <div id="messages" class="messages"></div>
-      <form id="form" class="input-form">
-        <textarea id="input" placeholder="Nachricht…" rows="2" autofocus></textarea>
-        <button type="submit" id="send" class="btn primary">Send</button>
-      </form>
-    </div>
-    <style>
-      .chat-wrap { display:flex; flex-direction:column; height: calc(100vh - 200px); }
-      .messages { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:8px 0; }
-      .msg { padding: 10px 14px; border-radius: 10px; max-width: 85%; line-height:1.5; word-wrap:break-word; white-space:pre-wrap; }
-      .msg.user { background: var(--accent-soft); border:1px solid rgba(78,201,255,0.3); align-self:flex-end; }
-      .msg.assistant { background: var(--bg-card); border:1px solid var(--border); align-self:flex-start; }
-      .msg.tool { background: var(--bg-elevated); border:1px solid var(--border); align-self:flex-start; font-family: var(--mono); font-size:12px; color: var(--text-dim); max-width: 95%; }
-      .msg.error { background: rgba(255,107,122,0.15); border:1px solid var(--err); align-self:flex-start; color: var(--err); }
-      .msg .role { font-size:10px; color: var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
-      .input-form { display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--border); }
-      .input-form textarea { flex:1; padding:10px 14px; background: var(--bg-card); border:1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--font); font-size:14px; resize:none; }
-    </style>
-    <script>
-      const messages=document.getElementById('messages'),form=document.getElementById('form'),input=document.getElementById('input'),send=document.getElementById('send');
-      const CHAT_ID='web-chat';
-      function addMsg(r,t){const d=document.createElement('div');d.className='msg '+r;d.innerHTML='<div class="role">'+r+'</div><div class="text"></div>';d.querySelector('.text').textContent=t;messages.appendChild(d);messages.scrollTop=messages.scrollHeight;return d.querySelector('.text');}
-      fetch('/api/chat/history?chatId='+CHAT_ID+'&limit=30').then(r=>r.json()).then(d=>{(d.messages||[]).forEach(m=>m.role!=='system'&&addMsg(m.role,m.content))});
-      form.addEventListener('submit',async e=>{e.preventDefault();const t=input.value.trim();if(!t)return;input.value='';send.disabled=true;addMsg('user',t);const tgt=addMsg('assistant','');
-        try{const res=await fetch('/api/chat/send/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chatId:CHAT_ID,message:t})});
-          const reader=res.body.getReader();const dec=new TextDecoder();let buf='',acc='';
-          while(true){const{value,done}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const evs=buf.split('\\n\\n');buf=evs.pop();
-            for(const ev of evs){const ls=ev.split('\\n');const ty=ls.find(l=>l.startsWith('event: '))?.slice(7);const dl=ls.find(l=>l.startsWith('data: '))?.slice(6);if(!dl)continue;const d=JSON.parse(dl);
-              if(ty==='delta'){acc+=d.text;tgt.textContent=acc;messages.scrollTop=messages.scrollHeight;}
-              else if(ty==='tool_use')addMsg('tool','🔧 '+d.name+'('+JSON.stringify(d.input).slice(0,200)+')');
-              else if(ty==='tool_result')addMsg('tool','↳ '+JSON.stringify(d.result).slice(0,300));
-              else if(ty==='error')addMsg('error',d.error);}}}
-        catch(err){addMsg('error',err.message);}finally{send.disabled=false;input.focus();}});
-    </script>`;
-}
+// DEPRECATED: Web-Chat ungenutzt (iOS-App + Telegram als Chat-Interfaces).
+// chatBody() ausgeblendet, Datei als Fallback im git-history.
+/*
+function chatBody() { ... }
+*/
 
 function toolsBody() {
   return `
@@ -1533,7 +1499,7 @@ function logsBody() {
 function layout(active, title, body) {
   const navItems = [
     ["dashboard","/","Dashboard"],
-    ["chat","/chat","Chat"],
+    // ["chat","/chat","Chat"],  // DEPRECATED: Web-Chat ungenutzt
     // ["notes","/notes","Notes"],  // DEPRECATED: nach Kerio migriert
     ["memory","/memory","Memory"],
     ["reminders","/reminders","Reminders"],
