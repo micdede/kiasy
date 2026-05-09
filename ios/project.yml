@@ -41,6 +41,8 @@ targets:
           - "_jarvis._tcp"
         UIBackgroundModes:
           - audio
+    entitlements:
+      path: JarvisApp/Resources/JarvisApp.entitlements
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.dedecke.jarvis
@@ -48,3 +50,4 @@ targets:
         ENABLE_PREVIEWS: "YES"
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: JarvisApp/Resources/JarvisApp.entitlements
