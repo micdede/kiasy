@@ -120,6 +120,39 @@ actor JarvisAPI {
         }
         return nil
     }
+
+    /// Holt den letzten Verlauf vom Server. Liefert chronologisch sortierte
+    /// ChatMessages (oldest first). Wirft bei Netzwerk-/HTTP-Fehler — Aufrufer
+    /// sollte das schlucken (Verlauf ist nice-to-have).
+    func loadHistory(
+        baseURL: String,
+        user: String,
+        pass: String,
+        chatId: String,
+        limit: Int = 50
+    ) async throws -> [ChatMessage] {
+        guard let url = URL(string: "\(baseURL)/api/chat/history?chatId=\(chatId)&limit=\(limit)") else {
+            throw URLError(.badURL)
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        if !user.isEmpty {
+            let token = "\(user):\(pass)".data(using: .utf8)!.base64EncodedString()
+            req.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, http.statusCode >= 400 {
+            throw NSError(domain: "JarvisAPI", code: http.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode)"])
+        }
+        guard
+            let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let arr = obj["messages"] as? [[String: Any]]
+        else {
+            return []
+        }
+        return arr.compactMap { ChatMessage(serverDict: $0) }
+    }
 }
 
 // SelfSignedDelegate entfernt — Caddy-Root-Cert ist jetzt als Trusted Profile

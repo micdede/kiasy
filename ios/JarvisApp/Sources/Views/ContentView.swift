@@ -25,7 +25,32 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { SettingsView(messages: $messages) }
-        .task { _ = await speech.requestPermissions() }
+        .task {
+            _ = await speech.requestPermissions()
+            await loadHistoryIfEmpty()
+        }
+    }
+
+    /// Lädt den Chat-Verlauf vom Server beim ersten View-Mount.
+    /// Skip wenn schon Messages drin sind (User hat in der Zwischenzeit getippt
+    /// oder die View wurde nur re-mounted ohne dass die App neu gestartet wurde).
+    private func loadHistoryIfEmpty() async {
+        guard messages.isEmpty else { return }
+        guard !settings.backendURL.isEmpty else { return }
+        do {
+            let loaded = try await api.loadHistory(
+                baseURL: settings.backendURL,
+                user: settings.authUser,
+                pass: settings.authPass,
+                chatId: settings.chatId,
+                limit: 50
+            )
+            // Race-Schutz: zwischen await und hier könnte User schon getippt haben
+            guard messages.isEmpty else { return }
+            messages = loaded
+        } catch {
+            print("[history] load failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Subviews
