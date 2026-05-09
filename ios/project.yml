@@ -20,10 +20,12 @@ targets:
     sources:
       - path: JarvisApp/Sources
     resources:
-      # Asset-Catalog explizit (sonst behandelt XcodeGen die internen .json
-      # als einzelne Resources statt als compilable .xcassets)
+      # Asset-Catalog: KEIN `type: folder.assetcatalog` — das macht eine
+      # blaue Folder-Reference und landet NICHT in der Resources-Build-Phase.
+      # XcodeGen erkennt .xcassets automatisch korrekt; `buildPhase: resources`
+      # erzwingt explizit das Anlegen der PBXResourcesBuildPhase.
       - path: JarvisApp/Resources/Assets.xcassets
-        type: folder.assetcatalog
+        buildPhase: resources
     info:
       path: JarvisApp/Resources/Info.plist
       properties:
