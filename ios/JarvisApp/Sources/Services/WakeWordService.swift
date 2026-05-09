@@ -104,7 +104,7 @@ final class WakeWordService: ObservableObject {
     func shutdown() {
         if let mgr = manager {
             try? mgr.stop()
-            mgr.delete()
+            try? mgr.delete()
         }
         manager = nil
         configuredKey = nil
