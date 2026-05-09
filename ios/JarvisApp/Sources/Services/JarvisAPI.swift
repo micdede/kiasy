@@ -20,12 +20,20 @@ actor JarvisAPI {
         self.session = URLSession(configuration: cfg)
     }
 
+    /// Attachment fürs Backend — base64-codiert, mit MIME-Type
+    struct Attachment {
+        let type: String   // "image"
+        let mime: String   // "image/jpeg", "image/png"
+        let base64: String
+    }
+
     func sendStream(
         baseURL: String,
         user: String,
         pass: String,
         chatId: String,
-        message: String
+        message: String,
+        attachments: [Attachment] = []
     ) -> AsyncThrowingStream<SSEEvent, Error> {
         AsyncThrowingStream { cont in
             Task {
@@ -41,10 +49,18 @@ actor JarvisAPI {
                         let token = "\(user):\(pass)".data(using: .utf8)!.base64EncodedString()
                         req.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
                     }
-                    req.httpBody = try JSONSerialization.data(withJSONObject: [
+                    var body: [String: Any] = [
                         "chatId": chatId,
                         "message": message
-                    ])
+                    ]
+                    if !attachments.isEmpty {
+                        body["attachments"] = attachments.map { [
+                            "type":   $0.type,
+                            "mime":   $0.mime,
+                            "base64": $0.base64
+                        ] }
+                    }
+                    req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
                     let (bytes, response) = try await session.bytes(for: req)
                     if let http = response as? HTTPURLResponse {

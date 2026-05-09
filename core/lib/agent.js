@@ -78,11 +78,15 @@ async function chatWithFallback({ messages, tools: toolDefs, system }) {
   }
 }
 
-export async function handle({ chatId, message, provider, role }) {
+export async function handle({ chatId, message, provider, role, attachments }) {
   if (!chatId || !message) throw new Error("chatId+message erforderlich");
 
   // 1. User-Message persistieren + im Hintergrund vektorisieren
-  const userMsgId = db.saveMessage({ chatId, role: "user", content: message });
+  // Attachments selbst werden NICHT in DB gespeichert (zu groß), nur ein Hinweis in meta
+  const userMeta = attachments?.length
+    ? { attachments_count: attachments.length, attachment_types: attachments.map(a => a.type) }
+    : null;
+  const userMsgId = db.saveMessage({ chatId, role: "user", content: message, meta: userMeta });
   vectors.upsertMessage(userMsgId, message, { chat_id: chatId, role: "user" }).catch(() => {});
 
   // 1a. Übersetzungs-Shortcut: Pattern erkannt → direkter Tool-Call ohne LLM
@@ -107,6 +111,15 @@ export async function handle({ chatId, message, provider, role }) {
 
   // 2. Verlauf laden + Semantic-Recall + Tools
   const history = loadHistory(chatId);
+  // Attachments an die zuletzt gespeicherte (= aktuelle) User-Message anhängen
+  if (attachments?.length) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === "user") {
+        history[i].attachments = attachments;
+        break;
+      }
+    }
+  }
   const toolDefs = await tools.getDefinitions();
   const recall = await semanticRecall(chatId, message);
   const explicitRole = pickRole(role || provider);  // null oder "cheap" wenn explizit angefragt
@@ -207,13 +220,24 @@ export async function handle({ chatId, message, provider, role }) {
   return { text: lastText, turns: turn, messageId, usage: lastUsage, role: roleLabel, tools_used: toolsUsed, fallback: usedFallback };
 }
 
-export async function* streamHandle({ chatId, message, provider, role }) {
+export async function* streamHandle({ chatId, message, provider, role, attachments }) {
   if (!chatId || !message) throw new Error("chatId+message erforderlich");
 
-  const userMsgId = db.saveMessage({ chatId, role: "user", content: message });
+  const userMeta = attachments?.length
+    ? { attachments_count: attachments.length, attachment_types: attachments.map(a => a.type) }
+    : null;
+  const userMsgId = db.saveMessage({ chatId, role: "user", content: message, meta: userMeta });
   vectors.upsertMessage(userMsgId, message, { chat_id: chatId, role: "user" }).catch(() => {});
 
   const history = loadHistory(chatId);
+  if (attachments?.length) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === "user") {
+        history[i].attachments = attachments;
+        break;
+      }
+    }
+  }
   const toolDefs = await tools.getDefinitions();
   const recall = await semanticRecall(chatId, message);
   // Stream-Pfad: kein Auto-Fallback (würde Streaming bedeutend komplizieren).

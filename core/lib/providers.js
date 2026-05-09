@@ -129,6 +129,19 @@ function toAnthropicMessages(messages) {
       if (m.content) blocks.push({ type: "text", text: m.content });
       for (const tc of m.tool_calls) blocks.push({ type: "tool_use", id: tc.id, name: tc.name, input: tc.input });
       out.push({ role: "assistant", content: blocks });
+    } else if (m.role === "user" && m.attachments?.length) {
+      // Multi-Modal: text + image_blocks (Anthropic-Format)
+      const blocks = [];
+      for (const att of m.attachments) {
+        if (att.type === "image") {
+          blocks.push({
+            type: "image",
+            source: { type: "base64", media_type: att.mime || "image/jpeg", data: att.base64 }
+          });
+        }
+      }
+      if (m.content) blocks.push({ type: "text", text: m.content });
+      out.push({ role: "user", content: blocks });
     } else {
       out.push({ role: m.role === "assistant" ? "assistant" : "user", content: m.content });
     }
@@ -219,6 +232,18 @@ function toOpenAIMessages(messages, system) {
     if (m.role === "tool") out.push({ role: "tool", tool_call_id: m.tool_call_id, content: typeof m.content === "string" ? m.content : JSON.stringify(m.content) });
     else if (m.role === "assistant" && m.tool_calls?.length)
       out.push({ role: "assistant", content: m.content || null, tool_calls: m.tool_calls.map(tc => ({ id: tc.id, type: "function", function: { name: tc.name, arguments: JSON.stringify(tc.input) } })) });
+    else if (m.role === "user" && m.attachments?.length) {
+      // Multi-Modal: OpenAI-compat content-Array mit text + image_url
+      const parts = [];
+      if (m.content) parts.push({ type: "text", text: m.content });
+      for (const att of m.attachments) {
+        if (att.type === "image") {
+          const dataUrl = `data:${att.mime || "image/jpeg"};base64,${att.base64}`;
+          parts.push({ type: "image_url", image_url: { url: dataUrl } });
+        }
+      }
+      out.push({ role: "user", content: parts });
+    }
     else out.push({ role: m.role, content: m.content });
   }
   return out;

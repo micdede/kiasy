@@ -244,7 +244,8 @@ const server = http.createServer(async (req, res) => {
       const result = await agent.handle({
         chatId: body.chatId || "default",
         message: body.message,
-        provider: body.provider
+        provider: body.provider,
+        attachments: body.attachments
       });
       return sendJson(200, { chatId: body.chatId || "default", ...result });
     }
@@ -261,7 +262,8 @@ const server = http.createServer(async (req, res) => {
         for await (const ev of agent.streamHandle({
           chatId: body.chatId || "default",
           message: body.message,
-          provider: body.provider
+          provider: body.provider,
+          attachments: body.attachments
         })) {
           if (ev.delta) sse("delta", { text: ev.delta });
           if (ev.tool_use) sse("tool_use", ev.tool_use);

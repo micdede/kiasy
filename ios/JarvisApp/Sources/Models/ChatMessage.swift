@@ -3,6 +3,16 @@ import Foundation
 struct ChatMessage: Identifiable, Equatable {
     enum Role: String { case user, assistant, tool, error, system }
 
+    /// Lokal angehängte Datei (vom User hochgeladen, nur in der App-View persistent)
+    struct LocalAttachment: Equatable, Hashable, Identifiable {
+        enum Kind: Equatable, Hashable { case image, pdf }
+        let kind: Kind
+        let filename: String
+        /// PNG/JPEG-Daten für Image, PDF-Daten für PDF — wird als Vorschau in der Bubble gerendert
+        let data: Data
+        var id: String { filename }
+    }
+
     let id: UUID
     let role: Role
     var text: String
@@ -10,14 +20,17 @@ struct ChatMessage: Identifiable, Equatable {
     var isStreaming: Bool = false
     /// optional vollständige URL (mit Backend-Prefix) — wird gerendert als Inline-Image
     var imageURL: String? = nil
+    /// vom User in der App angehängte Files — nur lokal sichtbar, nicht im Server-History
+    var localAttachments: [LocalAttachment] = []
 
-    init(role: Role, text: String, isStreaming: Bool = false, imageURL: String? = nil) {
+    init(role: Role, text: String, isStreaming: Bool = false, imageURL: String? = nil, localAttachments: [LocalAttachment] = []) {
         self.id = UUID()
         self.role = role
         self.text = text
         self.timestamp = Date()
         self.isStreaming = isStreaming
         self.imageURL = imageURL
+        self.localAttachments = localAttachments
     }
 
     /// Mappt eine Server-History-Zeile (`{role, content, msg_type, meta, created_at}`)

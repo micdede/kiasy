@@ -37,6 +37,7 @@ targets:
         NSMicrophoneUsageDescription: "JARVIS braucht Zugriff aufs Mikrofon, um deine Sprachbefehle aufzunehmen."
         NSSpeechRecognitionUsageDescription: "JARVIS wandelt deine Sprache lokal in Text um, bevor er sie ans Backend schickt."
         NSLocalNetworkUsageDescription: "JARVIS verbindet sich mit deinem JARVIS-Server im lokalen Netzwerk (192.168.x.x)."
+        NSPhotoLibraryAddUsageDescription: "JARVIS speichert generierte Bilder in deiner Foto-Mediathek wenn du das anforderst."
         NSBonjourServices:
           - "_jarvis._tcp"
         UIBackgroundModes:

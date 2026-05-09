@@ -1,4 +1,7 @@
 import SwiftUI
+import PhotosUI
+import PDFKit
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject var settings: AppSettings
@@ -12,6 +15,10 @@ struct ContentView: View {
     @State private var statusText = "bereit"
     @State private var inputText = ""
     @FocusState private var inputFocused: Bool
+    // Attachment-Pipeline
+    @State private var pendingAttachments: [ChatMessage.LocalAttachment] = []
+    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showFileImporter = false
 
     private let api = JarvisAPI()
 
@@ -180,7 +187,23 @@ struct ContentView: View {
     }
 
     private var inputBar: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 0) {
+            // Pending-Attachments Vorschau (nur sichtbar wenn welche da)
+            if !pendingAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pendingAttachments, id: \.filename) { att in
+                            attachmentPreview(att)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                }
+                .background(Theme.bgCard)
+                .transition(.opacity)
+            }
+
+            HStack(spacing: 8) {
             // Stop-TTS-Pill (nur sichtbar während TTS läuft)
             if tts.isSpeaking {
                 Button { tts.stop() } label: {
@@ -193,6 +216,24 @@ struct ContentView: View {
                 }
                 .transition(.scale.combined(with: .opacity))
             }
+
+            // Anhängen-Button (Photos + Files Menu)
+            Menu {
+                PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                    Label("Foto auswählen", systemImage: "photo")
+                }
+                Button {
+                    showFileImporter = true
+                } label: { Label("Datei (PDF) auswählen", systemImage: "doc") }
+            } label: {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 34, height: 34)
+                    .background(Theme.accentSoft)
+                    .clipShape(Circle())
+            }
+            .disabled(sending)
 
             // Textfeld
             HStack(spacing: 6) {
@@ -248,13 +289,100 @@ struct ContentView: View {
                 .disabled(sending || speech.isListening)
                 .transition(.scale.combined(with: .opacity))
             }
+            }  // close inner HStack
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .background(Theme.bgCard)
         .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.accent.opacity(0.2)), alignment: .top)
         .animation(.easeInOut(duration: 0.18), value: inputText.isEmpty)
         .animation(.easeInOut(duration: 0.18), value: tts.isSpeaking)
+        .animation(.easeInOut(duration: 0.18), value: pendingAttachments.count)
+        // Photos-Picker → Daten extrahieren + zu pendingAttachments
+        .onChange(of: photoPickerItem) { _, item in
+            guard let item else { return }
+            Task { await loadPhotoPickerItem(item) }
+        }
+        // Datei-Importer (PDF)
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            handleFileImport(result)
+        }
+    }
+
+    /// Vorschau eines pending-Attachments im Input-Bar (kleines Thumbnail mit X-Button)
+    @ViewBuilder
+    private func attachmentPreview(_ att: ChatMessage.LocalAttachment) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                switch att.kind {
+                case .image:
+                    if let img = UIImage(data: att.data) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                case .pdf:
+                    VStack(spacing: 4) {
+                        Image(systemName: "doc.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Theme.accent)
+                        Text(att.filename)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .frame(width: 60, height: 60)
+                    .background(Theme.bgElevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.bgHairline, lineWidth: 0.8))
+
+            // Remove-Button
+            Button {
+                pendingAttachments.removeAll(where: { $0.filename == att.filename })
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Theme.text)
+                    .background(Circle().fill(Color.black.opacity(0.6)))
+            }
+            .offset(x: 6, y: -6)
+        }
+    }
+
+    @MainActor
+    private func loadPhotoPickerItem(_ item: PhotosPickerItem) async {
+        defer { photoPickerItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        // JPEG re-encode falls riesig (>2MB) — sonst werden Backend-Requests sehr fett
+        let finalData: Data = {
+            if data.count <= 2_000_000 { return data }
+            if let img = UIImage(data: data), let jpeg = img.jpegData(compressionQuality: 0.7) {
+                return jpeg
+            }
+            return data
+        }()
+        let name = "photo-\(Int(Date().timeIntervalSince1970)).jpg"
+        pendingAttachments.append(.init(kind: .image, filename: name, data: finalData))
+    }
+
+    @MainActor
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        // security-scoped Resource — auf iOS sind picker-Files in einer Sandbox
+        let didStart = url.startAccessingSecurityScopedResource()
+        defer { if didStart { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { return }
+        let name = url.lastPathComponent
+        pendingAttachments.append(.init(kind: .pdf, filename: name, data: data))
     }
 
     @ViewBuilder
@@ -308,7 +436,34 @@ struct ContentView: View {
 
     @MainActor
     private func sendMessage(_ text: String) async {
-        let userMsg = ChatMessage(role: .user, text: text)
+        // Pending-Attachments übernehmen + sofort leeren (lokal in User-Bubble festhalten)
+        let attachmentsForBubble = pendingAttachments
+        pendingAttachments.removeAll()
+
+        // Server-Format: PDFs als Text extrahieren und an message anhängen,
+        // Bilder als base64-image-Attachments für Multi-Modal
+        var serverMessage = text
+        var serverAttachments: [JarvisAPI.Attachment] = []
+        for att in attachmentsForBubble {
+            switch att.kind {
+            case .image:
+                let mime = att.filename.lowercased().hasSuffix(".png") ? "image/png" : "image/jpeg"
+                serverAttachments.append(.init(
+                    type: "image",
+                    mime: mime,
+                    base64: att.data.base64EncodedString()
+                ))
+            case .pdf:
+                if let extracted = extractPDFText(att.data), !extracted.isEmpty {
+                    let header = "\n\n[Anhang: PDF \"\(att.filename)\"]\n"
+                    serverMessage += header + extracted
+                } else {
+                    serverMessage += "\n\n[Anhang: PDF \"\(att.filename)\" — kein Text extrahierbar]"
+                }
+            }
+        }
+
+        let userMsg = ChatMessage(role: .user, text: text, localAttachments: attachmentsForBubble)
         messages.append(userMsg)
         sending = true
         statusText = "sende…"
@@ -325,7 +480,8 @@ struct ContentView: View {
                 user: settings.authUser,
                 pass: settings.authPass,
                 chatId: settings.chatId,
-                message: text
+                message: serverMessage,
+                attachments: serverAttachments
             )
             statusText = "warte auf Antwort…"
             for try await ev in stream {
@@ -373,11 +529,28 @@ struct ContentView: View {
         }
         sending = false
     }
+
+    /// Extrahiert reinen Text aus einem PDF (PDFKit). Liefert nil wenn das PDF
+    /// nicht parsebar ist oder kein Text drin ist (z.B. reines Scan-Image-PDF
+    /// ohne OCR — könnten wir später server-seitig mit Vision lösen).
+    private func extractPDFText(_ data: Data) -> String? {
+        guard let doc = PDFDocument(data: data) else { return nil }
+        var collected = ""
+        for i in 0..<doc.pageCount {
+            if let pageText = doc.page(at: i)?.string {
+                collected += pageText + "\n\n"
+            }
+        }
+        let trimmed = collected.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
 
 private struct MessageBubble: View {
     @EnvironmentObject var settings: AppSettings
     let msg: ChatMessage
+
+    @State private var pdfPreview: ChatMessage.LocalAttachment?
 
     var body: some View {
         HStack {
@@ -387,6 +560,12 @@ private struct MessageBubble: View {
                     .font(.caption2.monospaced())
                     .foregroundStyle(Theme.textDim)
                     .tracking(0.8)
+                // Lokal angehängte Files (User-Uploads) — über dem Text
+                if !msg.localAttachments.isEmpty {
+                    ForEach(msg.localAttachments, id: \.filename) { att in
+                        localAttachmentBubble(att)
+                    }
+                }
                 if !msg.text.isEmpty || msg.isStreaming {
                     Text(msg.text.isEmpty && msg.isStreaming ? "…" : msg.text)
                         .foregroundStyle(textColor)
@@ -414,6 +593,17 @@ private struct MessageBubble: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                                 .overlay(RoundedRectangle(cornerRadius: 14)
                                     .strokeBorder(Theme.accent.opacity(0.4), lineWidth: 0.8))
+                                .contextMenu {
+                                    Button {
+                                        Task { await saveImageToPhotos(from: url) }
+                                    } label: { Label("In Fotos sichern", systemImage: "square.and.arrow.down") }
+                                    ShareLink(item: url) {
+                                        Label("Teilen", systemImage: "square.and.arrow.up")
+                                    }
+                                    Button {
+                                        UIPasteboard.general.url = url
+                                    } label: { Label("URL kopieren", systemImage: "doc.on.doc") }
+                                }
                         case .failure:
                             Text("⚠ Bild nicht ladbar")
                                 .font(.caption).foregroundStyle(Theme.err)
@@ -426,6 +616,66 @@ private struct MessageBubble: View {
                 }
             }
             if msg.role != .user { Spacer(minLength: 40) }
+        }
+        .sheet(item: $pdfPreview) { att in
+            PDFPreview(data: att.data, title: att.filename)
+        }
+    }
+
+    /// Lokal angehängtes File (User-Upload) — Bild als Inline-Image, PDF als
+    /// File-Card mit Tap → Vollbild-PDF-Viewer.
+    @ViewBuilder
+    private func localAttachmentBubble(_ att: ChatMessage.LocalAttachment) -> some View {
+        switch att.kind {
+        case .image:
+            if let img = UIImage(data: att.data) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Theme.accent.opacity(0.5), lineWidth: 0.8))
+            }
+        case .pdf:
+            Button { pdfPreview = att } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(Theme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(att.filename)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.text)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text("\(att.data.count / 1024) KB · zum Öffnen tippen")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.textDim)
+                    }
+                    Spacer(minLength: 4)
+                }
+                .padding(10)
+                .background(Theme.bgElevated)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Theme.bgHairline, lineWidth: 0.8))
+                .frame(maxWidth: 260)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Lädt das Bild von der URL (mit Basic-Auth via authedURL) und speichert
+    /// es in der Foto-Mediathek. Apple zeigt automatisch einen Permission-Prompt
+    /// beim ersten Mal (NSPhotoLibraryAddUsageDescription in Info.plist).
+    private func saveImageToPhotos(from url: URL) async {
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let image = UIImage(data: data) else { return }
+            UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        } catch {
+            print("[image-save] failed: \(error.localizedDescription)")
         }
     }
 
@@ -464,6 +714,45 @@ private struct MessageBubble: View {
         case .tool:  return Theme.textDim
         default:     return Theme.text
         }
+    }
+}
+
+/// Vollbild-PDF-Viewer via PDFKit. Wird als Sheet beim Tap auf eine PDF-Bubble
+/// geöffnet. Theme-konsistent (dunkel) mit Schließen-Button.
+private struct PDFPreview: View {
+    let data: Data
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            PDFKitView(data: data)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Fertig") { dismiss() }.foregroundStyle(Theme.accent)
+                    }
+                }
+        }
+        .preferredColorScheme(.dark)
+    }
+}
+
+private struct PDFKitView: UIViewRepresentable {
+    let data: Data
+    func makeUIView(context: Context) -> PDFView {
+        let v = PDFView()
+        v.document = PDFDocument(data: data)
+        v.autoScales = true
+        v.displayMode = .singlePageContinuous
+        v.displayDirection = .vertical
+        v.backgroundColor = .black
+        return v
+    }
+    func updateUIView(_ uiView: PDFView, context: Context) {
+        if uiView.document == nil { uiView.document = PDFDocument(data: data) }
     }
 }
 
