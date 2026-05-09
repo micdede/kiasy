@@ -18,6 +18,7 @@ struct ContentView: View {
     // Attachment-Pipeline
     @State private var pendingAttachments: [ChatMessage.LocalAttachment] = []
     @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showPhotosPicker = false
     @State private var showFileImporter = false
 
     private let api = JarvisAPI()
@@ -218,10 +219,13 @@ struct ContentView: View {
             }
 
             // Anhängen-Button (Photos + Files Menu)
+            // PhotosPicker im Menu funktioniert nicht (Apple-Bug, Menu schluckt
+            // Tap-Geste). Workaround: Menu setzt nur Flag, .photosPicker-Modifier
+            // außen am VStack zeigt den Picker modal.
             Menu {
-                PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                    Label("Foto auswählen", systemImage: "photo")
-                }
+                Button {
+                    showPhotosPicker = true
+                } label: { Label("Foto auswählen", systemImage: "photo") }
                 Button {
                     showFileImporter = true
                 } label: { Label("Datei (PDF) auswählen", systemImage: "doc") }
@@ -298,7 +302,13 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.18), value: inputText.isEmpty)
         .animation(.easeInOut(duration: 0.18), value: tts.isSpeaking)
         .animation(.easeInOut(duration: 0.18), value: pendingAttachments.count)
-        // Photos-Picker → Daten extrahieren + zu pendingAttachments
+        // Photos-Picker als Modifier (funktioniert auch wenn Menu offen war)
+        .photosPicker(
+            isPresented: $showPhotosPicker,
+            selection: $photoPickerItem,
+            matching: .images
+        )
+        // Foto-Auswahl → Daten extrahieren + zu pendingAttachments
         .onChange(of: photoPickerItem) { _, item in
             guard let item else { return }
             Task { await loadPhotoPickerItem(item) }
