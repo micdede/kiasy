@@ -4,7 +4,6 @@ struct ContentView: View {
     @EnvironmentObject var settings: AppSettings
     @StateObject private var speech = SpeechService()
     @StateObject private var tts = TTSService()
-    @StateObject private var wake = WakeWordService()
     @State private var messages: [ChatMessage] = []
     @State private var pending: ChatMessage? = nil
     @State private var sending = false
@@ -26,7 +25,7 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .sheet(isPresented: $showSettings) { SettingsView(messages: $messages, wake: wake) }
+        .sheet(isPresented: $showSettings) { SettingsView(messages: $messages) }
         .fullScreenCover(isPresented: $showConversation) {
             ConversationView(speech: speech, tts: tts, sending: $sending)
                 .environmentObject(settings)
@@ -34,24 +33,10 @@ struct ContentView: View {
         .task {
             _ = await speech.requestPermissions()
             await loadHistoryIfEmpty()
-            // Wake-Word: Detection-Handler setzen, dann initial konfigurieren+starten
-            wake.onDetected = { Task { @MainActor in handleWakeDetection() } }
-            applyWakeSettings()
         }
-        // AccessKey oder Enable-Toggle geändert → neu konfigurieren
-        .onChange(of: settings.picovoiceAccessKey) { _, _ in applyWakeSettings() }
-        .onChange(of: settings.wakeWordEnabled)    { _, _ in applyWakeSettings() }
-        // Mic-Konflikt + zentrales Auto-Send beim Stop
+        // Auto-Send beim Mic-Stop — egal ob User-Stop, isFinal vom Recognizer
+        // oder Silence-Timeout im Konversations-Modus.
         .onChange(of: speech.isListening) { wasListening, listening in
-            // Wake-Word-Mic-Konflikt
-            if listening {
-                wake.stop()
-            } else if settings.wakeWordEnabled {
-                wake.start()
-            }
-            // Auto-Send: wenn das Mic gerade aus ging und Transcript da ist
-            // → senden. Greift egal ob User-Stop, isFinal vom Recognizer oder
-            // Silence-Timeout im Konversations-Modus.
             if wasListening && !listening {
                 let text = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !text.isEmpty {
@@ -95,43 +80,11 @@ struct ContentView: View {
     }
 
     /// Expliziter User-Trigger (Action-Button, Doppel-Tap auf Header, Siri, …).
-    /// Anders als Wake-Word: ignoriert das Barge-In-Setting — wer einen Knopf
-    /// drückt, will reden, also wird TTS immer abgewürgt.
+    /// TTS wird immer abgewürgt — wer einen Knopf drückt, will sofort reden.
     @MainActor
     private func triggerListeningExplicit() {
         if speech.isListening { return }
         tts.stop()
-        Task { @MainActor in await toggleListening() }
-    }
-
-    /// Bringt den Wake-Service in den von den Settings gewünschten Zustand.
-    /// Idempotent — bei gleichem Key + Enable-Status passiert nichts.
-    @MainActor
-    private func applyWakeSettings() {
-        guard settings.wakeWordEnabled, !settings.picovoiceAccessKey.isEmpty else {
-            wake.shutdown()
-            return
-        }
-        wake.configure(accessKey: settings.picovoiceAccessKey)
-        // Nicht starten wenn gerade SpeechService läuft — sonst Mic-Konflikt
-        if !speech.isListening { wake.start() }
-    }
-
-    /// "Jarvis" wurde erkannt. Strategie:
-    /// - schon am Aufnehmen → ignorieren
-    /// - TTS spricht + Barge-In an → TTS abwürgen, dann starten
-    /// - TTS spricht + Barge-In aus → ignorieren (User soll Antwort zu Ende hören)
-    /// - sonst → Aufnahme starten
-    @MainActor
-    private func handleWakeDetection() {
-        if speech.isListening { return }
-        if tts.isSpeaking {
-            if settings.bargeInEnabled {
-                tts.stop()
-            } else {
-                return
-            }
-        }
         Task { @MainActor in await toggleListening() }
     }
 

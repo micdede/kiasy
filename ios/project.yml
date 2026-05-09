@@ -5,12 +5,6 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 
-# ─── Swift Packages ──────────────────────────────────────────
-packages:
-  Porcupine:
-    url: https://github.com/Picovoice/porcupine.git
-    from: "3.0.0"
-
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -31,9 +25,6 @@ targets:
       # angelegt aber nicht kompiliert (kein PBXResourcesBuildPhase).
       - path: JarvisApp/Resources/Assets.xcassets
     # resources: leer — Asset-Catalog liegt unter sources (siehe oben)
-    dependencies:
-      - package: Porcupine
-        product: Porcupine
     info:
       path: JarvisApp/Resources/Info.plist
       properties:

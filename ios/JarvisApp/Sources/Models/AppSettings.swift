@@ -31,12 +31,6 @@ final class AppSettings: ObservableObject {
     @Published var edgeVoice:      String { didSet { sync("edgeVoice",      edgeVoice) } }
     /// true = während Tokens, false = am Ende
     @Published var speakStreaming: Bool   { didSet { sync("speakStreaming", speakStreaming) } }
-    /// Picovoice Console AccessKey (https://console.picovoice.ai). Ohne den ist Wake-Word inaktiv.
-    @Published var picovoiceAccessKey: String { didSet { sync("picovoiceAccessKey", picovoiceAccessKey) } }
-    /// Wake-Word "Jarvis" aktiv (kontinuierliches Hören)
-    @Published var wakeWordEnabled: Bool { didSet { sync("wakeWordEnabled", wakeWordEnabled) } }
-    /// Barge-In: während TTS spricht "Jarvis" sagen → TTS abbrechen + neue Aufnahme
-    @Published var bargeInEnabled: Bool { didSet { sync("bargeInEnabled", bargeInEnabled) } }
     /// Konversations-Modus: nach TTS automatisch wieder Mic auf für Folgefrage. Stoppt nach 6s Stille.
     @Published var conversationMode: Bool { didSet { sync("conversationMode", conversationMode) } }
     /// Voice-Mode Visualisierung: "sphere" (Default) oder "blackhole"
@@ -66,9 +60,6 @@ final class AppSettings: ObservableObject {
         self.piperVoice     = Self.read("piperVoice",     kv: kv, ud: ud, default: "")
         self.edgeVoice      = Self.read("edgeVoice",      kv: kv, ud: ud, default: "")
         self.speakStreaming = Self.readBool("speakStreaming", kv: kv, ud: ud, default: false)
-        self.picovoiceAccessKey = Self.read("picovoiceAccessKey", kv: kv, ud: ud, default: "")
-        self.wakeWordEnabled    = Self.readBool("wakeWordEnabled", kv: kv, ud: ud, default: false)
-        self.bargeInEnabled     = Self.readBool("bargeInEnabled",  kv: kv, ud: ud, default: true)
         self.conversationMode   = Self.readBool("conversationMode", kv: kv, ud: ud, default: false)
         self.orbStyle           = Self.read("orbStyle",      kv: kv, ud: ud, default: "sphere")
         self.particleShape      = Self.read("particleShape", kv: kv, ud: ud, default: "circle")
@@ -124,9 +115,6 @@ final class AppSettings: ObservableObject {
                 case "piperVoice":     if let v = kv.string(forKey: key) { piperVoice     = v }
                 case "edgeVoice":      if let v = kv.string(forKey: key) { edgeVoice      = v }
                 case "speakStreaming": speakStreaming = kv.bool(forKey: key)
-                case "picovoiceAccessKey": if let v = kv.string(forKey: key) { picovoiceAccessKey = v }
-                case "wakeWordEnabled": wakeWordEnabled = kv.bool(forKey: key)
-                case "bargeInEnabled":  bargeInEnabled  = kv.bool(forKey: key)
                 case "conversationMode": conversationMode = kv.bool(forKey: key)
                 case "orbStyle":      if let v = kv.string(forKey: key) { orbStyle = v }
                 case "particleShape": if let v = kv.string(forKey: key) { particleShape = v }

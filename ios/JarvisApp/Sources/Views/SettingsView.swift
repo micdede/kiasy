@@ -15,7 +15,6 @@ struct SettingsView: View {
     @EnvironmentObject var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
     @Binding var messages: [ChatMessage]
-    @ObservedObject var wake: WakeWordService
     @State private var probeResult: String = ""
     @State private var probing = false
     @State private var piperVoices: [PiperVoice] = []
@@ -128,33 +127,6 @@ struct SettingsView: View {
                     Text("Sphere: rotierende Punktwolke. Schwarzes Loch: Akkretionsscheibe — beim Hören laufen Punkte rein, beim Denken rotieren sie nur, beim Sprechen kommen sie raus.")
                         .font(.caption2)
                 }
-                Section {
-                    SecureField("Picovoice AccessKey", text: $settings.picovoiceAccessKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Toggle("Wake-Word \"Jarvis\" aktiv", isOn: $settings.wakeWordEnabled)
-                        .disabled(settings.picovoiceAccessKey.isEmpty)
-                    Toggle("Barge-In (während TTS unterbrechen)", isOn: $settings.bargeInEnabled)
-                        .disabled(!settings.wakeWordEnabled)
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(wakeStatusColor)
-                            .frame(width: 8, height: 8)
-                        Text(wakeStatusText)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                    }
-                    if let detected = wake.lastDetectedAt {
-                        Text("Letztes \"Jarvis\" erkannt: \(detected, style: .relative)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Wake-Word")
-                } footer: {
-                    Text("Picovoice Console (kostenlos, 3 Geräte): https://console.picovoice.ai\nNach Registrierung den AccessKey aus dem Dashboard hier einfügen. Wake-Word braucht ständigen Mic-Zugriff (~5% CPU, Background-Audio entitlement ist gesetzt).")
-                        .font(.caption2)
-                }
                 Section("Aktionen") {
                     Button(role: .destructive) {
                         showClearConfirm = true
@@ -194,26 +166,6 @@ struct SettingsView: View {
             }
         }
         .tint(Theme.accent)
-    }
-
-    private var wakeStatusColor: Color {
-        switch wake.status {
-        case .idle:      return Color.gray
-        case .ready:     return Color.yellow
-        case .listening: return Color.green
-        case .error:     return Color.red
-        }
-    }
-
-    private var wakeStatusText: String {
-        switch wake.status {
-        case .idle:      return settings.wakeWordEnabled
-                                ? (settings.picovoiceAccessKey.isEmpty ? "AccessKey fehlt" : "aus")
-                                : "deaktiviert"
-        case .ready:     return "bereit (nicht aktiv)"
-        case .listening: return "lauscht auf \"Jarvis\""
-        case .error(let msg): return "Fehler: \(msg)"
-        }
     }
 
     private func clearLocal() {
@@ -328,5 +280,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(messages: .constant([]), wake: WakeWordService()).environmentObject(AppSettings())
+    SettingsView(messages: .constant([])).environmentObject(AppSettings())
 }

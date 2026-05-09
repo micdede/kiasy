@@ -70,7 +70,6 @@ ios/
     │   ├── Services/
     │   │   ├── SpeechService.swift   — SFSpeechRecognizer
     │   │   ├── TTSService.swift      — iOS / Piper / Edge-Routing
-    │   │   ├── WakeWordService.swift — Picovoice Porcupine (Built-in Keyword .jarvis)
     │   │   ├── StartListeningIntent.swift — AppIntent + AppShortcuts (Action-Button/Siri/…)
     │   │   └── JarvisAPI.swift       — actor mit sendStream() + loadHistory()
     │   └── Views/
@@ -103,22 +102,6 @@ Sprechblase/Waveform-Icon im Input-Bar (rechts neben dem Mic) öffnet einen Voll
 - **Shortcuts-App** für eigene Automationen
 
 Zusätzlich in der App selbst: **Doppel-Tap auf den J A R V I S-Wordmark** im Header startet die Aufnahme.
-
-## Wake-Word „Jarvis" (Picovoice Porcupine)
-Always-On Hot-Word-Detection via Built-in Keyword `.jarvis` — kein eigenes Training nötig, ca. 5% CPU.
-
-**Setup:**
-1. Account auf https://console.picovoice.ai (kostenlos, max 3 Geräte/Free-Plan)
-2. AccessKey aus Dashboard kopieren
-3. App → Einstellungen → Wake-Word → Key einfügen + Toggle „Wake-Word aktiv" + optional „Barge-In"
-
-**Verhalten:**
-- Wake-Word erkannt + Aufnahme nicht aktiv → startet sofort Aufnahme
-- Wake-Word erkannt während TTS spricht + Barge-In an → TTS wird abgebrochen, Aufnahme startet
-- Wake-Word erkannt während Aufnahme → ignoriert
-- Wake-Service pausiert automatisch wenn das Mikrofon für STT gebraucht wird
-
-**Status sehen:** Settings-Sheet zeigt Live-Status (idle/ready/lauscht/Fehler) + Zeitpunkt der letzten Detection.
 
 ## Roadmap
 - Streaming-TTS satzweise während Tokens
