@@ -172,9 +172,13 @@ final class VoiceStreamService: NSObject, ObservableObject {
                 }
                 self.receiveLoop()
             case .failure(let err):
-                print("[VoiceWS] receive: \(err.localizedDescription)")
+                print("[VoiceWS] receive error: \(err.localizedDescription)")
+                // Socket tot → aufräumen damit reconnect möglich ist
                 Task { @MainActor in
-                    if self.state != .idle { self.state = .idle }
+                    self.stopPlayback()
+                    self.webSocket  = nil
+                    self.urlSession = nil
+                    self.state = .idle
                 }
             }
         }

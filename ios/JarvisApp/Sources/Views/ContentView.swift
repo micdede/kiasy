@@ -83,11 +83,20 @@ struct ContentView: View {
         .onChange(of: speech.isListening) { wasListening, listening in
             if wasListening && !listening {
                 let text = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
                 if settings.realtimeMode && showConversation {
-                    // Realtime-Modus: Text direkt per WebSocket, kein HTTP-Stream
-                    voiceStream.sendText(text)
+                    if text.isEmpty {
+                        // Nichts gesagt → Mic nach kurzer Pause neu starten
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 400_000_000)
+                            guard showConversation, !speech.isListening,
+                                  voiceStream.state == .idle else { return }
+                            speech.start(silenceTimeout: 2.5)
+                        }
+                    } else {
+                        voiceStream.sendText(text)
+                    }
                 } else {
+                    guard !text.isEmpty else { return }
                     Task { @MainActor in await sendMessage(text) }
                 }
             }

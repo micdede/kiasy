@@ -142,12 +142,16 @@ struct ConversationView: View {
     private func onAppear() {
         previousConversationMode = settings.conversationMode
         settings.conversationMode = true
+        if settings.realtimeMode {
+            // WebSocket reconnecten falls zuvor getrennt (z.B. nach Fehler)
+            voiceStream.connect(settings: settings)
+        }
         Task { @MainActor in
             let ok = await speech.requestPermissions()
             guard ok, !speech.isListening else { return }
             if settings.realtimeMode {
-                // Kürzerer Timeout im Realtime-Modus — flüssigere Konversation
-                speech.start(silenceTimeout: 1.5)
+                // 2.5s damit der User in Ruhe anfangen kann zu sprechen
+                speech.start(silenceTimeout: 2.5)
             } else {
                 guard !tts.isSpeaking else { return }
                 speech.start(silenceTimeout: 6)
@@ -159,7 +163,7 @@ struct ConversationView: View {
         settings.conversationMode = previousConversationMode
         speech.stop()
         if settings.realtimeMode {
-            voiceStream.cancelTurn()
+            voiceStream.disconnect()  // WebSocket sauber schließen
         } else {
             tts.stop()
         }
