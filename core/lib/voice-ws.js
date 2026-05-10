@@ -19,7 +19,7 @@ import * as agent from "./agent.js";
 import * as piper from "./piper.js";
 
 const WS_PORT = Number(process.env.WS_PORT || 8081);
-const MIN_SENTENCE_LEN = 40;  // Kürzere Fragmente nicht einzeln synthetisieren
+const MIN_SENTENCE_LEN = 20;  // Kürzere Fragmente nicht einzeln synthetisieren
 
 export function start() {
   const wss = new WebSocketServer({ port: WS_PORT });
@@ -156,17 +156,36 @@ async function runTurn(ws, chatId, text, signal) {
   }
 }
 
-// Satz-Grenze: .!? gefolgt von Whitespace + Großbuchstabe, oder Doppel-Newline
+// Satz-Grenze: .!? + Whitespace + Großbuchstabe, Doppel-Newline,
+// Komma/Semikolon/Doppelpunkt nach 60+ Zeichen, oder Forced-Split nach 160 Zeichen.
 function sentenceSplit(text) {
-  const re = /^([\s\S]*?[.!?])(\s+)([A-ZÄÖÜÀ-ɏ])/u;
+  // Harter Satzschluss
+  const re = /^([\s\S]*?[.!?])(\s+)([A-ZÄÖÜÀ-ɏ\d"])/u;
   const m = text.match(re);
   if (m) {
     const remainder = m[3] + text.slice(m[1].length + m[2].length + 1);
     return { spoken: m[1].trim(), remainder };
   }
+  // Doppel-Newline
   if (text.includes("\n\n")) {
     const i = text.indexOf("\n\n");
     return { spoken: text.slice(0, i).trim(), remainder: text.slice(i + 2).trimStart() };
+  }
+  // Komma / Semikolon / Doppelpunkt nach mind. 60 Zeichen
+  if (text.length >= 60) {
+    const commaRe = /^([\s\S]{30,}?[,;:])(\s+)(\S)/u;
+    const cm = text.match(commaRe);
+    if (cm) {
+      const remainder = cm[3] + text.slice(cm[1].length + cm[2].length + 1);
+      return { spoken: cm[1].trim(), remainder };
+    }
+  }
+  // Forced-Split nach 160 Zeichen am letzten Leerzeichen
+  if (text.length >= 160) {
+    const idx = text.lastIndexOf(" ", 160);
+    if (idx > 40) {
+      return { spoken: text.slice(0, idx).trim(), remainder: text.slice(idx + 1) };
+    }
   }
   return null;
 }
