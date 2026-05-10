@@ -1,37 +1,37 @@
 import Foundation
 import AVFoundation
 
-/// Echtzeit-Sprachdialog via WebSocket.
-/// Record → Whisper STT → Agent → Piper-Audio-Streaming → AVAudioPlayerNode.
+/// WebSocket-TTS-Empfänger für Echtzeit-Sprachdialog.
+///
+/// STT + Stille-Erkennung übernimmt weiterhin SpeechService (on-device,
+/// kein Whisper-Overhead). VoiceStreamService ist nur für den TTS-Rückkanal:
+///   - sendText()    → schickt transkribierten Text an Server
+///   - audio_start   → richtet AVAudioPlayerNode ein
+///   - audio_chunk   → schedulet PCM-Buffer direkt
+///   - done          → wechselt nach Playback-Ende auf .idle
 ///
 /// Kommunikation mit ContentView über @Published-Properties:
-///   turnStarted    → ContentView hängt User-Bubble + leere Assistant-Bubble an
+///   turnStarted     → ContentView hängt User-Bubble + leere Assistant-Bubble an
 ///   accumulatedText → ContentView aktualisiert Assistant-Bubble live
-///   turnFinished   → ContentView finalisiert Bubble + setzt sending=false
+///   turnFinished    → ContentView finalisiert Bubble + setzt sending=false
 @MainActor
 final class VoiceStreamService: NSObject, ObservableObject {
 
-    enum State: Equatable { case idle, listening, processing, speaking }
+    enum State: Equatable { case idle, processing, speaking }
 
     @Published var state: State = .idle
-    @Published var inputLevel: Float = 0
     @Published var outputLevel: Float = 0
 
     // Signale für ContentView (über .onChange beobachtet)
-    @Published var turnStarted:      Int    = 0   // +1 wenn Transcript da ist
+    @Published var turnStarted:      Int    = 0
     @Published var latestTranscript: String = ""
     @Published var accumulatedText:  String = ""
-    @Published var turnFinished:     Int    = 0   // +1 wenn done + Playback fertig
+    @Published var turnFinished:     Int    = 0
 
     private var webSocket: URLSessionWebSocketTask?
     private var urlSession: URLSession?
 
-    // Recording via AVAudioRecorder (einfacher als AVAudioEngine für file-basiertes STT)
-    private var recorder: AVAudioRecorder?
-    private var recordURL: URL?
-    private var meterTimer: Timer?
-
-    // Playback via AVAudioEngine + AVAudioPlayerNode (chunk-by-chunk scheduling)
+    // Playback via AVAudioEngine + AVAudioPlayerNode
     private let playEngine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     private var playFormat: AVAudioFormat?
@@ -63,7 +63,6 @@ final class VoiceStreamService: NSObject, ObservableObject {
     }
 
     func disconnect() {
-        stopRecording()
         stopPlayback()
         webSocket?.cancel(with: .goingAway, reason: nil)
         webSocket  = nil
@@ -71,78 +70,23 @@ final class VoiceStreamService: NSObject, ObservableObject {
         state = .idle
     }
 
-    // MARK: - Listening
+    // MARK: - Send
 
-    func startListening() {
-        guard state == .idle || state == .speaking else { return }
-        stopPlayback()
-
-        do {
-            let s = AVAudioSession.sharedInstance()
-            try s.setCategory(.record, mode: .measurement)
-            try s.setActive(true)
-        } catch { print("[VoiceWS] record session: \(error)") }
-
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("jarvis_\(Int(Date().timeIntervalSince1970)).wav")
-        recordURL = tmp
-
-        let recSettings: [String: Any] = [
-            AVFormatIDKey:            Int(kAudioFormatLinearPCM),
-            AVSampleRateKey:          16000.0,
-            AVNumberOfChannelsKey:    1,
-            AVLinearPCMBitDepthKey:   16,
-            AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsFloatKey:    false
-        ]
-        do {
-            recorder = try AVAudioRecorder(url: tmp, settings: recSettings)
-            recorder!.isMeteringEnabled = true
-            recorder!.record()
-            state = .listening
-            startMeterTimer()
-        } catch { print("[VoiceWS] recorder: \(error)") }
-    }
-
-    func stopListening() {
-        guard state == .listening else { return }
-        stopRecording()
+    /// Schickt transkribierten Text an den Server (kein Whisper-Overhead).
+    func sendText(_ text: String) {
+        guard !text.isEmpty else { return }
+        latestTranscript = text
+        accumulatedText  = ""
+        turnStarted += 1
         state = .processing
-        sendRecording()
+        sendWS(["type": "text", "text": text])
+        print("[VoiceWS] sendText: \"\(text.prefix(60))\"")
     }
 
-    func stopAll() {
+    func cancelTurn() {
         sendWS(["type": "stop"])
-        stopRecording()
         stopPlayback()
         state = .idle
-    }
-
-    private func stopRecording() {
-        meterTimer?.invalidate(); meterTimer = nil
-        recorder?.stop(); recorder = nil
-        inputLevel = 0
-    }
-
-    private func sendRecording() {
-        guard let url = recordURL, let wav = try? Data(contentsOf: url) else {
-            state = .idle; return
-        }
-        try? FileManager.default.removeItem(at: url)
-        recordURL = nil
-        sendWS(["type": "audio", "data": wav.base64EncodedString()])
-        print("[VoiceWS] sent \(wav.count) bytes")
-    }
-
-    private func startMeterTimer() {
-        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, let rec = self.recorder, rec.isRecording else { return }
-                rec.updateMeters()
-                let dB = rec.averagePower(forChannel: 0)  // -160…0
-                self.inputLevel = max(0, min(1, (dB + 60) / 60))
-            }
-        }
     }
 
     // MARK: - Playback
@@ -179,7 +123,6 @@ final class VoiceStreamService: NSObject, ObservableObject {
         }
         playerNode.scheduleBuffer(buf)
 
-        // Grobe Pegelanzeige aus den ersten Samples
         let n = min(256, Int(frames))
         let lvl = pcm.withUnsafeBytes { ptr -> Float in
             guard let p = ptr.baseAddress?.assumingMemoryBound(to: Int16.self) else { return 0 }
@@ -200,8 +143,6 @@ final class VoiceStreamService: NSObject, ObservableObject {
         outputLevel = 0
     }
 
-    /// Wartet via Sentinel-Buffer bis der PlayerNode alle Chunks abgespielt hat,
-    /// dann idle + turnFinished signalisieren.
     private func waitForPlaybackEnd() {
         guard let fmt = playFormat, playRunning else { finishTurn(); return }
         guard let sentinel = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 1) else {
@@ -247,10 +188,8 @@ final class VoiceStreamService: NSObject, ObservableObject {
         switch type {
 
         case "transcript":
-            let t = (obj["text"] as? String) ?? ""
-            latestTranscript = t
-            accumulatedText  = ""
-            turnStarted += 1
+            // Im text-Modus kommt kein transcript vom Server — ignorieren
+            break
 
         case "text_chunk":
             accumulatedText += (obj["text"] as? String) ?? ""
@@ -282,7 +221,7 @@ final class VoiceStreamService: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Send
+    // MARK: - Helpers
 
     private func sendWS(_ dict: [String: Any]) {
         guard let ws  = webSocket,

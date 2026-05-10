@@ -48,11 +48,10 @@ struct ContentView: View {
                 voiceStream.connect(settings: settings)
             }
         }
-        // Realtime: neuer Turn startet (Transcript angekommen)
+        // Realtime: neuer Turn startet (sendText wurde aufgerufen)
         .onChange(of: voiceStream.turnStarted) { _, _ in
             guard settings.realtimeMode else { return }
-            let userMsg = ChatMessage(role: .user, text: voiceStream.latestTranscript)
-            messages.append(userMsg)
+            messages.append(ChatMessage(role: .user, text: voiceStream.latestTranscript))
             sending = true
             let a = ChatMessage(role: .assistant, text: "", isStreaming: true)
             messages.append(a)
@@ -84,7 +83,11 @@ struct ContentView: View {
         .onChange(of: speech.isListening) { wasListening, listening in
             if wasListening && !listening {
                 let text = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !text.isEmpty {
+                guard !text.isEmpty else { return }
+                if settings.realtimeMode && showConversation {
+                    // Realtime-Modus: Text direkt per WebSocket, kein HTTP-Stream
+                    voiceStream.sendText(text)
+                } else {
                     Task { @MainActor in await sendMessage(text) }
                 }
             }

@@ -18,32 +18,25 @@ struct ConversationView: View {
 
     // MARK: - Computed State
 
+    // Im Realtime-Modus: SpeechService für Mic/Stille, VoiceStreamService für TTS
     private var orbState: OrbState {
+        if speech.isListening                         { return .listening }
         if settings.realtimeMode {
-            switch voiceStream.state {
-            case .listening:  return .listening
-            case .processing: return .thinking
-            case .speaking:   return .speaking
-            case .idle:       return .idle
-            }
+            if voiceStream.state == .processing       { return .thinking }
+            if voiceStream.state == .speaking         { return .speaking }
+        } else {
+            if tts.isSpeaking                         { return .speaking }
+            if sending                                { return .thinking }
         }
-        if speech.isListening { return .listening }
-        if tts.isSpeaking     { return .speaking }
-        if sending            { return .thinking }
         return .idle
     }
 
     private var orbLevel: Double {
-        if settings.realtimeMode {
-            switch voiceStream.state {
-            case .listening: return Double(voiceStream.inputLevel)
-            case .speaking:  return Double(voiceStream.outputLevel)
-            default:         return 0
-            }
-        }
         if speech.isListening { return Double(speech.inputLevel) }
-        if tts.isSpeaking     { return Double(tts.outputLevel) }
-        return 0
+        if settings.realtimeMode {
+            return voiceStream.state == .speaking ? Double(voiceStream.outputLevel) : 0
+        }
+        return tts.isSpeaking ? Double(tts.outputLevel) : 0
     }
 
     private var statusText: String {
@@ -56,11 +49,8 @@ struct ConversationView: View {
     }
 
     private var transcriptText: String? {
-        if settings.realtimeMode {
-            return voiceStream.state == .listening && !voiceStream.latestTranscript.isEmpty
-                ? voiceStream.latestTranscript : nil
-        }
-        return speech.isListening && !speech.transcript.isEmpty ? speech.transcript : nil
+        guard speech.isListening, !speech.transcript.isEmpty else { return nil }
+        return speech.transcript
     }
 
     // MARK: - Body
@@ -152,13 +142,14 @@ struct ConversationView: View {
     private func onAppear() {
         previousConversationMode = settings.conversationMode
         settings.conversationMode = true
-
-        if settings.realtimeMode {
-            voiceStream.startListening()
-        } else {
-            Task { @MainActor in
-                let ok = await speech.requestPermissions()
-                guard ok, !speech.isListening, !tts.isSpeaking else { return }
+        Task { @MainActor in
+            let ok = await speech.requestPermissions()
+            guard ok, !speech.isListening else { return }
+            if settings.realtimeMode {
+                // Kürzerer Timeout im Realtime-Modus — flüssigere Konversation
+                speech.start(silenceTimeout: 1.5)
+            } else {
+                guard !tts.isSpeaking else { return }
                 speech.start(silenceTimeout: 6)
             }
         }
@@ -166,10 +157,10 @@ struct ConversationView: View {
 
     private func onDisappear() {
         settings.conversationMode = previousConversationMode
+        speech.stop()
         if settings.realtimeMode {
-            voiceStream.stopAll()
+            voiceStream.cancelTurn()
         } else {
-            speech.stop()
             tts.stop()
         }
     }
@@ -195,21 +186,20 @@ struct ConversationView: View {
     }
 
     private func tapMainAction() {
-        if settings.realtimeMode {
-            switch voiceStream.state {
-            case .listening:  voiceStream.stopListening()
-            case .speaking:   voiceStream.stopAll()
-            case .processing: return  // läuft — nicht interruptieren
-            case .idle:       voiceStream.startListening()
-            }
-        } else {
-            if speech.isListening {
-                speech.stop()
-            } else if tts.isSpeaking {
-                tts.stop()
-            } else if sending {
+        if speech.isListening {
+            speech.stop()  // im Realtime-Modus → ContentView.onChange sendet Text per WS
+        } else if settings.realtimeMode {
+            if voiceStream.state == .speaking {
+                voiceStream.cancelTurn()
+            } else if voiceStream.state == .processing {
                 return
             } else {
+                speech.start(silenceTimeout: 1.5)
+            }
+        } else {
+            if tts.isSpeaking { tts.stop() }
+            else if sending   { return }
+            else {
                 Task { @MainActor in
                     let ok = await speech.requestPermissions()
                     guard ok else { return }
@@ -224,9 +214,9 @@ struct ConversationView: View {
     private func autoRestart() {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 300_000_000)
-            guard settings.conversationMode,
+            guard settings.conversationMode, !speech.isListening,
                   voiceStream.state == .idle else { return }
-            voiceStream.startListening()
+            speech.start(silenceTimeout: 1.5)
         }
     }
 
