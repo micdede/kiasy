@@ -72,9 +72,11 @@ final class SpeechService: NSObject, ObservableObject {
             isListening = true
             listenStartTime = Date()
 
-            // Silence-Timer: feuert wenn so lange kein Recognizer-Update kommt
+            // Initialer Fallback-Timer mit Warmup-Puffer: stoppt das Mic falls der
+            // Recognizer nichts Verwertbares liefert. Wird durch echte Speech-Ergebnisse
+            // auf den normalen silenceTimeout zurückgesetzt.
             if let timeout = silenceTimeout {
-                scheduleSilenceTimeout(timeout)
+                scheduleSilenceTimeout(max(timeout + 2.0, 4.0))
             }
 
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
@@ -82,8 +84,9 @@ final class SpeechService: NSObject, ObservableObject {
                 Task { @MainActor in
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
-                        // Recognizer hat geliefert → Silence-Timer reset
-                        if let timeout = silenceTimeout {
+                        // Silence-Timer nur bei echtem Inhalt resetten — Warmup-Artefakte
+                        // (leeres Transcript) sollen den Fallback-Timer nicht stören.
+                        if let timeout = silenceTimeout, !self.transcript.isEmpty {
                             self.scheduleSilenceTimeout(timeout)
                         }
                     }
