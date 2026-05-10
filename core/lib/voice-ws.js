@@ -97,16 +97,17 @@ async function runTurn(ws, chatId, text, signal) {
     ttsChain = ttsChain.then(async () => {
       if (signal.aborted || ws.readyState !== 1) return;
       try {
-        await piper.synthesizeStreaming(s, (chunk, fmt) => {
-          if (signal.aborted || ws.readyState !== 1) return;
-          if (!audioStartSent) {
-            audioStartSent = true;
-            safeSend(ws, { type: "audio_start", format: fmt || {} });
-          }
-          safeSend(ws, { type: "audio_chunk", data: chunk.toString("base64") });
-        });
+        // synthesize gibt { pcm: Buffer, format: {rate,width,channels} } zurück.
+        // synthesizeStreaming hatte "# channels not specified"-Bug in wyoming-piper.
+        const { pcm, format } = await piper.synthesize(s);
+        if (signal.aborted || ws.readyState !== 1) return;
+        if (!audioStartSent) {
+          audioStartSent = true;
+          safeSend(ws, { type: "audio_start", format });
+        }
+        safeSend(ws, { type: "audio_chunk", data: pcm.toString("base64") });
       } catch (e) {
-        console.error("[voice-ws] piper error:", e.message);
+        console.error("[voice-ws] piper error:", e.message, "| text:", s.slice(0, 60));
       }
     });
   }
