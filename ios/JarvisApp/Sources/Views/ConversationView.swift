@@ -6,6 +6,38 @@ import SwiftUI
 /// Zwei Modi:
 ///   realtimeMode=false  → SpeechService (SFSpeechRecognizer) + TTSService
 ///   realtimeMode=true   → VoiceStreamService (WebSocket + Whisper + Piper-Streaming)
+private let thinkingPhrases: [String] = [
+    // technisch-selbstbewusst
+    "Kalkuliere…", "Optimiere Antwort…", "Neuronales Netz warm…",
+    "Verarbeite Eingabe…", "Inferenz läuft…", "Tokenisiere Gedanken…",
+    "Aktiviere Denkapparat…", "Quantifiziere Möglichkeiten…",
+    "Mustererkennung aktiv…", "Semantik wird analysiert…",
+    "Kontextualisiere…", "Gewichte Parameter…",
+    // launig / witzig
+    "Frage Deep Thought…", "Zähle zu 42…", "Kratze virtuellen Kopf…",
+    "Frage Tony Stark…", "Konsultiere das Orakel…", "Lese Teeblätter…",
+    "Schau in die Kristallkugel…", "Befrage die Götter…",
+    "Würfle mit dem Universum…", "Bitte kurz um Ruhe…",
+    "Aktiviere Turbo-Hirn…", "Starte Gedankenprotokoll…",
+    "Lade Weisheit hoch…", "Kompiliere Klugheit…",
+    "Suche in allen Paralleluniversen…", "Frage Sherlock…",
+    "Konsultiere Einstein…", "Wühle im Wissensschatz…",
+    "Philosophiere kurz…", "Taste die Existenz…",
+    // dramatisch
+    "Durchforste das Universum…", "Ergründe die Tiefen…",
+    "Durchleuchte die Frage…", "Scanme Wissensmatrix…",
+    "Überbrücke neuronale Synapsen…", "Entfalte Denkfalten…",
+    "Streife durch Datennebel…", "Tauche in Informationsozean…",
+    // nüchtern / ehrlich
+    "Hm.", "Gute Frage.", "Kommt drauf an…", "Interessant.",
+    "Einen Moment.", "Ich überlege.", "Fast fertig…", "Gleich.",
+    "Noch ein Augenblick…", "Kurz bitte…",
+    // JARVIS-spezifisch
+    "Initiiere Denksequenz…", "JARVIS denkt nach…",
+    "Hauptprozessor bei 100%…", "Lade besten Gedanken…",
+    "Bin gleich zurück…", "Synapse feuert…",
+]
+
 struct ConversationView: View {
     @EnvironmentObject var settings: AppSettings
     @ObservedObject var speech:      SpeechService
@@ -15,6 +47,9 @@ struct ConversationView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var previousConversationMode: Bool = false
+    @State private var thinkingWord: String = "Kalkuliere…"
+    @State private var thinkingWordVisible: Bool = true
+    @State private var thinkingTask: Task<Void, Never>? = nil
 
     // MARK: - Computed State
 
@@ -43,7 +78,7 @@ struct ConversationView: View {
         switch orbState {
         case .idle:      return "warte auf dich…"
         case .listening: return "ich höre…"
-        case .thinking:  return "ich denke nach…"
+        case .thinking:  return thinkingWord
         case .speaking:  return "ich spreche…"
         }
     }
@@ -93,7 +128,9 @@ struct ConversationView: View {
                     .tracking(0.5)
                     .foregroundStyle(orbState.primaryColor)
                     .shadow(color: orbState.primaryColor.opacity(0.5), radius: 6)
+                    .opacity(thinkingWordVisible ? 1 : 0)
                     .padding(.top, 24)
+                    .animation(.easeInOut(duration: 0.35), value: thinkingWordVisible)
                     .animation(.easeInOut(duration: 0.3), value: statusText)
 
                 if let t = transcriptText {
@@ -123,6 +160,13 @@ struct ConversationView: View {
         .preferredColorScheme(.dark)
         .onAppear { onAppear() }
         .onDisappear { onDisappear() }
+        .onChange(of: orbState) { _, newState in
+            if newState == .thinking {
+                startThinkingCycle()
+            } else {
+                stopThinkingCycle()
+            }
+        }
         // Realtime-Modus: nach jedem Turn automatisch wieder Mic auf
         .onChange(of: voiceStream.turnFinished) { _, _ in
             if settings.realtimeMode && settings.conversationMode {
@@ -231,6 +275,40 @@ struct ConversationView: View {
                   !speech.isListening, !sending, !tts.isSpeaking else { return }
             speech.start(silenceTimeout: 6)
         }
+    }
+
+    // MARK: - Thinking Cycle
+
+    private func startThinkingCycle() {
+        thinkingTask?.cancel()
+        thinkingWord = thinkingPhrases.randomElement() ?? "Kalkuliere…"
+        thinkingWordVisible = true
+        thinkingTask = Task { @MainActor in
+            var used: Set<String> = [thinkingWord]
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_800_000_000)
+                guard !Task.isCancelled else { break }
+                // Fade out
+                thinkingWordVisible = false
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard !Task.isCancelled else { break }
+                // Pick next phrase — avoid immediate repeats, reset pool when exhausted
+                if used.count >= thinkingPhrases.count { used.removeAll() }
+                let next = thinkingPhrases.filter { !used.contains($0) }.randomElement()
+                    ?? thinkingPhrases.randomElement()
+                    ?? thinkingWord
+                used.insert(next)
+                thinkingWord = next
+                // Fade in
+                thinkingWordVisible = true
+            }
+        }
+    }
+
+    private func stopThinkingCycle() {
+        thinkingTask?.cancel()
+        thinkingTask = nil
+        thinkingWordVisible = true
     }
 }
 
