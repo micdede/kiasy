@@ -2,6 +2,8 @@
 
 import express from "express";
 import { readFileSync } from "node:fs";
+import os from "node:os";
+import { execSync } from "node:child_process";
 
 const PORT = Number(process.env.PORT || 3000);
 const CORE_URL = process.env.CORE_URL || "http://kiasy-core:8080";
@@ -13,9 +15,54 @@ const app = express();
 app.disable("x-powered-by");
 app.use(express.json());
 
-app.get("/health", (req, res) => {
+app.get("/ping", (req, res) => {
   res.json({ ok: true, service: "kiasy-monitor", version: pkg.version,
              uptime_s: Math.round((Date.now() - STARTED) / 1000), core_url: CORE_URL });
+});
+
+// ─── Hardware-Metriken (lokal, nicht an core proxied) ────────
+app.get("/health/hw", (req, res) => {
+  try {
+    const cpus = os.cpus();
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const memPct = Math.round((usedMem / totalMem) * 100);
+    const load = os.loadavg();
+
+    // Disk via df
+    let disk = { total: "?", used: "?", free: "?", pct: 0, raw: "" };
+    try {
+      const dfLine = execSync("df -h / | tail -1", { timeout: 3000 }).toString().trim();
+      const parts = dfLine.split(/\s+/);
+      disk = { total: parts[1], used: parts[2], free: parts[3], pct: parseInt(parts[4] || "0"), raw: dfLine };
+    } catch (_) {}
+
+    // Temperature
+    let temp_c = null;
+    try {
+      const raw = readFileSync("/sys/class/thermal/thermal_zone0/temp", "utf8").trim();
+      temp_c = Math.round(parseInt(raw) / 1000);
+    } catch (_) {}
+
+    // Uptime
+    const uptimeSec = Math.round(os.uptime());
+    const d = Math.floor(uptimeSec / 86400);
+    const h = Math.floor((uptimeSec % 86400) / 3600);
+    const m = Math.floor((uptimeSec % 3600) / 60);
+    const uptimeStr = `${d}d ${h}h ${m}m`;
+
+    res.json({
+      cpu: { model: cpus[0]?.model || "unknown", cores: cpus.length, load_1: load[0], load_5: load[1], load_15: load[2] },
+      memory: { total_bytes: totalMem, used_bytes: usedMem, free_bytes: freeMem, pct: memPct,
+                total: (totalMem / 1073741824).toFixed(1) + " GB", used: (usedMem / 1073741824).toFixed(1) + " GB" },
+      disk,
+      uptime: uptimeStr,
+      temp_c
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Generischer API-Proxy zu kiasy-core ────────────────────
@@ -650,31 +697,256 @@ function newsBody() {
 
 function healthBody() {
   return `
-    <div class="page-head"><h2>Health</h2><button class="btn" onclick="check()">↻ check</button></div>
-    <div id="health-grid" class="cards"></div>
-    <h3 style="margin-top:24px">Status-Snapshot</h3>
-    <pre id="status-json" class="result"></pre>
     <style>
-      .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
-      .health-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
-      .health-card h4 { font-size:13px; color:var(--text-dim); text-transform:uppercase; margin-bottom:8px; }
-      .health-card .status { font-size:22px; font-weight:600; }
-      .health-card .status.ok { color:var(--ok); }
-      .health-card .status.err { color:var(--err); }
-      .health-card small { color:var(--text-dim); font-family:var(--mono); font-size:11px; }
-      .result { background:var(--bg-card); border:1px solid var(--border); padding:16px; border-radius:var(--radius); white-space:pre-wrap; max-height:400px; overflow:auto; font-size:12px; }
-    </style>
-    <script>
-      async function check(){
-        document.getElementById('health-grid').innerHTML = 'lade…';
-        const [h, s] = await Promise.all([fetch('/api/health/check').then(r=>r.json()), fetch('/api/status').then(r=>r.json())]);
-        document.getElementById('health-grid').innerHTML = h.checks.map(c=>\`
-          <div class="health-card"><h4>\${c.name}</h4><div class="status \${c.ok?'ok':'err'}">\${c.ok?'online':'offline'}</div>
-          <small>\${c.latency_ms}ms\${c.error?' · '+c.error:''}</small></div>
-        \`).join('');
-        document.getElementById('status-json').textContent = JSON.stringify(s, null, 2);
+      .h-page-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:8px; }
+      .h-page-head h2 { margin:0; }
+      .h-ts { font-size:12px; color:var(--text-dim); font-family:var(--mono); }
+      .h-actions { display:flex; gap:8px; align-items:center; }
+
+      /* Section titles */
+      .sec-title { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-dim);
+                   border-bottom:1px solid var(--border); padding-bottom:6px; margin:24px 0 14px; }
+
+      /* Hardware metric cards */
+      .hw-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; }
+      .hw-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; }
+      .hw-card .hw-label { font-size:11px; text-transform:uppercase; color:var(--text-dim); margin-bottom:6px; letter-spacing:.05em; }
+      .hw-card .hw-val { font-size:22px; font-weight:700; font-family:var(--mono); color:var(--text); line-height:1.1; }
+      .hw-card .hw-sub { font-size:11px; color:var(--text-dim); margin-top:4px; }
+      .hw-bar-wrap { margin-top:10px; background:var(--bg-elevated); border-radius:4px; height:6px; overflow:hidden; }
+      .hw-bar { height:6px; border-radius:4px; transition:width .4s; }
+      .bar-ok  { background:var(--ok); }
+      .bar-warn { background:var(--warn); }
+      .bar-err  { background:var(--err); }
+
+      /* Services table */
+      .svc-table { width:100%; border-collapse:collapse; }
+      .svc-table th { font-size:11px; text-transform:uppercase; color:var(--text-dim); padding:6px 10px; text-align:left; border-bottom:1px solid var(--border); }
+      .svc-table td { padding:9px 10px; border-bottom:1px solid var(--border); font-size:13px; }
+      .svc-table tr:last-child td { border-bottom:none; }
+      .badge { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:100px; font-size:12px; font-weight:600; }
+      .badge.ok  { background:rgba(111,229,164,0.15); color:var(--ok); border:1px solid var(--ok); }
+      .badge.err { background:rgba(255,107,122,0.15); color:var(--err); border:1px solid var(--err); }
+      .ms { font-family:var(--mono); font-size:11px; color:var(--text-dim); }
+      .svc-err { font-family:var(--mono); font-size:11px; color:var(--err); }
+
+      /* Container rows */
+      .ct-row { display:flex; align-items:center; padding:10px 14px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:8px; gap:12px; }
+      .ct-name { font-family:var(--mono); font-size:13px; flex:1; }
+      .ct-status { flex:0 0 120px; }
+      .ct-action { flex-shrink:0; }
+      .ct-msg { font-size:11px; color:var(--accent); margin-left:8px; }
+
+      /* Systemaktionen */
+      .sys-box { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+      .sys-box .dim { font-size:12px; color:var(--text-dim); margin-top:10px; }
+
+      @media(max-width:500px){
+        .hw-grid { grid-template-columns:1fr 1fr; }
+        .ct-status { display:none; }
       }
-      check();
+    </style>
+
+    <div class="h-page-head">
+      <h2>Health</h2>
+      <div class="h-actions">
+        <span class="h-ts">zuletzt aktualisiert: <span id="h-ts">–</span></span>
+        <button class="btn" onclick="refreshAll()">↻ refresh</button>
+      </div>
+    </div>
+
+    <!-- Hardware -->
+    <h3 class="sec-title">Hardware</h3>
+    <div id="hw-grid" class="hw-grid">
+      <div class="hw-card"><div class="hw-label">CPU</div><div class="hw-val">–</div></div>
+    </div>
+
+    <!-- Dienste -->
+    <h3 class="sec-title">Dienste</h3>
+    <div style="overflow-x:auto;">
+      <table class="svc-table">
+        <thead><tr><th>Service</th><th>Status</th><th>Latenz</th><th>Detail</th></tr></thead>
+        <tbody id="svc-body"><tr><td colspan="4" class="dim">lade…</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Docker Container -->
+    <h3 class="sec-title">Docker Container</h3>
+    <div id="ct-list">lade…</div>
+
+    <!-- Systemaktionen -->
+    <h3 class="sec-title">Systemaktionen</h3>
+    <div class="sys-box">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button class="btn primary" onclick="stackRestart()">↻ Stack restart</button>
+        <span id="stack-msg" class="ct-msg"></span>
+      </div>
+      <p class="dim">Startet kiasy-core und kiasy-monitor nacheinander neu. Core-Neustart dauert ~5–10s, Monitor-Seite lädt danach automatisch neu.</p>
+      <p class="dim" style="margin-top:6px;">Hardware-Reboot: noch nicht implementiert</p>
+    </div>
+
+    <script>
+    const CONTAINERS = [
+      'kiasy-core','kiasy-monitor','kiasy-caddy',
+      'kiasy-piper','kiasy-whisper','kiasy-ollama','kiasy-searxng','kiasy-qdrant'
+    ];
+
+    // Map service-check names to container names (for status inference)
+    const SVC_TO_CT = {
+      ollama: 'kiasy-ollama', qdrant: 'kiasy-qdrant',
+      whisper: 'kiasy-whisper', searxng: 'kiasy-searxng', piper: 'kiasy-piper'
+    };
+
+    let lastSvcChecks = [];
+
+    function barClass(pct) {
+      if (pct < 70) return 'bar-ok';
+      if (pct < 88) return 'bar-warn';
+      return 'bar-err';
+    }
+
+    async function loadHw() {
+      try {
+        const d = await fetch('/health/hw').then(r => r.json());
+        const load1 = d.cpu.load_1.toFixed(2);
+        const loadPct = Math.min(100, Math.round((d.cpu.load_1 / d.cpu.cores) * 100));
+        const tempHtml = d.temp_c != null
+          ? \`<div class="hw-card"><div class="hw-label">CPU Temp</div><div class="hw-val">\${d.temp_c}°C</div></div>\`
+          : '';
+        document.getElementById('hw-grid').innerHTML = \`
+          <div class="hw-card">
+            <div class="hw-label">CPU Load</div>
+            <div class="hw-val">\${load1}</div>
+            <div class="hw-sub">\${d.cpu.cores} Kerne · 1/5/15min: \${d.cpu.load_1.toFixed(2)} / \${d.cpu.load_5.toFixed(2)} / \${d.cpu.load_15.toFixed(2)}</div>
+            <div class="hw-bar-wrap"><div class="hw-bar \${barClass(loadPct)}" style="width:\${loadPct}%"></div></div>
+          </div>
+          <div class="hw-card">
+            <div class="hw-label">RAM</div>
+            <div class="hw-val">\${d.memory.pct}%</div>
+            <div class="hw-sub">\${d.memory.used} / \${d.memory.total}</div>
+            <div class="hw-bar-wrap"><div class="hw-bar \${barClass(d.memory.pct)}" style="width:\${d.memory.pct}%"></div></div>
+          </div>
+          <div class="hw-card">
+            <div class="hw-label">Disk /</div>
+            <div class="hw-val">\${d.disk.pct}%</div>
+            <div class="hw-sub">\${d.disk.used} / \${d.disk.total} · frei: \${d.disk.free}</div>
+            <div class="hw-bar-wrap"><div class="hw-bar \${barClass(d.disk.pct)}" style="width:\${d.disk.pct}%"></div></div>
+          </div>
+          <div class="hw-card">
+            <div class="hw-label">Uptime</div>
+            <div class="hw-val" style="font-size:16px;padding-top:4px;">\${d.uptime}</div>
+          </div>
+          \${tempHtml}
+        \`;
+      } catch (e) {
+        document.getElementById('hw-grid').innerHTML = \`<div class="hw-card"><div class="hw-val" style="color:var(--err)">Fehler</div><div class="hw-sub">\${e.message}</div></div>\`;
+      }
+    }
+
+    async function loadSvcs() {
+      try {
+        const h = await fetch('/api/health/check').then(r => r.json());
+        lastSvcChecks = h.checks || [];
+        document.getElementById('svc-body').innerHTML = lastSvcChecks.map(c => \`
+          <tr>
+            <td><b>\${c.name}</b></td>
+            <td><span class="badge \${c.ok ? 'ok' : 'err'}">\${c.ok ? '✓ online' : '✗ offline'}</span></td>
+            <td><span class="ms">\${c.latency_ms != null ? c.latency_ms + 'ms' : '–'}</span></td>
+            <td>\${c.error ? '<span class="svc-err">' + c.error + '</span>' : ''}</td>
+          </tr>
+        \`).join('');
+        renderContainers();
+      } catch (e) {
+        document.getElementById('svc-body').innerHTML = \`<tr><td colspan="4" style="color:var(--err)">\${e.message}</td></tr>\`;
+      }
+    }
+
+    function ctStatus(name) {
+      // Try to infer from service checks
+      for (const [svcName, ctName] of Object.entries(SVC_TO_CT)) {
+        if (ctName === name) {
+          const chk = lastSvcChecks.find(c => c.name === svcName);
+          if (chk) return chk.ok
+            ? '<span class="badge ok">✓ läuft</span>'
+            : '<span class="badge err">✗ offline</span>';
+        }
+      }
+      return '<span class="badge" style="color:var(--text-dim);border-color:var(--border)">– unbekannt</span>';
+    }
+
+    function renderContainers() {
+      document.getElementById('ct-list').innerHTML = CONTAINERS.map(name => \`
+        <div class="ct-row" id="ct-\${name}">
+          <div class="ct-name">\${name}</div>
+          <div class="ct-status">\${ctStatus(name)}</div>
+          <div class="ct-action">
+            <button class="btn" onclick="restartContainer('\${name}')">↻ Restart</button>
+            <span class="ct-msg" id="msg-\${name}"></span>
+          </div>
+        </div>
+      \`).join('');
+    }
+
+    async function restartContainer(name) {
+      const msgEl = document.getElementById('msg-' + name);
+      msgEl.textContent = '…';
+      try {
+        const r = await fetch('/api/restart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ service: name })
+        });
+        const d = await r.json();
+        if (r.ok) {
+          if (name === 'kiasy-monitor' || name === 'kiasy-core') {
+            msgEl.textContent = 'Container startet neu — Seite lädt in 10s';
+            setTimeout(() => location.reload(), 10000);
+          } else {
+            msgEl.textContent = 'neu gestartet ✓';
+            setTimeout(() => { msgEl.textContent = ''; }, 5000);
+          }
+        } else {
+          msgEl.style.color = 'var(--err)';
+          msgEl.textContent = d.error || 'Fehler';
+        }
+      } catch (e) {
+        msgEl.style.color = 'var(--err)';
+        msgEl.textContent = e.message;
+      }
+    }
+
+    async function stackRestart() {
+      const msg = document.getElementById('stack-msg');
+      msg.textContent = 'Starte core neu…';
+      try {
+        await fetch('/api/restart', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({service:'kiasy-core'}) });
+        msg.textContent = 'core restartet. Starte monitor neu…';
+        setTimeout(async () => {
+          await fetch('/api/restart', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({service:'kiasy-monitor'}) });
+          msg.textContent = 'monitor restartet — Seite lädt in 10s';
+          setTimeout(() => location.reload(), 10000);
+        }, 3000);
+      } catch(e) {
+        msg.style.color = 'var(--err)';
+        msg.textContent = e.message;
+      }
+    }
+
+    function updateTs() {
+      const now = new Date();
+      document.getElementById('h-ts').textContent =
+        now.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    }
+
+    async function refreshAll() {
+      updateTs();
+      await Promise.all([loadHw(), loadSvcs()]);
+    }
+
+    // Initial render of container list immediately (before svc data)
+    renderContainers();
+    refreshAll();
+    setInterval(refreshAll, 20000);
     </script>`;
 }
 
