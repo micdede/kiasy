@@ -86,26 +86,36 @@ export function start() {
 }
 
 async function runTurn(ws, chatId, text, signal) {
+  const t0 = Date.now();
+  const ms = () => `${Date.now() - t0}ms`;
+
   let fullText = "";
   let ttsBuffer = "";
   let audioStartSent = false;
   let ttsChain = Promise.resolve();
+  let firstDelta = true;
+  let sentenceCount = 0;
 
   function flushTTS(sentence) {
     const s = sentence.trim();
     if (!s) return;
+    const sentIdx = ++sentenceCount;
+    const tPiperStart = Date.now();
     ttsChain = ttsChain.then(async () => {
       if (signal.aborted || ws.readyState !== 1) return;
+      console.log(`[voice-ws] ⏱ T=${ms()} piper #${sentIdx} start: "${s.slice(0, 40)}"`);
       try {
         // synthesize gibt { pcm: Buffer, format: {rate,width,channels} } zurück.
         // synthesizeStreaming hatte "# channels not specified"-Bug in wyoming-piper.
         const { pcm, format } = await piper.synthesize(s);
         if (signal.aborted || ws.readyState !== 1) return;
+        console.log(`[voice-ws] ⏱ T=${ms()} piper #${sentIdx} ready (${pcm.length} bytes, ${Date.now()-tPiperStart}ms synthesis)`);
         if (!audioStartSent) {
           audioStartSent = true;
           safeSend(ws, { type: "audio_start", format });
         }
         safeSend(ws, { type: "audio_chunk", data: pcm.toString("base64") });
+        console.log(`[voice-ws] ⏱ T=${ms()} piper #${sentIdx} sent to client`);
       } catch (e) {
         console.error("[voice-ws] piper error:", e.message, "| text:", s.slice(0, 60));
       }
@@ -116,6 +126,10 @@ async function runTurn(ws, chatId, text, signal) {
     if (signal.aborted) break;
 
     if (ev.delta) {
+      if (firstDelta) {
+        firstDelta = false;
+        console.log(`[voice-ws] ⏱ T=${ms()} first LLM delta`);
+      }
       fullText += ev.delta;
       ttsBuffer += ev.delta;
       safeSend(ws, { type: "text_chunk", text: ev.delta });
@@ -137,6 +151,7 @@ async function runTurn(ws, chatId, text, signal) {
   await ttsChain;
 
   if (!signal.aborted) {
+    console.log(`[voice-ws] ⏱ T=${ms()} done sent (${sentenceCount} sentences, ${fullText.length} chars)`);
     safeSend(ws, { type: "done", text: fullText });
   }
 }

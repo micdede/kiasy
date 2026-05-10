@@ -31,6 +31,12 @@ final class VoiceStreamService: NSObject, ObservableObject {
     private var webSocket: URLSessionWebSocketTask?
     private var urlSession: URLSession?
 
+    // Timing
+    private var t0: Date = Date()
+    private var firstTextChunk = false
+    private var firstAudioChunk = false
+    private func ms() -> String { String(format: "%.0fms", Date().timeIntervalSince(t0) * 1000) }
+
     // Playback via AVAudioEngine + AVAudioPlayerNode
     private let playEngine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
@@ -75,12 +81,15 @@ final class VoiceStreamService: NSObject, ObservableObject {
     /// Schickt transkribierten Text an den Server (kein Whisper-Overhead).
     func sendText(_ text: String) {
         guard !text.isEmpty else { return }
+        t0 = Date()
+        firstTextChunk  = false
+        firstAudioChunk = false
         latestTranscript = text
         accumulatedText  = ""
         turnStarted += 1
         state = .processing
         sendWS(["type": "text", "text": text])
-        print("[VoiceWS] sendText: \"\(text.prefix(60))\"")
+        print("[VoiceWS] ⏱ T=0ms text sent: \"\(text.prefix(50))\"")
     }
 
     func cancelTurn() {
@@ -155,6 +164,7 @@ final class VoiceStreamService: NSObject, ObservableObject {
     }
 
     private func finishTurn() {
+        print("[VoiceWS] ⏱ T=\(ms()) playback complete — full turn done")
         stopPlayback()
         state = .idle
         turnFinished += 1
@@ -196,6 +206,10 @@ final class VoiceStreamService: NSObject, ObservableObject {
             break
 
         case "text_chunk":
+            if !firstTextChunk {
+                firstTextChunk = true
+                print("[VoiceWS] ⏱ T=\(ms()) first text_chunk")
+            }
             accumulatedText += (obj["text"] as? String) ?? ""
 
         case "audio_start":
@@ -203,6 +217,7 @@ final class VoiceStreamService: NSObject, ObservableObject {
             let fmt   = obj["format"] as? [String: Any]
             let rate  = (fmt?["rate"]     as? Double) ?? 22050
             let chans = AVAudioChannelCount((fmt?["channels"] as? Int) ?? 1)
+            print("[VoiceWS] ⏱ T=\(ms()) audio_start (\(Int(rate))Hz, \(chans)ch)")
             if let avFmt = AVAudioFormat(commonFormat: .pcmFormatInt16,
                                          sampleRate: rate, channels: chans,
                                          interleaved: true) {
@@ -211,10 +226,15 @@ final class VoiceStreamService: NSObject, ObservableObject {
 
         case "audio_chunk":
             if let b64 = obj["data"] as? String, let pcm = Data(base64Encoded: b64) {
+                if !firstAudioChunk {
+                    firstAudioChunk = true
+                    print("[VoiceWS] ⏱ T=\(ms()) first audio_chunk (\(pcm.count) bytes PCM) → playback starts")
+                }
                 scheduleChunk(pcm)
             }
 
         case "done":
+            print("[VoiceWS] ⏱ T=\(ms()) done received, waiting for playback end")
             waitForPlaybackEnd()
 
         case "error":
