@@ -118,6 +118,7 @@ app.get("/", async (req, res) => {
         ["voice","Voice","🎙","TTS/STT-Test"],
         ["ha-editor","HA","🏠","HA-Devices"],
         ["health","Health","🩺","Container-Status"],
+        ["files","Dateien","📁","Bilder & Dokumente"],
         ["logs","Logs","📜","Live-Logs core"],
         ["backup","Backup","💾","Backups"],
         ["settings","Settings","🛠","Konfiguration"]
@@ -143,6 +144,7 @@ app.get("/voice", (req, res) => res.send(layout("voice", "Voice-Test", voiceBody
 app.get("/backup", (req, res) => res.send(layout("backup", "Backups", backupBody())));
 app.get("/labs", (req, res) => res.send(layout("labs", "Labs", labsBody())));
 app.get("/logs", (req, res) => res.send(layout("logs", "Logs", logsBody())));
+app.get("/files", (req, res) => res.send(layout("files", "Dateien", filesBody())));
 
 app.listen(PORT, "0.0.0.0", () => console.log(`[kiasy-monitor] v${pkg.version} listening on :${PORT}`));
 
@@ -957,6 +959,155 @@ function healthBody() {
     renderContainers();
     refreshAll();
     setInterval(refreshAll, 20000);
+    </script>`;
+}
+
+function filesBody() {
+  return `
+    <div class="page-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      <h2 style="margin:0">Dateien</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="fb-count" class="dim" style="font-size:12px;"></span>
+        <button class="btn" onclick="fbLoad()">↻ refresh</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <button class="btn fb-tab active" data-dir="all"    onclick="fbSetTab(this,'all')">Alle</button>
+      <button class="btn fb-tab"        data-dir="images" onclick="fbSetTab(this,'images')">Bilder</button>
+      <button class="btn fb-tab"        data-dir="exports" onclick="fbSetTab(this,'exports')">Dokumente</button>
+    </div>
+
+    <div id="fb-grid"></div>
+
+    <!-- Lightbox -->
+    <div id="fb-lb" onclick="fbCloseLb()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;cursor:zoom-out;">
+      <img id="fb-lb-img" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 8px 40px #000;" src="">
+    </div>
+
+    <style>
+      .fb-tab.active { background:var(--accent);color:#000;border-color:var(--accent); }
+      .fb-img-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
+      .fb-img-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; position:relative; }
+      .fb-img-card img { width:100%; aspect-ratio:1; object-fit:cover; display:block; cursor:zoom-in; transition:opacity .2s; }
+      .fb-img-card img:hover { opacity:.85; }
+      .fb-img-info { padding:8px 10px; }
+      .fb-img-name { font-size:11px; color:var(--text-dim); font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .fb-img-meta { font-size:10px; color:var(--text-dim); margin-top:2px; }
+      .fb-img-actions { display:flex; gap:6px; padding:0 8px 8px; }
+      .fb-doc-table { width:100%; border-collapse:collapse; }
+      .fb-doc-table th { font-size:11px; text-transform:uppercase; color:var(--text-dim); padding:6px 10px; text-align:left; border-bottom:1px solid var(--border); }
+      .fb-doc-table td { padding:9px 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle; }
+      .fb-doc-table tr:last-child td { border-bottom:none; }
+      .fb-doc-table tr:hover td { background:var(--bg-elevated); }
+      .fb-ext { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-family:var(--mono); background:var(--bg-elevated); color:var(--text-dim); margin-right:4px; }
+      .fb-del { color:var(--err); border-color:var(--err); }
+      .fb-del:hover { background:rgba(255,107,122,.12); }
+      @media(max-width:480px){ .fb-img-grid { grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); } }
+    </style>
+
+    <script>
+    let fbDir = 'all';
+    let fbFiles = [];
+
+    function fbSetTab(el, dir) {
+      document.querySelectorAll('.fb-tab').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      fbDir = dir;
+      fbLoad();
+    }
+
+    function fmtSize(b) {
+      if (b < 1024) return b + ' B';
+      if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+      return (b/1024/1024).toFixed(1) + ' MB';
+    }
+    function fmtDate(ms) {
+      return new Date(ms).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    }
+
+    async function fbLoad() {
+      document.getElementById('fb-grid').innerHTML = '<p class="dim">lade…</p>';
+      try {
+        const d = await fetch('/api/files?dir=' + fbDir).then(r => r.json());
+        fbFiles = d.files || [];
+        document.getElementById('fb-count').textContent = fbFiles.length + ' Datei' + (fbFiles.length !== 1 ? 'en' : '');
+        fbRender();
+      } catch(e) {
+        document.getElementById('fb-grid').innerHTML = \`<p style="color:var(--err)">Fehler: \${e.message}</p>\`;
+      }
+    }
+
+    function fbRender() {
+      const images = fbFiles.filter(f => f.is_image);
+      const docs   = fbFiles.filter(f => !f.is_image);
+      let html = '';
+
+      if (images.length) {
+        html += \`<h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);border-bottom:1px solid var(--border);padding-bottom:6px;margin:0 0 14px;">Bilder (\${images.length})</h3>\`;
+        html += '<div class="fb-img-grid">';
+        html += images.map(f => \`
+          <div class="fb-img-card">
+            <img src="\${f.url}?preview=1" alt="\${f.name}" loading="lazy" onclick="fbOpenLb('\${f.url}?preview=1')">
+            <div class="fb-img-info">
+              <div class="fb-img-name" title="\${f.name}">\${f.name}</div>
+              <div class="fb-img-meta">\${fmtSize(f.size)} · \${fmtDate(f.mtime)}</div>
+            </div>
+            <div class="fb-img-actions">
+              <a class="btn" style="font-size:11px;padding:3px 8px;" href="\${f.url}" download="\${f.name}">↓</a>
+              <button class="btn fb-del" style="font-size:11px;padding:3px 8px;" onclick="fbDelete('\${f.dir}','\${f.name}')">✕</button>
+            </div>
+          </div>
+        \`).join('');
+        html += '</div>';
+        if (docs.length) html += '<div style="margin-top:24px;"></div>';
+      }
+
+      if (docs.length) {
+        html += \`<h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);border-bottom:1px solid var(--border);padding-bottom:6px;margin:0 0 14px;">Dokumente (\${docs.length})</h3>\`;
+        html += '<div style="overflow-x:auto;"><table class="fb-doc-table"><thead><tr><th>Name</th><th>Größe</th><th>Datum</th><th></th></tr></thead><tbody>';
+        html += docs.map(f => \`
+          <tr>
+            <td><span class="fb-ext">\${f.ext}</span>\${f.name}</td>
+            <td style="white-space:nowrap;color:var(--text-dim);font-size:12px;">\${fmtSize(f.size)}</td>
+            <td style="white-space:nowrap;color:var(--text-dim);font-size:12px;">\${fmtDate(f.mtime)}</td>
+            <td style="white-space:nowrap;">
+              <a class="btn" style="font-size:11px;padding:3px 10px;" href="\${f.url}" download="\${f.name}">↓ Download</a>
+              <button class="btn fb-del" style="font-size:11px;padding:3px 8px;margin-left:4px;" onclick="fbDelete('\${f.dir}','\${f.name}')">✕</button>
+            </td>
+          </tr>
+        \`).join('');
+        html += '</tbody></table></div>';
+      }
+
+      if (!images.length && !docs.length) {
+        html = '<p class="dim" style="padding:32px 0;text-align:center;">Noch keine Dateien vorhanden.</p>';
+      }
+      document.getElementById('fb-grid').innerHTML = html;
+    }
+
+    function fbOpenLb(src) {
+      const lb = document.getElementById('fb-lb');
+      document.getElementById('fb-lb-img').src = src;
+      lb.style.display = 'flex';
+    }
+    function fbCloseLb() {
+      document.getElementById('fb-lb').style.display = 'none';
+      document.getElementById('fb-lb-img').src = '';
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fbCloseLb(); });
+
+    async function fbDelete(dir, name) {
+      if (!confirm('Datei löschen: ' + name + '?')) return;
+      const url = dir === 'images' ? '/api/images/' + encodeURIComponent(name) : '/api/files/' + encodeURIComponent(name);
+      try {
+        const r = await fetch(url, { method: 'DELETE' });
+        if (!r.ok) { const d = await r.json(); alert('Fehler: ' + (d.error || r.status)); return; }
+        fbLoad();
+      } catch(e) { alert('Fehler: ' + e.message); }
+    }
+
+    fbLoad();
     </script>`;
 }
 

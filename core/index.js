@@ -459,6 +459,64 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // ─── Files: Liste aller Dateien in exports/ und images/ ────
+    if (url.pathname === "/api/files" && req.method === "GET") {
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const MIME = {
+        csv:"text/csv", json:"application/json", txt:"text/plain", md:"text/markdown",
+        html:"text/html", xml:"application/xml", pdf:"application/pdf",
+        png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg",
+        gif:"image/gif", webp:"image/webp", svg:"image/svg+xml", zip:"application/zip"
+      };
+      const readDir = (dirPath, dirKey) => {
+        if (!fs.existsSync(dirPath)) return [];
+        return fs.readdirSync(dirPath)
+          .filter(f => !f.startsWith(".") && fs.statSync(`${dirPath}/${f}`).isFile())
+          .map(name => {
+            const stat = fs.statSync(`${dirPath}/${name}`);
+            const ext  = name.toLowerCase().split(".").pop() || "";
+            const mime = MIME[ext] || "application/octet-stream";
+            return { name, dir: dirKey, size: stat.size, mtime: stat.mtimeMs, ext, mime,
+                     is_image: mime.startsWith("image/"),
+                     url: `/api/${dirKey}/${encodeURIComponent(name)}` };
+          });
+      };
+      const dirParam = url.searchParams.get("dir") || "all";
+      let files = [];
+      if (dirParam !== "images") files.push(...readDir("/data/exports", "exports"));
+      if (dirParam !== "exports") files.push(...readDir("/data/images", "images"));
+      files.sort((a, b) => b.mtime - a.mtime);
+      return sendJson(200, { count: files.length, files });
+    }
+
+    // ─── Images: Bild-Download/Preview ──────────────────────────
+    {
+      const m = url.pathname.match(/^\/api\/images\/(.+)$/);
+      if (m) {
+        const fs = await import("node:fs");
+        const path = await import("node:path");
+        const filename = decodeURIComponent(m[1]);
+        if (filename.includes("/") || filename.includes("\\") || filename.includes(".."))
+          return sendJson(400, { error: "ungültiger Dateiname" });
+        const filepath = path.resolve("/data/images", filename);
+        if (!filepath.startsWith("/data/images/") || !fs.existsSync(filepath))
+          return sendJson(404, { error: "nicht gefunden" });
+        if (req.method === "DELETE") {
+          fs.unlinkSync(filepath);
+          return sendJson(200, { deleted: filename });
+        }
+        const stat = fs.statSync(filepath);
+        const ext  = filename.toLowerCase().split(".").pop() || "";
+        const mime = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg",
+                       gif:"image/gif", webp:"image/webp", svg:"image/svg+xml" }[ext] || "application/octet-stream";
+        const inline = url.searchParams.get("preview") === "1";
+        res.writeHead(200, { "Content-Type": mime, "Content-Length": stat.size,
+          "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${filename}"` });
+        return fs.createReadStream(filepath).pipe(res);
+      }
+    }
+
     // ─── Files: Download von Server-erzeugten Files (/data/exports/) ────
     // Tools wie file_write koennen in /data/exports/ schreiben und liefern
     // dann eine download_url zurueck. Hier wird die ausgeliefert.
@@ -491,6 +549,18 @@ const server = http.createServer(async (req, res) => {
           "Content-Disposition": `attachment; filename="${filename}"`
         });
         return fs.createReadStream(filepath).pipe(res);
+      }
+      if (m && req.method === "DELETE") {
+        const fs = await import("node:fs");
+        const path = await import("node:path");
+        const filename = decodeURIComponent(m[1]);
+        if (filename.includes("/") || filename.includes("\\") || filename.includes(".."))
+          return sendJson(400, { error: "ungültiger Dateiname" });
+        const filepath = path.resolve("/data/exports", filename);
+        if (!filepath.startsWith("/data/exports/") || !fs.existsSync(filepath))
+          return sendJson(404, { error: "nicht gefunden" });
+        fs.unlinkSync(filepath);
+        return sendJson(200, { deleted: filename });
       }
     }
 
