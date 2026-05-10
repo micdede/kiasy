@@ -479,7 +479,7 @@ const server = http.createServer(async (req, res) => {
             const mime = MIME[ext] || "application/octet-stream";
             return { name, dir: dirKey, size: stat.size, mtime: stat.mtimeMs, ext, mime,
                      is_image: mime.startsWith("image/"),
-                     url: `/api/${dirKey}/${encodeURIComponent(name)}` };
+                     url: `${dirKey === "images" ? "/api/images" : "/api/files"}/${encodeURIComponent(name)}` };
           });
       };
       const dirParam = url.searchParams.get("dir") || "all";
