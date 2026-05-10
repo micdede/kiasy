@@ -7,9 +7,12 @@ struct ContentView: View {
     @EnvironmentObject var settings: AppSettings
     @StateObject private var speech = SpeechService()
     @StateObject private var tts = TTSService()
+    @StateObject private var voiceStream = VoiceStreamService()
     @State private var messages: [ChatMessage] = []
     @State private var pending: ChatMessage? = nil
     @State private var sending = false
+    // Realtime-Modus: ID der aktuell strömenden Assistant-Bubble
+    @State private var realtimeAssistantID: UUID? = nil
     @State private var showSettings = false
     @State private var showConversation = false
     @State private var statusText = "bereit"
@@ -35,12 +38,46 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) { SettingsView(messages: $messages) }
         .fullScreenCover(isPresented: $showConversation) {
-            ConversationView(speech: speech, tts: tts, sending: $sending)
+            ConversationView(speech: speech, tts: tts, voiceStream: voiceStream, sending: $sending)
                 .environmentObject(settings)
         }
         .task {
             _ = await speech.requestPermissions()
             await loadHistoryIfEmpty()
+            if settings.realtimeMode {
+                voiceStream.connect(settings: settings)
+            }
+        }
+        // Realtime: neuer Turn startet (Transcript angekommen)
+        .onChange(of: voiceStream.turnStarted) { _, _ in
+            guard settings.realtimeMode else { return }
+            let userMsg = ChatMessage(role: .user, text: voiceStream.latestTranscript)
+            messages.append(userMsg)
+            sending = true
+            let a = ChatMessage(role: .assistant, text: "", isStreaming: true)
+            messages.append(a)
+            realtimeAssistantID = a.id
+        }
+        // Realtime: Text-Chunks live in Bubble schreiben
+        .onChange(of: voiceStream.accumulatedText) { _, full in
+            guard settings.realtimeMode, let id = realtimeAssistantID else { return }
+            if let i = messages.firstIndex(where: { $0.id == id }) {
+                messages[i].text = full
+            }
+        }
+        // Realtime: Turn beendet
+        .onChange(of: voiceStream.turnFinished) { _, _ in
+            guard settings.realtimeMode, let id = realtimeAssistantID else { return }
+            if let i = messages.firstIndex(where: { $0.id == id }) {
+                messages[i].isStreaming = false
+            }
+            realtimeAssistantID = nil
+            sending = false
+        }
+        // Realtime-Modus ein/aus → WebSocket connect/disconnect
+        .onChange(of: settings.realtimeMode) { _, on in
+            if on { voiceStream.connect(settings: settings) }
+            else  { voiceStream.disconnect() }
         }
         // Auto-Send beim Mic-Stop — egal ob User-Stop, isFinal vom Recognizer
         // oder Silence-Timeout im Konversations-Modus.

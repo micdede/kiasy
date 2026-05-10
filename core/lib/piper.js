@@ -131,6 +131,79 @@ export async function synthesize(text, opts = {}) {
   });
 }
 
+// Wie synthesize, aber ruft onChunk(pcmBuffer, format) für jeden Wyoming-audio-chunk auf,
+// statt alles zu akkumulieren. Ermöglicht Echtzeit-Streaming der PCM-Daten zum Client.
+export async function synthesizeStreaming(text, onChunk, opts = {}) {
+  const voice = opts.voice || VOICE;
+
+  return new Promise((resolve, reject) => {
+    const sock = connect({ host: HOST, port: PORT });
+    let buffer = Buffer.alloc(0);
+    let phase = "header";
+    let header = null;
+    let dataBytes = 0;
+    let payloadBytes = 0;
+    let dataBuf = Buffer.alloc(0);
+    let format = null;
+
+    const timeout = setTimeout(() => { sock.destroy(); reject(new Error(`Piper streaming timeout`)); }, TIMEOUT);
+
+    sock.on("connect", () => {
+      sock.write(JSON.stringify({ type: "synthesize", data: { text, voice: { name: voice } } }) + "\n");
+    });
+
+    sock.on("data", chunk => {
+      buffer = Buffer.concat([buffer, chunk]);
+      while (buffer.length > 0) {
+        if (phase === "header") {
+          const nl = buffer.indexOf(0x0A);
+          if (nl < 0) break;
+          try { header = JSON.parse(buffer.subarray(0, nl).toString("utf8")); }
+          catch { return cleanup(new Error("Piper streaming: invalid header")); }
+          buffer = buffer.subarray(nl + 1);
+          dataBytes    = header.data_length    || 0;
+          payloadBytes = header.payload_length || 0;
+          phase = dataBytes > 0 ? "data" : (payloadBytes > 0 ? "payload" : "header");
+          if (phase === "header") handleEvent(header, null, null);
+        } else if (phase === "data") {
+          if (buffer.length < dataBytes) break;
+          dataBuf = buffer.subarray(0, dataBytes);
+          buffer  = buffer.subarray(dataBytes);
+          phase = payloadBytes > 0 ? "payload" : "header";
+          if (phase === "header") handleEvent(header, dataBuf, null);
+        } else if (phase === "payload") {
+          if (buffer.length < payloadBytes) break;
+          const payloadBuf = buffer.subarray(0, payloadBytes);
+          buffer = buffer.subarray(payloadBytes);
+          phase = "header";
+          handleEvent(header, dataBuf, payloadBuf);
+          dataBuf = Buffer.alloc(0);
+        }
+      }
+    });
+
+    function handleEvent(h, dataObj, payload) {
+      const data = dataObj ? JSON.parse(dataObj.toString("utf8")) : null;
+      switch (h.type) {
+        case "audio-start":  format = data || {}; break;
+        case "audio-chunk":  if (payload) onChunk(payload, format); break;
+        case "audio-stop":   cleanup(null); break;
+        case "error":        cleanup(new Error(`Piper: ${data?.text || "unknown"}`)); break;
+      }
+    }
+
+    function cleanup(err) {
+      clearTimeout(timeout);
+      sock.destroy();
+      if (err) return reject(err);
+      resolve({ format });
+    }
+
+    sock.on("error", err => cleanup(new Error(`Piper socket: ${err.message}`)));
+    sock.on("close", () => clearTimeout(timeout));
+  });
+}
+
 // PCM → WAV-Wrapper (für direkten Audio-Play im Browser)
 export function pcmToWav(pcm, format) {
   const rate = format?.rate || 22050;

@@ -61,6 +61,12 @@ struct SettingsView: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
+                    Toggle("Echtzeit-Modus (WebSocket)", isOn: $settings.realtimeMode)
+                    if settings.realtimeMode {
+                        Text("WebSocket-Verbindung: Sprache → faster-Whisper → Agent → Piper-Audio-Streaming direkt zurück. TTS-Latenz stark reduziert. Erfordert Piper als TTS-Backend auf dem Server.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     Picker("Backend", selection: $settings.ttsBackend) {
                         Text("iOS (on-device)").tag("ios")
                         Text("Piper (Server, lokal)").tag("piper")

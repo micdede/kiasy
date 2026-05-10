@@ -15,6 +15,7 @@ import * as whisper from "./lib/whisper.js";
 import * as piper from "./lib/piper.js";
 import * as edge  from "./lib/edge-tts.js";
 import * as toolGen from "./lib/tool-generator.js";
+import * as voiceWs from "./lib/voice-ws.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const STARTED = Date.now();
@@ -888,6 +889,8 @@ const server = http.createServer(async (req, res) => {
     return sendJson(500, { error: String(err.message || err) });
   }
 });
+
+voiceWs.start();
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[kiasy-core] v${pkg.version} listening on :${PORT}`);

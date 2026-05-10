@@ -37,6 +37,8 @@ final class AppSettings: ObservableObject {
     @Published var orbStyle: String { didSet { sync("orbStyle", orbStyle) } }
     /// Particle-Form: "circle" (Default), "square", "diamond", "star"
     @Published var particleShape: String { didSet { sync("particleShape", particleShape) } }
+    /// Echtzeit-Modus: WebSocket + faster-Whisper STT + Piper-Audio-Streaming
+    @Published var realtimeMode: Bool { didSet { sync("realtimeMode", realtimeMode) } }
 
     // ─── Internal ────────────────────────────────────────────
     private let kv = NSUbiquitousKeyValueStore.default
@@ -63,6 +65,7 @@ final class AppSettings: ObservableObject {
         self.conversationMode   = Self.readBool("conversationMode", kv: kv, ud: ud, default: false)
         self.orbStyle           = Self.read("orbStyle",      kv: kv, ud: ud, default: "sphere")
         self.particleShape      = Self.read("particleShape", kv: kv, ud: ud, default: "circle")
+        self.realtimeMode       = Self.readBool("realtimeMode", kv: kv, ud: ud, default: false)
 
         // Initial-Sync triggern
         kv.synchronize()
@@ -118,6 +121,7 @@ final class AppSettings: ObservableObject {
                 case "conversationMode": conversationMode = kv.bool(forKey: key)
                 case "orbStyle":      if let v = kv.string(forKey: key) { orbStyle = v }
                 case "particleShape": if let v = kv.string(forKey: key) { particleShape = v }
+                case "realtimeMode":  realtimeMode = kv.bool(forKey: key)
                 default: break
                 }
                 // UserDefaults parallel aktualisieren
