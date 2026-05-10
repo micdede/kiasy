@@ -862,7 +862,17 @@ function healthBody() {
     }
 
     function ctStatus(name) {
-      // Try to infer from service checks
+      // Monitor + Caddy: Seite wurde ausgeliefert → beide laufen definitiv
+      if (name === 'kiasy-monitor' || name === 'kiasy-caddy') {
+        return '<span class="badge ok">✓ läuft</span>';
+      }
+      // Core: health/check-Daten kommen von Core → wenn wir Daten haben, läuft Core
+      if (name === 'kiasy-core') {
+        return lastSvcChecks.length > 0
+          ? '<span class="badge ok">✓ läuft</span>'
+          : '<span class="badge err">✗ offline</span>';
+      }
+      // Restliche Services: aus health/check-Ergebnissen ableiten
       for (const [svcName, ctName] of Object.entries(SVC_TO_CT)) {
         if (ctName === name) {
           const chk = lastSvcChecks.find(c => c.name === svcName);
