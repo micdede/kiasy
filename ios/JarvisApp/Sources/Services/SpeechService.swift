@@ -19,6 +19,8 @@ final class SpeechService: NSObject, ObservableObject {
     /// Wird bei jedem Recognizer-Update reset. Genutzt im Konversations-Modus damit
     /// das Mic nicht ewig offen bleibt wenn der User nichts sagt.
     private var silenceTask: Task<Void, Never>?
+    /// Zeitpunkt des letzten start() — für Warm-up-Schutz.
+    private var listenStartTime: Date = .distantPast
 
     func requestPermissions() async -> Bool {
         let speechStatus = await withCheckedContinuation { (cont: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
@@ -68,6 +70,7 @@ final class SpeechService: NSObject, ObservableObject {
             audioEngine.prepare()
             try audioEngine.start()
             isListening = true
+            listenStartTime = Date()
 
             // Silence-Timer: feuert wenn so lange kein Recognizer-Update kommt
             if let timeout = silenceTimeout {
@@ -84,7 +87,14 @@ final class SpeechService: NSObject, ObservableObject {
                             self.scheduleSilenceTimeout(timeout)
                         }
                     }
-                    if error != nil || (result?.isFinal ?? false) {
+                    // Spurious isFinal: SFSpeechRecognizer liefert beim ersten Start
+                    // manchmal sofort isFinal=true mit leerem Transcript (Warm-up-Artefakt).
+                    // Innerhalb der ersten 1.5s mit leerem Transcript ignorieren.
+                    let elapsed = Date().timeIntervalSince(self.listenStartTime)
+                    let warmupArtifact = (result?.isFinal ?? false)
+                        && self.transcript.isEmpty
+                        && elapsed < 1.5
+                    if !warmupArtifact && (error != nil || (result?.isFinal ?? false)) {
                         self.stop()
                     }
                 }
