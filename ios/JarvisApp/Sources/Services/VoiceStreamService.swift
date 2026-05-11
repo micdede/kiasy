@@ -180,7 +180,7 @@ final class VoiceStreamService: NSObject, ObservableObject {
                 if case .string(let s) = msg {
                     Task { @MainActor in self.handle(s) }
                 }
-                self.receiveLoop()
+                Task { @MainActor in self.receiveLoop() }
             case .failure(let err):
                 print("[VoiceWS] receive error: \(err.localizedDescription)")
                 // Socket tot → aufräumen damit reconnect möglich ist

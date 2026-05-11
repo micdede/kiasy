@@ -34,7 +34,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Backend") {
-                    TextField("Basis-URL (https://…)", text: $settings.baseURL)
+                    TextField("Basis-URL (https://…)", text: $settings.backendURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
