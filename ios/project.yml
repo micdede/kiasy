@@ -1,4 +1,15 @@
 name: JarvisApp
+
+# Xcode-Capabilities die bei xcodegen generate erhalten bleiben sollen.
+# SystemCapabilities werden im .xcodeproj unter TargetAttributes gespeichert
+# und von XcodeGen pro Target-Name aufgelöst.
+attributes:
+  TargetAttributes:
+    JarvisApp:
+      SystemCapabilities:
+        com.apple.Push:
+          enabled: 1
+
 options:
   bundleIdPrefix: de.dedecke
   deploymentTarget:
