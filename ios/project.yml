@@ -42,6 +42,7 @@ targets:
           - "_jarvis._tcp"
         UIBackgroundModes:
           - audio
+          - remote-notification
     entitlements:
       path: JarvisApp/Resources/JarvisApp.entitlements
     settings:

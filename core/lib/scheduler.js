@@ -8,6 +8,7 @@
 
 import * as db from "./db.js";
 import * as telegram from "./telegram.js";
+import * as apns from "./apns.js";
 
 const ENABLED  = process.env.SCHEDULER_ENABLED === "true";
 const TICK_MS  = Number(process.env.SCHEDULER_TICK_MS) || 60_000;
@@ -59,6 +60,15 @@ async function fireReminder(r) {
       await telegram.send(r.chat_id, `⏰ ${r.text}`);
     } else {
       console.warn(`[scheduler] reminder #${r.id} hat kein chat_id — nur als done markiert`);
+    }
+
+    // APNs: alle registrierten Geräte benachrichtigen (fire-and-forget)
+    if (apns.isConfigured()) {
+      const tokens = db.get().prepare("SELECT token FROM apns_tokens").all();
+      for (const { token } of tokens) {
+        apns.send(token, "JARVIS Erinnerung", r.text)
+          .catch(err => console.warn(`[apns] push failed (${token.substring(0, 8)}…):`, err.message));
+      }
     }
 
     if (r.type === "recurring" && r.interval_hours > 0) {

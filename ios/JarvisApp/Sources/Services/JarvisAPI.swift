@@ -137,6 +137,29 @@ actor JarvisAPI {
         return nil
     }
 
+    /// Registriert den APNs Device-Token beim Backend.
+    func registerAPNsToken(
+        _ token: String,
+        device: String,
+        baseURL: String,
+        user: String,
+        pass: String
+    ) async {
+        guard let url = URL(string: "\(baseURL)/api/apns/register") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !user.isEmpty {
+            let cred = "\(user):\(pass)".data(using: .utf8)!.base64EncodedString()
+            req.setValue("Basic \(cred)", forHTTPHeaderField: "Authorization")
+        }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["token": token, "device": device])
+        if let (_, resp) = try? await session.data(for: req),
+           let http = resp as? HTTPURLResponse {
+            print("[APNs] register → HTTP \(http.statusCode)")
+        }
+    }
+
     /// Holt den letzten Verlauf vom Server. Liefert chronologisch sortierte
     /// ChatMessages (oldest first). Wirft bei Netzwerk-/HTTP-Fehler — Aufrufer
     /// sollte das schlucken (Verlauf ist nice-to-have).

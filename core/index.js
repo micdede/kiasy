@@ -16,6 +16,7 @@ import * as piper from "./lib/piper.js";
 import * as edge  from "./lib/edge-tts.js";
 import * as toolGen from "./lib/tool-generator.js";
 import * as voiceWs from "./lib/voice-ws.js";
+import * as apns    from "./lib/apns.js";
 
 const PORT = Number(process.env.PORT || 8080);
 const STARTED = Date.now();
@@ -950,6 +951,17 @@ const server = http.createServer(async (req, res) => {
         "X-Turns":      String(result.turns)
       });
       return res.end(wav);
+    }
+
+    // ─── APNs Device-Token Registry ─────────────────────────
+    if (url.pathname === "/api/apns/register" && req.method === "POST") {
+      if (!body.token) return sendJson(400, { error: "token fehlt" });
+      db.get().prepare(`
+        INSERT INTO apns_tokens(token, device) VALUES (?,?)
+        ON CONFLICT(token) DO UPDATE SET device=excluded.device, last_used=datetime('now')
+      `).run(body.token, body.device || null);
+      console.log(`[apns] token registered: ${body.token.substring(0, 16)}… device=${body.device || "?"}`);
+      return sendJson(200, { ok: true, configured: apns.isConfigured() });
     }
 
     // ─── 404 ────────────────────────────────────────────────
