@@ -17,6 +17,16 @@ final class AppSettings: ObservableObject {
 
     // ─── gespeicherte Werte ──────────────────────────────────
     @Published var backendURL:     String { didSet { sync("backendURL",     backendURL) } }
+
+    /// Normalisierte URL mit https:// Prefix — für alle API-Calls nutzen.
+    var baseURL: String { Self.normalizeURL(backendURL) }
+
+    private static func normalizeURL(_ raw: String) -> String {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return s }
+        if s.hasPrefix("http://") || s.hasPrefix("https://") { return s }
+        return "https://\(s)"
+    }
     @Published var authUser:       String { didSet { sync("authUser",       authUser) } }
     @Published var authPass:       String { didSet { sync("authPass",       authPass) } }
     @Published var chatId:         String { didSet { sync("chatId",         chatId) } }

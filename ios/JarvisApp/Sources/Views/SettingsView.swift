@@ -34,7 +34,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Backend") {
-                    TextField("Basis-URL (https://…)", text: $settings.backendURL)
+                    TextField("Basis-URL (https://…)", text: $settings.baseURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -185,7 +185,7 @@ struct SettingsView: View {
         // Erst Server-DELETE, DANN lokale Bubbles leeren — sonst könnte
         // die nächste loadHistory-Welle den geleerten Zustand überschreiben
         clearStatus = "lösche…"
-        guard let url = URL(string: "\(settings.backendURL)/api/chat/history?chatId=\(settings.chatId)") else {
+        guard let url = URL(string: "\(settings.baseURL)/api/chat/history?chatId=\(settings.chatId)") else {
             clearStatus = "✗ URL ungültig"; return
         }
         var req = URLRequest(url: url)
@@ -213,7 +213,7 @@ struct SettingsView: View {
     private func loadVoices(engine: String) async {
         if engine == "piper" { piperLoading = true; piperError = nil } else { edgeLoading = true; edgeError = nil }
         defer { if engine == "piper" { piperLoading = false } else { edgeLoading = false } }
-        guard let url = URL(string: "\(settings.backendURL)/api/voice/voices?engine=\(engine)") else {
+        guard let url = URL(string: "\(settings.baseURL)/api/voice/voices?engine=\(engine)") else {
             if engine == "piper" { piperError = "URL ungültig" } else { edgeError = "URL ungültig" }
             return
         }
@@ -270,7 +270,7 @@ struct SettingsView: View {
         probing = true
         probeResult = ""
         defer { probing = false }
-        guard let url = URL(string: "\(settings.backendURL)/health") else {
+        guard let url = URL(string: "\(settings.baseURL)/health") else {
             probeResult = "URL ungültig"; return
         }
         var req = URLRequest(url: url)

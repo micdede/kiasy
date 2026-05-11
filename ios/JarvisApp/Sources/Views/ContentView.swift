@@ -150,10 +150,10 @@ struct ContentView: View {
     /// oder die View wurde nur re-mounted ohne dass die App neu gestartet wurde).
     private func loadHistoryIfEmpty() async {
         guard messages.isEmpty else { return }
-        guard !settings.backendURL.isEmpty else { return }
+        guard !settings.baseURL.isEmpty else { return }
         do {
             let loaded = try await api.loadHistory(
-                baseURL: settings.backendURL,
+                baseURL: settings.baseURL,
                 user: settings.authUser,
                 pass: settings.authPass,
                 chatId: settings.chatId,
@@ -541,7 +541,7 @@ struct ContentView: View {
         do {
             statusText = "verbinde…"
             let stream = await api.sendStream(
-                baseURL: settings.backendURL,
+                baseURL: settings.baseURL,
                 user: settings.authUser,
                 pass: settings.authPass,
                 chatId: settings.chatId,
@@ -575,13 +575,13 @@ struct ContentView: View {
                     // als Datei-Card mit ShareLink rendern.
                     if let dict = any as? [String: Any] {
                         if let path = dict["url"] as? String, path.hasPrefix("/api/images/") {
-                            let full = "\(settings.backendURL)\(path)"
+                            let full = "\(settings.baseURL)\(path)"
                             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                                 messages[idx].imageURL = full
                             }
                         }
                         if let path = dict["download_url"] as? String {
-                            let full = "\(settings.backendURL)\(path)"
+                            let full = "\(settings.baseURL)\(path)"
                             let name = (dict["filename"] as? String)
                                 ?? URL(string: full)?.lastPathComponent
                                 ?? "Datei"

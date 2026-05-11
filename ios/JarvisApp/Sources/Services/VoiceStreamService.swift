@@ -48,7 +48,7 @@ final class VoiceStreamService: NSObject, ObservableObject {
     func connect(settings: AppSettings) {
         guard webSocket == nil else { return }
 
-        var urlStr = settings.backendURL
+        var urlStr = settings.baseURL
             .replacingOccurrences(of: "https://", with: "wss://")
             .replacingOccurrences(of: "http://",  with: "ws://")
         urlStr += "/ws/voice?chatId=ios-realtime"

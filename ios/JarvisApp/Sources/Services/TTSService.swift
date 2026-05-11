@@ -191,7 +191,7 @@ final class TTSService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate,
     }
 
     private func fetchServerAudio(text: String, engine: String, voice: String, settings: AppSettings) async throws -> Data {
-        guard let url = URL(string: "\(settings.backendURL)/api/voice/synth") else {
+        guard let url = URL(string: "\(settings.baseURL)/api/voice/synth") else {
             throw URLError(.badURL)
         }
         var req = URLRequest(url: url)
