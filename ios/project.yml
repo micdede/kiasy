@@ -8,7 +8,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    DEVELOPMENT_TEAM: "" # in Xcode: Signing & Capabilities → Team auswählen
+    DEVELOPMENT_TEAM: "VP6BQ82TU2"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
 
