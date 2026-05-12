@@ -955,6 +955,7 @@ const server = http.createServer(async (req, res) => {
 
     // ─── APNs Device-Token Registry ─────────────────────────
     if (url.pathname === "/api/apns/register" && req.method === "POST") {
+      const body = await readJson(req).catch(() => ({}));
       if (!body.token) return sendJson(400, { error: "token fehlt" });
       db.get().prepare(`
         INSERT INTO apns_tokens(token, device) VALUES (?,?)
