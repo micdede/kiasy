@@ -132,6 +132,7 @@ app.get("/tools", (req, res) => res.send(layout("tools", "Tools", toolsBody())))
 app.get("/memory", (req, res) => res.send(layout("memory", "Memory", memoryBody())));
 app.get("/reminders", (req, res) => res.send(layout("reminders", "Reminders", remindersBody())));
 app.get("/news", (req, res) => res.send(layout("news", "News-Quellen", newsBody())));
+app.get("/contacts", (req, res) => res.send(layout("contacts", "Kontakte", contactsBody())));
 app.get("/health", (req, res) => res.send(layout("health", "Health", healthBody())));
 app.get("/settings", (req, res) => res.send(layout("settings", "Settings", settingsBody())));
 // DEPRECATED: lokale Markdown-Notes ersetzt durch Kerio CalDAV (note_* Tools).
@@ -644,6 +645,125 @@ function remindersBody() {
       async function delRem(id){if(!confirm('löschen?'))return; await fetch('/api/reminders/'+id,{method:'DELETE'}); loadRem();}
       function escapeHtml(s){return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
       loadRem();
+    </script>`;
+}
+
+function contactsBody() {
+  return `
+    <div class="page-head"><h2>Kontakte</h2><button class="btn" onclick="openModal()">+ Neu</button></div>
+    <input type="search" id="searchInput" placeholder="Suchen…" class="input" style="width:100%;margin-bottom:16px;" oninput="debounceLoad()">
+    <div id="contactsList"></div>
+
+    <!-- Modal -->
+    <div id="modalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;">
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:24px;min-width:340px;max-width:480px;width:90%;">
+        <h3 id="modalTitle" style="margin:0 0 16px;">Kontakt anlegen</h3>
+        <input type="hidden" id="editId">
+        <div class="form-row"><label>Name *</label><input id="fName" class="input" placeholder="Vollständiger Name"></div>
+        <div class="form-row"><label>E-Mail (Arbeit)</label><input id="fEmailWork" class="input" type="email" placeholder="name@firma.de"></div>
+        <div class="form-row"><label>E-Mail (Privat)</label><input id="fEmailPrivate" class="input" type="email" placeholder="name@gmail.com"></div>
+        <div class="form-row"><label>Telegram-ID</label><input id="fTelegramId" class="input" placeholder="12345678"></div>
+        <div class="form-row"><label>Telefon</label><input id="fPhone" class="input" placeholder="+49 ..."></div>
+        <div class="form-row"><label>Tags (kommagetrennt)</label><input id="fTags" class="input" placeholder="familie, arbeit, freunde"></div>
+        <div class="form-row"><label>Notizen</label><textarea id="fNotes" class="input" rows="3" style="resize:vertical;"></textarea></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+          <button class="btn" onclick="closeModal()">Abbrechen</button>
+          <button class="btn" style="background:var(--accent-soft);color:var(--accent);" onclick="saveContact()">Speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .contact-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:8px;}
+      .contact-card h3{margin:0 0 6px;font-size:15px;}
+      .cf{font-size:13px;color:var(--text-dim);display:flex;gap:6px;align-items:baseline;}
+      .cf a{color:var(--accent);text-decoration:none;}
+      .fl{font-size:11px;color:var(--text-dim);min-width:80px;}
+      .tag{background:var(--accent-soft);color:var(--accent);font-size:11px;padding:2px 6px;border-radius:10px;}
+      .form-row{margin-bottom:10px;}
+      .form-row label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;}
+      .form-row .input{width:100%;box-sizing:border-box;}
+    </style>
+    <script>
+    let contacts = [];
+    let debTimer;
+    function debounceLoad() { clearTimeout(debTimer); debTimer = setTimeout(load, 300); }
+
+    async function load() {
+      const q = document.getElementById('searchInput').value.trim();
+      const url = q ? '/api/contacts/search?q=' + encodeURIComponent(q) : '/api/contacts';
+      const r = await fetch(url);
+      const data = await r.json();
+      contacts = data.contacts || [];
+      render();
+    }
+
+    function render() {
+      const el = document.getElementById('contactsList');
+      if (!contacts.length) { el.innerHTML = '<p style="color:var(--text-dim)">Keine Kontakte.</p>'; return; }
+      el.innerHTML = contacts.map(c => \`
+        <div class="contact-card">
+          <div>
+            <h3>\${esc(c.name)} \${tags(c.tags)}</h3>
+            \${c.email_work ? \`<div class="cf"><span class="fl">Arbeit</span><a href="mailto:\${esc(c.email_work)}">\${esc(c.email_work)}</a></div>\` : ''}
+            \${c.email_private ? \`<div class="cf"><span class="fl">Privat</span><a href="mailto:\${esc(c.email_private)}">\${esc(c.email_private)}</a></div>\` : ''}
+            \${c.telegram_id ? \`<div class="cf"><span class="fl">Telegram</span>\${esc(c.telegram_id)}</div>\` : ''}
+            \${c.phone ? \`<div class="cf"><span class="fl">Telefon</span><a href="tel:\${esc(c.phone)}">\${esc(c.phone)}</a></div>\` : ''}
+            \${c.notes ? \`<div class="cf" style="margin-top:6px"><span class="fl">Notiz</span><span style="white-space:pre-wrap">\${esc(c.notes)}</span></div>\` : ''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:flex-start;">
+            <button class="btn" style="padding:4px 9px;font-size:12px;" onclick="openModal(\${c.id})">✎</button>
+            <button class="btn" style="padding:4px 9px;font-size:12px;color:var(--err);" onclick="del(\${c.id})">🗑</button>
+          </div>
+        </div>
+      \`).join('');
+    }
+
+    function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+    function tags(t){if(!t)return'';return t.split(',').map(s=>\`<span class="tag">\${esc(s.trim())}</span>\`).join(' ');}
+
+    function openModal(id) {
+      const c = id ? contacts.find(x=>x.id===id) : null;
+      document.getElementById('modalTitle').textContent = c ? 'Kontakt bearbeiten' : 'Kontakt anlegen';
+      document.getElementById('editId').value = c ? c.id : '';
+      ['Name','EmailWork','EmailPrivate','TelegramId','Phone','Tags','Notes'].forEach(k => {
+        const el = document.getElementById('f'+k);
+        if (el) el.value = c ? (c[k.replace(/([A-Z])/g,'_$1').toLowerCase().replace(/^_/,'')] || '') : '';
+      });
+      const ov = document.getElementById('modalOverlay');
+      ov.style.display = 'flex';
+      document.getElementById('fName').focus();
+    }
+
+    function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
+
+    async function saveContact() {
+      const id = document.getElementById('editId').value;
+      const body = {
+        name: document.getElementById('fName').value.trim(),
+        email_work: document.getElementById('fEmailWork').value.trim() || null,
+        email_private: document.getElementById('fEmailPrivate').value.trim() || null,
+        telegram_id: document.getElementById('fTelegramId').value.trim() || null,
+        phone: document.getElementById('fPhone').value.trim() || null,
+        tags: document.getElementById('fTags').value.trim() || null,
+        notes: document.getElementById('fNotes').value.trim() || null,
+      };
+      if (!body.name) { alert('Name ist Pflichtfeld'); return; }
+      await fetch(id ? '/api/contacts/'+id : '/api/contacts', {
+        method: id ? 'PUT' : 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+      });
+      closeModal(); load();
+    }
+
+    async function del(id) {
+      if (!confirm('Kontakt wirklich löschen?')) return;
+      await fetch('/api/contacts/'+id, { method:'DELETE' });
+      load();
+    }
+
+    document.getElementById('modalOverlay').addEventListener('click', e => { if(e.target===e.currentTarget) closeModal(); });
+    document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+    load();
     </script>`;
 }
 
@@ -1940,6 +2060,7 @@ function layout(active, title, body) {
     ["delegations","/delegations","Delegations"],
     ["labs","/labs","Labs"],
     ["news","/news","News"],
+    ["contacts","/contacts","Kontakte"],
     ["tools","/tools","Tools"],
     ["voice","/voice","Voice"],
     ["ha-editor","/ha-editor","HA"],

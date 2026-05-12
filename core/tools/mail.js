@@ -4,6 +4,7 @@
 import { ImapFlow } from "imapflow";
 import nodemailer from "nodemailer";
 import fs from "node:fs";
+import * as contacts from "./contacts.js";
 
 const HOST = process.env.KERIO_HOST || "wrsk-mail.de";
 const SIG_FILE = "/data/mail-signature.txt";
@@ -75,11 +76,20 @@ export const definitions = [
 ];
 
 function checkRecipient(to) {
-  if (WHITELIST.length === 0 && ALLOWED_DOMAINS.length === 0) return; // keine Restriktion
+  if (WHITELIST.length === 0 && ALLOWED_DOMAINS.length === 0) {
+    // Auch ohne ENV-Whitelist: Kontakte-DB als dynamische Whitelist
+    const contactEmails = contacts.getAllEmails();
+    if (contactEmails.length === 0) return; // keinerlei Restriktion
+    if (contactEmails.includes(to.trim().toLowerCase())) return;
+    throw new Error(`Empfänger ${to} nicht in Kontakten (weder MAIL_WHITELIST noch MAIL_ALLOWED_DOMAINS gesetzt)`);
+  }
   if (WHITELIST.includes(to)) return;
   const dom = to.split("@")[1];
   if (dom && ALLOWED_DOMAINS.includes(dom)) return;
-  throw new Error(`Empfänger ${to} nicht erlaubt (weder in WHITELIST noch in ALLOWED_DOMAINS)`);
+  // Kontakte-DB als Erweiterung zur ENV-Whitelist
+  const contactEmails = contacts.getAllEmails();
+  if (contactEmails.includes(to.trim().toLowerCase())) return;
+  throw new Error(`Empfänger ${to} nicht erlaubt (weder in WHITELIST/ALLOWED_DOMAINS noch in Kontakten)`);
 }
 
 export async function execute(name, input) {

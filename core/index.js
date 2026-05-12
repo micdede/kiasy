@@ -953,6 +953,61 @@ const server = http.createServer(async (req, res) => {
       return res.end(wav);
     }
 
+    // ─── Contacts CRUD ──────────────────────────────────────
+    if (url.pathname === "/api/contacts/search" && req.method === "GET") {
+      const q = url.searchParams.get("q") || "";
+      const rows = db.get().prepare(
+        "SELECT * FROM contacts WHERE name LIKE ? OR email_work LIKE ? OR email_private LIKE ? OR tags LIKE ? ORDER BY name COLLATE NOCASE LIMIT 20"
+      ).all(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+      return sendJson(200, { count: rows.length, contacts: rows });
+    }
+
+    if (url.pathname === "/api/contacts" && req.method === "GET") {
+      const tag = url.searchParams.get("tag");
+      let sql = "SELECT * FROM contacts";
+      const params = [];
+      if (tag) { sql += " WHERE tags LIKE ?"; params.push(`%${tag}%`); }
+      sql += " ORDER BY name COLLATE NOCASE";
+      const rows = db.get().prepare(sql).all(...params);
+      return sendJson(200, { count: rows.length, contacts: rows });
+    }
+
+    if (url.pathname === "/api/contacts" && req.method === "POST") {
+      const body = await readJson(req).catch(() => ({}));
+      if (!body.name) return sendJson(400, { error: "name fehlt" });
+      const r = db.get().prepare(`
+        INSERT INTO contacts(name, email_work, email_private, telegram_id, phone, notes, tags)
+        VALUES (?,?,?,?,?,?,?)
+      `).run(body.name, body.email_work||null, body.email_private||null,
+             body.telegram_id||null, body.phone||null, body.notes||null, body.tags||null);
+      return sendJson(201, { id: r.lastInsertRowid, ok: true });
+    }
+
+    {
+      const m = url.pathname.match(/^\/api\/contacts\/(\d+)$/);
+      if (m) {
+        const id = Number(m[1]);
+        if (req.method === "GET") {
+          const row = db.get().prepare("SELECT * FROM contacts WHERE id = ?").get(id);
+          if (!row) return sendJson(404, { error: "nicht gefunden" });
+          return sendJson(200, row);
+        }
+        if (req.method === "PUT") {
+          const body = await readJson(req).catch(() => ({}));
+          db.get().prepare(`
+            UPDATE contacts SET name=?, email_work=?, email_private=?, telegram_id=?,
+              phone=?, notes=?, tags=?, updated_at=datetime('now') WHERE id=?
+          `).run(body.name, body.email_work||null, body.email_private||null,
+                 body.telegram_id||null, body.phone||null, body.notes||null, body.tags||null, id);
+          return sendJson(200, { ok: true });
+        }
+        if (req.method === "DELETE") {
+          db.get().prepare("DELETE FROM contacts WHERE id = ?").run(id);
+          return sendJson(200, { ok: true });
+        }
+      }
+    }
+
     // ─── APNs Device-Token Registry ─────────────────────────
     if (url.pathname === "/api/apns/register" && req.method === "POST") {
       const body = await readJson(req).catch(() => ({}));
