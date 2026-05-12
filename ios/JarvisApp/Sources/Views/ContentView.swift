@@ -105,6 +105,10 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .startListeningTrigger)) { _ in
             triggerListeningExplicit()
         }
+        // Push-Notification angetippt → History neu laden
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisNotificationTapped)) { _ in
+            Task { await reloadHistory() }
+        }
         // Konversations-Modus: nach TTS-Ende Mic wieder auf (TTS-Pfad)
         .onChange(of: tts.isSpeaking) { _, speaking in
             if !speaking { maybeAutoContinue() }
@@ -143,6 +147,16 @@ struct ContentView: View {
         if speech.isListening { return }
         tts.stop()
         Task { @MainActor in await toggleListening() }
+    }
+
+    /// Lädt den Chat-Verlauf nach einem Push-Notification-Tap neu (immer).
+    private func reloadHistory() async {
+        guard !settings.baseURL.isEmpty else { return }
+        do {
+            let loaded = try await api.loadHistory(baseURL: settings.baseURL, user: settings.authUser,
+                                                   pass: settings.authPass, chatId: settings.chatId, limit: 50)
+            messages = loaded
+        } catch { print("[history] reload failed: \(error.localizedDescription)") }
     }
 
     /// Lädt den Chat-Verlauf vom Server beim ersten View-Mount.
@@ -601,6 +615,11 @@ struct ContentView: View {
             }
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
+                // Inline-Image aus Markdown-Bild-Syntax im Antworttext extrahieren
+                if messages[idx].imageURL == nil,
+                   let imgURL = extractImageURL(assistantText, baseURL: settings.baseURL) {
+                    messages[idx].imageURL = imgURL
+                }
             }
             if useStreamingTTS {
                 // Rest aus dem Buffer noch sprechen (letzter Satz hatte vielleicht
@@ -665,6 +684,22 @@ struct ContentView: View {
         let trimmed = collected.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    /// Extrahiert Bild-URL aus Markdown-Syntax `![...](url)` oder roher `/api/images/` URL.
+    private func extractImageURL(_ text: String, baseURL: String) -> String? {
+        let pattern = #"!\[.*?\]\((.*?/api/images/[^)]+)\)"#
+        if let range = text.range(of: pattern, options: .regularExpression),
+           let urlRange = text[range].range(of: #"\((.+)\)"#, options: .regularExpression) {
+            let raw = String(text[range][urlRange]).dropFirst().dropLast()
+            return raw.hasPrefix("http") ? String(raw) : "\(baseURL)\(raw)"
+        }
+        // Fallback: rohe /api/images/... URL im Text
+        let rawPattern = #"(https?://\S+/api/images/[^\s)>]+)"#
+        if let range = text.range(of: rawPattern, options: .regularExpression) {
+            return String(text[range])
+        }
+        return nil
+    }
 }
 
 private struct MessageBubble: View {
@@ -688,17 +723,10 @@ private struct MessageBubble: View {
                     }
                 }
                 if !msg.text.isEmpty || msg.isStreaming {
-                    Text(msg.text.isEmpty && msg.isStreaming ? "…" : msg.text)
-                        .foregroundStyle(textColor)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 9)
-                        .background(bg)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(borderColor, lineWidth: 0.8)
-                        )
-                        .textSelection(.enabled)
+                    MarkdownBubble(
+                        text: msg.text.isEmpty && msg.isStreaming ? "…" : msg.text,
+                        color: textColor, bg: bg, border: borderColor
+                    )
                 }
                 // Server-erzeugte Datei (Tool-Result mit download_url) als Card
                 if let urlString = msg.downloadURL,
@@ -886,6 +914,73 @@ private struct MessageBubble: View {
         case .tool:  return Theme.textDim
         default:     return Theme.text
         }
+    }
+}
+
+// MARK: - MarkdownBubble
+
+/// Rendert einen Chat-Text mit Markdown-Formatierung (fett, kursiv, Code, Links).
+/// Code-Blöcke (``` ... ```) werden monospace + abgedunkelt dargestellt.
+private struct MarkdownBubble: View {
+    let text: String
+    let color: Color
+    let bg: Color
+    let border: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                if seg.isCode {
+                    Text(seg.content)
+                        .font(.system(.footnote, design: .monospaced))
+                        .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Theme.bgDeep)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    inlineMarkdown(seg.content)
+                        .foregroundStyle(color)
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .background(bg)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(border, lineWidth: 0.8))
+                        .textSelection(.enabled)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func inlineMarkdown(_ s: String) -> some View {
+        if let attr = try? AttributedString(
+            markdown: s,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            Text(attr)
+        } else {
+            Text(s)
+        }
+    }
+
+    private struct Segment { let content: String; let isCode: Bool }
+
+    private var segments: [Segment] {
+        var result: [Segment] = []
+        let parts = text.components(separatedBy: "```")
+        for (i, part) in parts.enumerated() {
+            let trimmed = part.trimmingCharacters(in: .newlines)
+            guard !trimmed.isEmpty else { continue }
+            // Ungerade Indizes sind Code-Blöcke (zwischen den ``` Paaren)
+            let isCode = i % 2 == 1
+            // Erste Zeile in Code-Blöcken ist oft der Sprach-Hint (z.B. "swift") — entfernen
+            let content = isCode
+                ? trimmed.components(separatedBy: "\n").dropFirst().joined(separator: "\n").trimmingCharacters(in: .newlines)
+                : trimmed
+            result.append(Segment(content: content.isEmpty ? trimmed : content, isCode: isCode))
+        }
+        return result.isEmpty ? [Segment(content: text, isCode: false)] : result
     }
 }
 

@@ -1,9 +1,13 @@
 import SwiftUI
 import UserNotifications
 
+extension Notification.Name {
+    static let jarvisNotificationTapped = Notification.Name("jarvisNotificationTapped")
+}
+
 // MARK: - AppDelegate
 
-class AppDelegate: NSObject, UIApplicationDelegate {
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     var api: JarvisAPI?
     var settings: AppSettings?
 
@@ -14,6 +18,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else { return }
             DispatchQueue.main.async {
@@ -34,6 +39,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
         print("[APNs] registration failed: \(error.localizedDescription)")
+    }
+
+    // Notification-Tap während App im Hintergrund — History-Reload triggern
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler handler: @escaping () -> Void) {
+        NotificationCenter.default.post(name: .jarvisNotificationTapped, object: nil)
+        handler()
+    }
+
+    // Notification im Vordergrund anzeigen (Banner + Sound)
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler handler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        handler([.banner, .sound])
     }
 
     /// Wird von JarvisApp.onAppear gerufen sobald api+settings gesetzt sind.

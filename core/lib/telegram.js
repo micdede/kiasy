@@ -11,6 +11,7 @@ import * as agent from "./agent.js";
 import * as db from "./db.js";
 import * as whisper from "./whisper.js";
 import * as piper from "./piper.js";
+import * as apns from "./apns.js";
 
 const TOKEN   = process.env.TELEGRAM_TOKEN;
 const ENABLED = process.env.TELEGRAM_ENABLED === "true";
@@ -152,7 +153,18 @@ function chunkText(text, limit) {
 
 export async function send(chatId, text) {
   if (!bot) throw new Error("telegram not started (TELEGRAM_ENABLED=true setzen)");
-  return safeReply(String(chatId), text);
+  await safeReply(String(chatId), text);
+  // iOS-Mirror: alle registrierten Geräte benachrichtigen (fire-and-forget)
+  if (apns.isConfigured()) {
+    const tokens = db.get().prepare("SELECT token FROM apns_tokens").all();
+    if (tokens.length) {
+      const preview = text.replace(/[*_`~\[\]#]/g, "").trim().substring(0, 140);
+      for (const { token } of tokens) {
+        apns.send(token, "JARVIS", preview, { "message-type": "chat" })
+          .catch(() => {});
+      }
+    }
+  }
 }
 
 export function stop() {
