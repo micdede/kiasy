@@ -85,7 +85,9 @@ async function fetchHN() {
 async function fetchNewsApi(src) {
   const key = src.api_key || process.env.NEWS_API_KEY;
   if (!key) return [];
-  const r = await fetch(`${src.url}?apiKey=${key}&pageSize=10&country=de`);
+  // top-headlines?country=de liefert 0 Ergebnisse → /everything mit Deutsch-Query
+  const base = "https://newsapi.org/v2/everything";
+  const r = await fetch(`${base}?apiKey=${key}&pageSize=10&language=de&sortBy=publishedAt&q=Deutschland OR Nachrichten`, { signal: AbortSignal.timeout(10_000) });
   const data = await r.json();
   return (data.articles || []).map(a => ({
     title: a.title, url: a.url, published: a.publishedAt, summary: a.description
