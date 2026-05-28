@@ -56,7 +56,7 @@ export async function execute(name, input) {
     const tx = conn.transaction(() => {
       const wf = conn.prepare(`
         INSERT INTO workflows(name, status, chat_id, context)
-        VALUES (?, 'pending', ?, ?)
+        VALUES (?, 'running', ?, ?)
       `).run(input.name, input.chatId || null, JSON.stringify({}));
       const wfId = Number(wf.lastInsertRowid);
 
@@ -76,7 +76,7 @@ export async function execute(name, input) {
       return wfId;
     });
     const id = tx();
-    return { id, name: input.name, steps: input.steps.length, status: "pending" };
+    return { id, name: input.name, steps: input.steps.length, status: "running" };
   }
 
   if (name === "workflow_status") {

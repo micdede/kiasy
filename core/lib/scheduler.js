@@ -86,13 +86,13 @@ async function tickWorkflows() {
     FROM workflow_steps ws
     JOIN workflows w ON w.id = ws.workflow_id
     WHERE ws.status = 'pending'
-      AND w.status IN ('pending', 'running')
+      AND w.status = 'running'
       AND (ws.scheduled IS NULL OR datetime(ws.scheduled) <= datetime('now'))
       AND NOT EXISTS (
         SELECT 1 FROM workflow_steps prev
         WHERE prev.workflow_id = ws.workflow_id
           AND prev.step_num < ws.step_num
-          AND prev.status != 'done'
+          AND prev.status != 'completed'
       )
     ORDER BY ws.scheduled ASC NULLS FIRST
     LIMIT 5
@@ -113,12 +113,12 @@ async function executeWorkflowStep(step) {
     const result = await agent.handle({ chatId: step.chat_id || "workflow", message: step.action });
     const resultText = (result.text || "").substring(0, 2000);
 
-    conn.prepare("UPDATE workflow_steps SET status = 'done', result = ? WHERE id = ?")
+    conn.prepare("UPDATE workflow_steps SET status = 'completed', result = ? WHERE id = ?")
       .run(resultText, step.step_id);
 
     // Noch offene Steps?
     const remaining = conn.prepare(
-      "SELECT COUNT(*) AS c FROM workflow_steps WHERE workflow_id = ? AND status != 'done'"
+      "SELECT COUNT(*) AS c FROM workflow_steps WHERE workflow_id = ? AND status NOT IN ('completed','skipped')"
     ).get(step.workflow_id).c;
 
     if (remaining === 0) {
@@ -135,9 +135,9 @@ async function executeWorkflowStep(step) {
     db.logEvent({ type: "workflow-step", message: `wf#${step.workflow_id} step#${step.step_num} done`, meta: { workflow_id: step.workflow_id } });
   } catch (err) {
     console.error(`[workflow] wf#${step.workflow_id} step#${step.step_num} error:`, err.message || err);
-    conn.prepare("UPDATE workflow_steps SET status = 'error', result = ? WHERE id = ?")
+    conn.prepare("UPDATE workflow_steps SET status = 'failed', result = ? WHERE id = ?")
       .run(String(err.message || err), step.step_id);
-    conn.prepare("UPDATE workflows SET status = 'error', updated_at = datetime('now') WHERE id = ?")
+    conn.prepare("UPDATE workflows SET status = 'failed', updated_at = datetime('now') WHERE id = ?")
       .run(step.workflow_id);
     if (step.chat_id) {
       await telegram.send(step.chat_id, `❌ Workflow „${step.wf_name}" Schritt ${step.step_num} fehlgeschlagen: ${err.message || err}`);
@@ -158,7 +158,7 @@ export function getInfo() {
       "SELECT COUNT(*) c FROM reminders WHERE done = 0 AND datetime(due) <= datetime('now')"
     ).get().c;
     const pendingWorkflows = db.get().prepare(
-      "SELECT COUNT(*) c FROM workflows WHERE status IN ('pending','running')"
+      "SELECT COUNT(*) c FROM workflows WHERE status = 'running'"
     ).get().c;
     return { enabled: true, started: !!timer, tick_ms: TICK_MS, upcoming, overdue, pending_workflows: pendingWorkflows };
   } catch (e) {
