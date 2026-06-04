@@ -1488,6 +1488,73 @@ function settingsBody() {
       load();
       loadSig();
       loadPrompt();
+      loadOllamaModels();
+    </script>
+
+    <div class="sec" style="margin-top:24px">
+      <h3>Ollama Modelle</h3>
+      <div id="ollama-model-list" style="margin-bottom:12px;font-size:13px">lade…</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="pull-model-name" placeholder="z.B. llama3.1:8b oder minimax-m2.7:cloud"
+          style="flex:1;min-width:200px;padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);font-size:13px">
+        <button class="btn" onclick="pullModel()" style="white-space:nowrap">⬇ Pull</button>
+      </div>
+      <div id="pull-status" style="font-size:12px;color:var(--text-muted);margin-top:6px"></div>
+    </div>
+
+    <script>
+      async function loadOllamaModels() {
+        const el = document.getElementById('ollama-model-list');
+        try {
+          const r = await fetch('/api/ollama/models');
+          const d = await r.json();
+          const models = d.models || [];
+          if (!models.length) { el.innerHTML = '<em style="color:var(--text-muted)">Keine Modelle gefunden</em>'; return; }
+          el.innerHTML = models.map(m => {
+            const gb = m.size ? (m.size / 1e9).toFixed(2) + ' GB' : '?';
+            const mod = m.modified_at ? new Date(m.modified_at).toLocaleDateString('de-DE') : '';
+            return \`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+              <span style="flex:1;font-family:var(--mono);font-size:13px">\${m.name}</span>
+              <span style="color:var(--text-muted);font-size:12px;white-space:nowrap">\${gb}\${mod?' · '+mod:''}</span>
+              <button class="btn" style="padding:3px 10px;font-size:12px" onclick="setKeepalive('\${m.name}')" title="Keepalive setzen">⏱</button>
+              <button class="btn" style="padding:3px 10px;font-size:12px;color:var(--err)" onclick="unloadModel('\${m.name}')" title="Aus RAM entladen">⏏</button>
+              <button class="btn" style="padding:3px 10px;font-size:12px;color:var(--err)" onclick="deleteModel('\${m.name}')">✕</button>
+            </div>\`;
+          }).join('');
+        } catch (e) { el.innerHTML = '<span style="color:var(--err)">Fehler: ' + e.message + '</span>'; }
+      }
+
+      async function pullModel() {
+        const name = document.getElementById('pull-model-name').value.trim();
+        const st = document.getElementById('pull-status');
+        if (!name) { st.textContent = 'Bitte Modellnamen eingeben.'; return; }
+        st.textContent = '⏳ Pull läuft… (kann Minuten dauern)';
+        try {
+          const r = await fetch('/api/ollama/pull', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+          const d = await r.json();
+          if (r.ok) { st.textContent = '✓ ' + name + ' geladen.'; loadOllamaModels(); }
+          else st.textContent = '✗ ' + (d.error || r.status);
+        } catch (e) { st.textContent = '✗ ' + e.message; }
+      }
+
+      async function deleteModel(name) {
+        if (!confirm('Modell "' + name + '" löschen?')) return;
+        const r = await fetch('/api/ollama/delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+        if (r.ok) loadOllamaModels();
+        else alert('Fehler beim Löschen');
+      }
+
+      async function unloadModel(name) {
+        const r = await fetch('/api/ollama/keepalive', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, keep_alive:'0'})});
+        document.getElementById('pull-status').textContent = r.ok ? '✓ ' + name + ' aus RAM entladen.' : '✗ Fehler';
+      }
+
+      async function setKeepalive(name) {
+        const val = prompt('Keepalive für "' + name + '":\n0 = sofort entladen, -1 = unbegrenzt, z.B. 30m, 2h', '30m');
+        if (val === null) return;
+        const r = await fetch('/api/ollama/keepalive', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, keep_alive: val})});
+        document.getElementById('pull-status').textContent = r.ok ? '✓ Keepalive für ' + name + ' gesetzt: ' + val : '✗ Fehler';
+      }
     </script>`;
 }
 

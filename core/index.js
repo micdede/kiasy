@@ -1020,6 +1020,55 @@ const server = http.createServer(async (req, res) => {
       return sendJson(200, { ok: true, configured: apns.isConfigured() });
     }
 
+    // ─── Ollama Model Management ─────────────────────────────
+    if (url.pathname === "/api/ollama/models" && req.method === "GET") {
+      const base = (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, "");
+      const r = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(5000) });
+      const data = await r.json();
+      return sendJson(r.status, data);
+    }
+
+    if (url.pathname === "/api/ollama/pull" && req.method === "POST") {
+      const { name } = await readJson(req).catch(() => ({}));
+      if (!name) return sendJson(400, { error: "name fehlt" });
+      const base = (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, "");
+      const r = await fetch(`${base}/api/pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, stream: false }),
+        signal: AbortSignal.timeout(600000),
+      });
+      const data = await r.json();
+      return sendJson(r.status, data);
+    }
+
+    if (url.pathname === "/api/ollama/delete" && req.method === "POST") {
+      const { name } = await readJson(req).catch(() => ({}));
+      if (!name) return sendJson(400, { error: "name fehlt" });
+      const base = (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, "");
+      const r = await fetch(`${base}/api/delete`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+        signal: AbortSignal.timeout(10000),
+      });
+      return sendJson(r.status, { ok: r.ok });
+    }
+
+    if (url.pathname === "/api/ollama/keepalive" && req.method === "POST") {
+      const { name, keep_alive } = await readJson(req).catch(() => ({}));
+      if (!name) return sendJson(400, { error: "name fehlt" });
+      const base = (process.env.OLLAMA_URL || "http://ollama:11434").replace(/\/$/, "");
+      // keep_alive: "0" = sofort entladen, "-1" = unbegrenzt, "5m" = 5 Minuten
+      const r = await fetch(`${base}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: name, keep_alive: keep_alive ?? "5m", prompt: "" }),
+        signal: AbortSignal.timeout(30000),
+      });
+      return sendJson(r.ok ? 200 : r.status, { ok: r.ok, keep_alive });
+    }
+
     // ─── 404 ────────────────────────────────────────────────
     return sendJson(404, { error: "Not Found", path: url.pathname });
   } catch (err) {
