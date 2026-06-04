@@ -1488,7 +1488,6 @@ function settingsBody() {
       load();
       loadSig();
       loadPrompt();
-      loadOllamaModels();
     </script>
 
     <div class="sec" style="margin-top:24px">
@@ -1555,6 +1554,7 @@ function settingsBody() {
         const r = await fetch('/api/ollama/keepalive', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, keep_alive: val})});
         document.getElementById('pull-status').textContent = r.ok ? '✓ Keepalive für ' + name + ' gesetzt: ' + val : '✗ Fehler';
       }
+      loadOllamaModels();
     </script>`;
 }
 
