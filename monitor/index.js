@@ -1549,7 +1549,7 @@ function settingsBody() {
       }
 
       async function setKeepalive(name) {
-        const val = prompt('Keepalive für "' + name + '":\n0 = sofort entladen, -1 = unbegrenzt, z.B. 30m, 2h', '30m');
+        const val = prompt('Keepalive für "' + name + '" — 0=entladen, -1=unbegrenzt, z.B. 30m, 2h:', '30m');
         if (val === null) return;
         const r = await fetch('/api/ollama/keepalive', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, keep_alive: val})});
         document.getElementById('pull-status').textContent = r.ok ? '✓ Keepalive für ' + name + ' gesetzt: ' + val : '✗ Fehler';
