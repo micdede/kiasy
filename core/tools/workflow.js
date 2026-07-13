@@ -54,11 +54,11 @@ export async function execute(name, input) {
   if (name === "workflow_create") {
     if (!input?.name || !input?.steps?.length) throw new Error("name + steps erforderlich");
     const tx = conn.transaction(() => {
-      const wf = conn.prepare(`
-        INSERT INTO workflows(name, status, chat_id, context)
-        VALUES (?, 'running', ?, ?)
-      `).run(input.name, input.chatId || null, JSON.stringify({}));
-      const wfId = Number(wf.lastInsertRowid);
+      const wfId = `wf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      conn.prepare(`
+        INSERT INTO workflows(id, name, status, chat_id, context)
+        VALUES (?, ?, 'running', ?, ?)
+      `).run(wfId, input.name, input.chatId || null, JSON.stringify({}));
 
       let scheduledAt = null;
       input.steps.forEach((step, i) => {
